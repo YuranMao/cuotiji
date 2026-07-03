@@ -15,17 +15,7 @@ body {
   -webkit-user-select: none;
   user-select: none;
 }
-
-/* ========== 布局：桌面端 ========== */
-.app-container {
-  display: flex;
-  height: 100vh;
-}
-
-/* ========== 侧边栏抽屉 ========== */
-.sidebar-overlay {
-  display: none;
-}
+.sidebar-overlay { display: none; }
 .sidebar {
   width: 280px;
   min-width: 280px;
@@ -70,7 +60,6 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* 树节点 */
 .tree-chapter { margin-bottom: 1px; }
 .chapter-header {
   display: flex;
@@ -160,7 +149,6 @@ body {
 .kp-item:hover .del-kp { display: block; }
 .kp-item .del-kp:hover { color: #e74c3c; }
 
-/* ========== 主内容区 ========== */
 .main {
   flex: 1;
   display: flex;
@@ -231,7 +219,6 @@ body {
 .empty-state .empty-icon { font-size: 52px; margin-bottom: 14px; }
 .empty-state p { font-size: 14px; line-height: 1.8; }
 
-/* ========== 错题卡片 ========== */
 .question-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -270,8 +257,6 @@ body {
   align-items: center;
   gap: 4px;
 }
-
-/* 进度条 */
 .progress-section { margin-bottom: 6px; }
 .progress-header {
   display: flex;
@@ -281,7 +266,6 @@ body {
 }
 .progress-header .review-label { font-size: 12px; color: #666; }
 .progress-header .review-count { font-size: 12px; font-weight: 600; color: #4a90d9; }
-
 .progress-bar-wrap {
   width: 100%;
   height: 8px;
@@ -297,7 +281,6 @@ body {
   transition: width .3s ease;
 }
 .progress-bar-fill.full { background: linear-gradient(90deg, #27ae60, #2ecc71); }
-
 .review-dates {
   display: flex;
   flex-wrap: wrap;
@@ -346,7 +329,6 @@ body {
 }
 .card-actions .btn-delete:active { background: #e74c3c; color: #fff; }
 
-/* ========== 弹窗 ========== */
 .modal-overlay {
   display: none;
   position: fixed;
@@ -437,7 +419,6 @@ body {
 .modal .btn-cancel { background: #f0f0f0; color: #666; }
 .modal .btn-confirm { background: #4a90d9; color: #fff; }
 
-/* ========== 图片预览 ========== */
 .img-preview-overlay {
   display: none;
   position: fixed;
@@ -456,7 +437,6 @@ body {
   border-radius: 4px;
 }
 
-/* ========== Toast ========== */
 .toast {
   position: fixed;
   top: 16px;
@@ -475,9 +455,52 @@ body {
 }
 .toast.show { opacity: 1; }
 
-/* ========== 移动端适配 ========== */
+/* loading */
+.loading-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #aaa;
+  gap: 10px;
+  font-size: 13px;
+}
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #e0e0e0;
+  border-top-color: #4a90d9;
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.conn-status {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: #27ae60;
+  background: #fff;
+  padding: 4px 12px;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.1);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.conn-status .dot {
+  width: 6px;
+  height: 6px;
+  background: #27ae60;
+  border-radius: 50%;
+}
+.conn-status.error { color: #e74c3c; }
+.conn-status.error .dot { background: #e74c3c; }
+
 @media (max-width: 768px) {
-  /* 侧边栏变为抽屉 */
   .sidebar-overlay {
     display: block;
     position: fixed;
@@ -488,11 +511,7 @@ body {
     pointer-events: none;
     transition: opacity .25s;
   }
-  .sidebar-overlay.open {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
+  .sidebar-overlay.open { opacity: 1; pointer-events: auto; }
   .sidebar {
     position: fixed;
     top: 0; left: 0; bottom: 0;
@@ -502,22 +521,13 @@ body {
     transition: transform .25s ease;
   }
   .sidebar.open { transform: translateX(0); }
-
   .main-header .menu-btn { display: block; }
   .main-header { padding: 12px 14px; }
   .main-header .breadcrumb { font-size: 13px; }
   .main-header .add-btn { padding: 8px 14px; font-size: 12px; }
-
   .main-content { padding: 12px; }
-
-  /* 卡片单列 */
-  .question-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
+  .question-grid { grid-template-columns: 1fr; gap: 10px; }
   .card-img-wrap { height: 180px; }
-
-  /* 弹窗全宽 */
   .modal-overlay { padding: 12px; align-items: flex-end; }
   .modal {
     width: 100%;
@@ -528,7 +538,6 @@ body {
   .modal .form-group input[type="text"],
   .modal .form-group select { font-size: 16px; padding: 11px 14px; }
 }
-
 @media (max-width: 380px) {
   .sidebar { width: 260px; }
   .card-img-wrap { height: 160px; }
@@ -537,10 +546,8 @@ body {
 </head>
 <body>
 
-<!-- 侧边栏遮罩（移动端） -->
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
-<!-- 侧边栏 -->
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <h1>错题集</h1>
@@ -553,7 +560,6 @@ body {
   <div class="sidebar-tree" id="sidebarTree"></div>
 </aside>
 
-<!-- 主内容区 -->
 <main class="main">
   <div class="main-header">
     <button class="menu-btn" onclick="toggleSidebar()" title="目录">☰</button>
@@ -568,7 +574,12 @@ body {
   </div>
 </main>
 
-<!-- 添加/编辑章节弹窗 -->
+<!-- 连接状态 -->
+<div class="conn-status" id="connStatus">
+  <span class="dot"></span> 数据已同步
+</div>
+
+<!-- 章节弹窗 -->
 <div class="modal-overlay" id="chapterModal">
   <div class="modal">
     <h3 id="chapterModalTitle">添加章节</h3>
@@ -584,7 +595,7 @@ body {
   </div>
 </div>
 
-<!-- 添加知识点弹窗 -->
+<!-- 知识点弹窗 -->
 <div class="modal-overlay" id="kpModal">
   <div class="modal">
     <h3>添加知识点</h3>
@@ -603,7 +614,7 @@ body {
   </div>
 </div>
 
-<!-- 添加错题弹窗 -->
+<!-- 错题弹窗 -->
 <div class="modal-overlay" id="questionModal">
   <div class="modal">
     <h3>添加错题</h3>
@@ -613,7 +624,7 @@ body {
     </div>
     <div class="form-group">
       <label>上传题目图片</label>
-      <div class="image-upload-area" id="imageUploadArea" onclick="">
+      <div class="image-upload-area" id="imageUploadArea">
         <input type="file" id="imageFileInput" accept="image/*" capture="environment" onchange="handleImageSelect(event)">
         <div class="placeholder">
           <span class="upload-icon">🖼️</span>
@@ -628,16 +639,23 @@ body {
   </div>
 </div>
 
-<!-- 图片预览弹窗 -->
+<!-- 图片预览 -->
 <div class="img-preview-overlay" id="imgPreview" onclick="closeImgPreview()">
   <img id="imgPreviewSrc" src="">
 </div>
 
-<!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<!-- Supabase JS -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
 <script>
-// ==================== 侧边栏开关（移动端） ====================
+// ==================== Supabase ====================
+const supabaseUrl = 'https://owuckenvwmdsithqvsod.supabase.co';
+const supabaseKey = 'sb_publishable_2Ccd-_BuUgE2RJ35YKyhBA_XhysffVW';
+const sb = supabase.createClient(supabaseUrl, supabaseKey);
+
+// ==================== 侧边栏 ====================
 function openSidebar() {
   document.getElementById('sidebar').classList.add('open');
   document.getElementById('sidebarOverlay').classList.add('open');
@@ -647,63 +665,16 @@ function closeSidebar() {
   document.getElementById('sidebarOverlay').classList.remove('open');
 }
 function toggleSidebar() {
-  const sidebar = document.getElementById('sidebar');
-  sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
-}
-
-// ==================== 数据库 ====================
-const DB_NAME = 'ErrorBookDB';
-const DB_VERSION = 1;
-let db = null;
-
-function openDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = (e) => {
-      const d = e.target.result;
-      if (!d.objectStoreNames.contains('chapters')) d.createObjectStore('chapters', { keyPath: 'id' });
-      if (!d.objectStoreNames.contains('knowledgePoints')) d.createObjectStore('knowledgePoints', { keyPath: 'id' });
-      if (!d.objectStoreNames.contains('questions')) d.createObjectStore('questions', { keyPath: 'id' });
-    };
-    req.onsuccess = (e) => { db = e.target.result; resolve(db); };
-    req.onerror = () => reject(req.error);
-  });
-}
-
-function idbGet(storeName, id) {
-  return new Promise((resolve) => {
-    const tx = db.transaction(storeName, 'readonly');
-    const store = tx.objectStore(storeName);
-    const req = id ? store.get(id) : store.getAll();
-    req.onsuccess = () => resolve(req.result);
-  });
-}
-
-function idbPut(storeName, item) {
-  return new Promise((resolve) => {
-    const tx = db.transaction(storeName, 'readwrite');
-    const store = tx.objectStore(storeName);
-    store.put(item);
-    tx.oncomplete = () => resolve();
-  });
-}
-
-function idbDelete(storeName, id) {
-  return new Promise((resolve) => {
-    const tx = db.transaction(storeName, 'readwrite');
-    tx.objectStore(storeName).delete(id);
-    tx.oncomplete = () => resolve();
-  });
-}
-
-function genId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  document.getElementById('sidebar').classList.contains('open') ? closeSidebar() : openSidebar();
 }
 
 // ==================== 全局状态 ====================
 let selectedChapterId = null;
 let selectedKpId = null;
 let selectedImageData = null;
+let cachedChapters = [];
+let cachedKps = [];
+let cachedQuestions = [];
 
 // ==================== Toast ====================
 let _toastTimer = null;
@@ -752,10 +723,9 @@ function showChapterModal(chapterId, currentName) {
 }
 
 async function showKpModal() {
-  const chapters = await idbGet('chapters');
-  if (chapters.length === 0) { showToast('请先添加章节'); return; }
+  if (cachedChapters.length === 0) { showToast('请先添加章节'); return; }
   const sel = document.getElementById('kpChapterSelect');
-  sel.innerHTML = chapters.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  sel.innerHTML = cachedChapters.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
   document.getElementById('kpNameInput').value = '';
   openModal('kpModal');
   setTimeout(() => document.getElementById('kpNameInput').focus(), 100);
@@ -763,13 +733,11 @@ async function showKpModal() {
 
 async function showQuestionModal() {
   if (!selectedKpId) { showToast('请先选择知识点'); return; }
-  const chapters = await idbGet('chapters');
-  const kps = await idbGet('knowledgePoints');
   const sel = document.getElementById('qKpSelect');
-  sel.innerHTML = kps.map(kp => {
-    const ch = chapters.find(c => c.id === kp.chapterId);
+  sel.innerHTML = cachedKps.map(kp => {
+    const ch = cachedChapters.find(c => c.id === kp.chapter_id);
     return `<option value="${kp.id}" ${kp.id === selectedKpId ? 'selected' : ''}>
-      ${ch ? ch.name + ' > ' : ''}${kp.name}
+      ${ch ? ch.name + ' > ' : ''}${escapeHtml(kp.name)}
     </option>`;
   }).join('');
   selectedImageData = null;
@@ -784,7 +752,6 @@ async function showQuestionModal() {
 function handleImageSelect(e) {
   const file = e.target.files[0];
   if (!file) return;
-  // 压缩大图
   const reader = new FileReader();
   reader.onload = (ev) => {
     const img = new Image();
@@ -819,119 +786,185 @@ function previewImage(src) {
   document.getElementById('imgPreview').classList.add('show');
 }
 
+// ==================== 数据加载（从 Supabase） ====================
+async function loadAllData() {
+  const statusEl = document.getElementById('connStatus');
+  try {
+    const [cRes, kpRes, qRes] = await Promise.all([
+      sb.from('chapters').select('*').order('id'),
+      sb.from('knowledge_points').select('*').order('id'),
+      sb.from('questions').select('*').order('created_at', { ascending: false })
+    ]);
+
+    if (cRes.error) throw cRes.error;
+    if (kpRes.error) throw kpRes.error;
+    if (qRes.error) throw qRes.error;
+
+    cachedChapters = cRes.data || [];
+    cachedKps = kpRes.data || [];
+    cachedQuestions = qRes.data || [];
+
+    statusEl.className = 'conn-status';
+    statusEl.innerHTML = '<span class="dot"></span> 数据已同步';
+    updateConnStatus(true);
+  } catch (err) {
+    console.error('加载数据失败:', err);
+    statusEl.className = 'conn-status error';
+    statusEl.innerHTML = '<span class="dot"></span> 连接失败，使用缓存';
+  }
+}
+
+function updateConnStatus(ok) {
+  const el = document.getElementById('connStatus');
+  if (ok) {
+    el.className = 'conn-status';
+    el.innerHTML = '<span class="dot"></span> 数据已同步';
+  } else {
+    el.className = 'conn-status error';
+    el.innerHTML = '<span class="dot"></span> 连接失败';
+  }
+}
+
 // ==================== 数据操作 ====================
 async function saveChapter() {
   const name = document.getElementById('chapterNameInput').value.trim();
   if (!name) { showToast('请输入章节名称'); return; }
   const editId = document.getElementById('editChapterId').value;
-  if (editId) {
-    const chapters = await idbGet('chapters');
-    const ch = chapters.find(c => c.id === editId);
-    if (ch) { ch.name = name; await idbPut('chapters', ch); }
-  } else {
-    await idbPut('chapters', { id: genId(), name });
+  updateConnStatus(false);
+  try {
+    if (editId) {
+      await sb.from('chapters').update({ name }).eq('id', editId);
+    } else {
+      await sb.from('chapters').insert({ name });
+    }
+    await loadAllData();
+    closeModal('chapterModal');
+    await refreshSidebar();
+    showToast(editId ? '章节已更新' : '章节已添加');
+  } catch (err) {
+    showToast('保存失败: ' + err.message);
   }
-  closeModal('chapterModal');
-  await refreshSidebar();
-  showToast(editId ? '章节已更新' : '章节已添加');
 }
 
 async function saveKnowledgePoint() {
   const chapterId = document.getElementById('kpChapterSelect').value;
   const name = document.getElementById('kpNameInput').value.trim();
   if (!name) { showToast('请输入知识点名称'); return; }
-  await idbPut('knowledgePoints', { id: genId(), chapterId, name });
-  closeModal('kpModal');
-  await refreshSidebar();
-  showToast('知识点已添加');
+  updateConnStatus(false);
+  try {
+    await sb.from('knowledge_points').insert({ chapter_id: chapterId, name });
+    await loadAllData();
+    closeModal('kpModal');
+    await refreshSidebar();
+    showToast('知识点已添加');
+  } catch (err) {
+    showToast('保存失败: ' + err.message);
+  }
 }
 
 async function saveQuestion() {
   if (!selectedImageData) { showToast('请上传题目图片'); return; }
   const kpId = document.getElementById('qKpSelect').value;
   const now = new Date().toISOString().slice(0, 10);
-  await idbPut('questions', {
-    id: genId(),
-    knowledgePointId: kpId,
-    imageData: selectedImageData,
-    firstUploadDate: now,
-    reviewCount: 0,
-    reviewDates: []
-  });
-  closeModal('questionModal');
-  await refreshMainContent();
-  await refreshSidebar();
-  showToast('错题已添加');
+  updateConnStatus(false);
+  try {
+    await sb.from('questions').insert({
+      knowledge_point_id: kpId,
+      image_data: selectedImageData,
+      first_upload_date: now,
+      review_count: 0,
+      review_dates: []
+    });
+    await loadAllData();
+    closeModal('questionModal');
+    await refreshMainContent();
+    await refreshSidebar();
+    showToast('错题已添加');
+  } catch (err) {
+    showToast('保存失败: ' + err.message);
+  }
 }
 
 async function deleteChapter(id) {
   if (!confirm('确定删除该章节及所有知识点和错题？')) return;
-  const kps = await idbGet('knowledgePoints');
-  const childKps = kps.filter(kp => kp.chapterId === id);
-  const questions = await idbGet('questions');
-  for (const kp of childKps) {
-    for (const q of questions.filter(q => q.knowledgePointId === kp.id)) {
-      await idbDelete('questions', q.id);
+  updateConnStatus(false);
+  try {
+    await sb.from('chapters').delete().eq('id', id);
+    await loadAllData();
+    if (selectedChapterId === id) {
+      selectedChapterId = null; selectedKpId = null;
+      updateMainHeader();
+      document.getElementById('mainContent').innerHTML =
+        '<div class="empty-state"><div class="empty-icon">📖</div><p>选择知识点查看错题</p></div>';
     }
-    await idbDelete('knowledgePoints', kp.id);
+    await refreshSidebar();
+    showToast('已删除');
+  } catch (err) {
+    showToast('删除失败: ' + err.message);
   }
-  await idbDelete('chapters', id);
-  if (selectedChapterId === id) {
-    selectedChapterId = null; selectedKpId = null;
-    updateMainHeader();
-    document.getElementById('mainContent').innerHTML =
-      '<div class="empty-state"><div class="empty-icon">📖</div><p>选择知识点查看错题</p></div>';
-  }
-  await refreshSidebar();
-  showToast('已删除');
 }
 
 async function deleteKp(id) {
   if (!confirm('确定删除该知识点及所有错题？')) return;
-  const questions = await idbGet('questions');
-  for (const q of questions.filter(q => q.knowledgePointId === id)) {
-    await idbDelete('questions', q.id);
+  updateConnStatus(false);
+  try {
+    await sb.from('knowledge_points').delete().eq('id', id);
+    await loadAllData();
+    if (selectedKpId === id) {
+      selectedKpId = null;
+      updateMainHeader();
+      document.getElementById('mainContent').innerHTML =
+        '<div class="empty-state"><div class="empty-icon">📖</div><p>选择知识点查看错题</p></div>';
+    }
+    await refreshSidebar();
+    showToast('已删除');
+  } catch (err) {
+    showToast('删除失败: ' + err.message);
   }
-  await idbDelete('knowledgePoints', id);
-  if (selectedKpId === id) {
-    selectedKpId = null;
-    updateMainHeader();
-    document.getElementById('mainContent').innerHTML =
-      '<div class="empty-state"><div class="empty-icon">📖</div><p>选择知识点查看错题</p></div>';
-  }
-  await refreshSidebar();
-  showToast('已删除');
 }
 
 async function deleteQuestion(id) {
   if (!confirm('确定删除该错题？')) return;
-  await idbDelete('questions', id);
-  await refreshMainContent();
-  await refreshSidebar();
-  showToast('已删除');
+  updateConnStatus(false);
+  try {
+    await sb.from('questions').delete().eq('id', id);
+    await loadAllData();
+    await refreshMainContent();
+    await refreshSidebar();
+    showToast('已删除');
+  } catch (err) {
+    showToast('删除失败: ' + err.message);
+  }
 }
 
 async function addReview(id) {
-  const q = await idbGet('questions', id);
-  if (q.reviewCount >= 5) { showToast('已达最大次数（5次）'); return; }
-  q.reviewCount++;
-  q.reviewDates.push(new Date().toISOString().slice(0, 10));
-  await idbPut('questions', q);
-  await refreshMainContent();
-  showToast(`已记录第 ${q.reviewCount} 次`);
+  const q = cachedQuestions.find(q => q.id === id);
+  if (!q) return;
+  if (q.review_count >= 5) { showToast('已达最大次数（5次）'); return; }
+  const newCount = q.review_count + 1;
+  const newDates = [...(q.review_dates || []), new Date().toISOString().slice(0, 10)];
+  updateConnStatus(false);
+  try {
+    await sb.from('questions').update({
+      review_count: newCount,
+      review_dates: newDates
+    }).eq('id', id);
+    await loadAllData();
+    await refreshMainContent();
+    showToast('已记录第 ' + newCount + ' 次');
+  } catch (err) {
+    showToast('记录失败: ' + err.message);
+  }
 }
 
 // ==================== 渲染 ====================
 async function refreshSidebar() {
-  const chapters = await idbGet('chapters');
-  const kps = await idbGet('knowledgePoints');
-  const questions = await idbGet('questions');
   const container = document.getElementById('sidebarTree');
 
-  container.innerHTML = chapters.map(ch => {
-    const childKps = kps.filter(kp => kp.chapterId === ch.id);
+  container.innerHTML = cachedChapters.map(ch => {
+    const childKps = cachedKps.filter(kp => kp.chapter_id === ch.id);
     const totalQuestions = childKps.reduce((sum, kp) =>
-      sum + questions.filter(q => q.knowledgePointId === kp.id).length, 0);
+      sum + cachedQuestions.filter(q => q.knowledge_point_id === kp.id).length, 0);
     const isExpanded = selectedChapterId === ch.id;
 
     return `
@@ -946,7 +979,7 @@ async function refreshSidebar() {
         </div>
         <div class="kp-list ${isExpanded ? 'open' : ''}">
           ${childKps.map(kp => {
-            const kpCount = questions.filter(q => q.knowledgePointId === kp.id).length;
+            const kpCount = cachedQuestions.filter(q => q.knowledge_point_id === kp.id).length;
             return `
               <div class="kp-item ${selectedKpId === kp.id ? 'active' : ''}"
                    onclick="event.stopPropagation();selectKp('${kp.id}')">
@@ -980,10 +1013,8 @@ function selectChapter(chapterId) {
 
 async function selectKp(kpId) {
   selectedKpId = kpId;
-  const kp = await idbGet('knowledgePoints', kpId);
-  if (kp) {
-    selectedChapterId = kp.chapterId;
-  }
+  const kp = cachedKps.find(k => k.id === kpId);
+  if (kp) selectedChapterId = kp.chapter_id;
   updateMainHeader();
   await refreshSidebar();
   await refreshMainContent();
@@ -994,10 +1025,9 @@ async function refreshMainContent() {
   updateMainHeader();
   if (!selectedKpId) return;
 
-  const questions = await idbGet('questions');
-  const filtered = questions
-    .filter(q => q.knowledgePointId === selectedKpId)
-    .sort((a, b) => b.firstUploadDate.localeCompare(a.firstUploadDate));
+  const filtered = cachedQuestions
+    .filter(q => q.knowledge_point_id === selectedKpId)
+    .sort((a, b) => b.first_upload_date.localeCompare(a.first_upload_date));
 
   const container = document.getElementById('mainContent');
 
@@ -1007,33 +1037,33 @@ async function refreshMainContent() {
   }
 
   container.innerHTML = `<div class="question-grid">${filtered.map(q => {
-    const pct = (q.reviewCount / 5) * 100;
-    const safeImg = q.imageData.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const pct = (q.review_count / 5) * 100;
+    const dates = q.review_dates || [];
     return `
       <div class="question-card">
-        <div class="card-img-wrap" onclick="previewImage('${safeImg}')">
-          <img src="${q.imageData}" alt="错题" loading="lazy">
+        <div class="card-img-wrap" onclick="previewImage(this.querySelector('img').src)">
+          <img src="${q.image_data}" alt="错题" loading="lazy">
         </div>
         <div class="card-info">
-          <div class="card-date">📅 首次上传：${q.firstUploadDate}</div>
+          <div class="card-date">📅 首次上传：${q.first_upload_date}</div>
           <div class="progress-section">
             <div class="progress-header">
               <span class="review-label">刷题进度</span>
-              <span class="review-count">${q.reviewCount} / 5</span>
+              <span class="review-count">${q.review_count} / 5</span>
             </div>
             <div class="progress-bar-wrap">
-              <div class="progress-bar-fill ${q.reviewCount >= 5 ? 'full' : ''}"
+              <div class="progress-bar-fill ${q.review_count >= 5 ? 'full' : ''}"
                    style="width:${pct}%"></div>
             </div>
-            ${q.reviewDates.length > 0 ? `
+            ${dates.length > 0 ? `
               <div class="review-dates">
-                ${q.reviewDates.map(d => `<span class="review-date-tag">${d}</span>`).join('')}
+                ${dates.map(d => `<span class="review-date-tag">${d}</span>`).join('')}
               </div>` : '<div class="review-dates" style="height:20px"></div>'}
           </div>
           <div class="card-actions">
-            <button class="btn-review" ${q.reviewCount >= 5 ? 'disabled' : ''}
+            <button class="btn-review" ${q.review_count >= 5 ? 'disabled' : ''}
                     onclick="addReview('${q.id}')">
-              ${q.reviewCount >= 5 ? '✓ 已完成' : '刷了一遍'}
+              ${q.review_count >= 5 ? '✓ 已完成' : '刷了一遍'}
             </button>
             <button class="btn-delete" onclick="deleteQuestion('${q.id}')">删除</button>
           </div>
@@ -1052,10 +1082,9 @@ async function updateMainHeader() {
     return;
   }
 
-  const kp = await idbGet('knowledgePoints', selectedKpId);
-  const chapters = await idbGet('chapters');
-  const ch = chapters.find(c => c.id === kp.chapterId);
-  breadcrumb.innerHTML = `${escapeHtml(ch?.name || '')} <span>&gt;</span> ${escapeHtml(kp.name)}`;
+  const kp = cachedKps.find(k => k.id === selectedKpId);
+  const ch = cachedChapters.find(c => c.id === (kp?.chapter_id));
+  breadcrumb.innerHTML = `${escapeHtml(ch?.name || '')} <span>&gt;</span> ${escapeHtml(kp?.name || '')}`;
   addBtn.disabled = false;
 }
 
@@ -1065,15 +1094,13 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
     if (e.target === overlay) closeModal(overlay.id);
   });
 });
-
-// 阻止图片预览事件冒泡
 document.getElementById('imgPreview').addEventListener('click', (e) => {
   if (e.target === e.currentTarget || e.target.tagName === 'IMG') closeImgPreview();
 });
 
 // ==================== 启动 ====================
 (async function init() {
-  await openDB();
+  await loadAllData();
   await refreshSidebar();
 })();
 </script>
