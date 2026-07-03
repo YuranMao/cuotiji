@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>错题集（按知识点分类）</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Microsoft YaHei", "PingFang SC", sans-serif;
+  background: #f0f2f5;
+  height: 100vh;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ========== 布局：桌面端 ========== */
+.app-container {
+  display: flex;
+  height: 100vh;
+}
+
+/* ========== 侧边栏抽屉 ========== */
+.sidebar-overlay {
+  display: none;
+}
+.sidebar {
+  width: 280px;
+  min-width: 280px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 2px 0 8px rgba(0,0,0,.05);
+  z-index: 100;
+}
+.sidebar-header {
+  padding: 20px 16px 12px;
+  border-bottom: 1px solid #eee;
+}
+.sidebar-header h1 { font-size: 18px; color: #1a1a2e; margin-bottom: 4px; }
+.sidebar-header .subtitle { font-size: 12px; color: #999; }
+
+.sidebar-actions {
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  gap: 6px;
+}
+.sidebar-actions button {
+  flex: 1;
+  padding: 9px 8px;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #333;
+  transition: all .2s;
+  white-space: nowrap;
+}
+.sidebar-actions button:hover { border-color: #4a90d9; color: #4a90d9; }
+.sidebar-actions button:active { background: #e8f0fe; }
+
+.sidebar-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 树节点 */
+.tree-chapter { margin-bottom: 1px; }
+.chapter-header {
+  display: flex;
+  align-items: center;
+  padding: 11px 14px;
+  cursor: pointer;
+  transition: background .15s;
+  gap: 6px;
+  position: relative;
+}
+.chapter-header:hover { background: #f5f7fa; }
+.chapter-header.active { background: #e8f0fe; color: #4a90d9; }
+.chapter-header .arrow {
+  font-size: 10px;
+  transition: transform .2s;
+  color: #aaa;
+  width: 12px;
+  flex-shrink: 0;
+}
+.chapter-header .arrow.expanded { transform: rotate(90deg); }
+.chapter-header .icon { font-size: 15px; flex-shrink: 0; }
+.chapter-header .name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chapter-header .count {
+  font-size: 11px;
+  color: #999;
+  background: #f0f0f0;
+  padding: 1px 7px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.chapter-header .del-chapter {
+  font-size: 18px;
+  color: #ccc;
+  cursor: pointer;
+  padding: 4px 6px;
+  display: none;
+  border: none;
+  background: none;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.chapter-header:hover .del-chapter { display: block; }
+.chapter-header .del-chapter:hover { color: #e74c3c; }
+
+.kp-list { display: none; }
+.kp-list.open { display: block; }
+.kp-item {
+  display: flex;
+  align-items: center;
+  padding: 9px 14px 9px 38px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #555;
+  gap: 6px;
+  transition: background .15s;
+}
+.kp-item:hover { background: #f5f7fa; }
+.kp-item.active { background: #e8f0fe; color: #4a90d9; font-weight: 600; }
+.kp-item .kp-dot { font-size: 5px; color: #bbb; flex-shrink: 0; }
+.kp-item .kp-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kp-item .kp-count {
+  font-size: 11px;
+  color: #999;
+  background: #f0f0f0;
+  padding: 1px 7px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.kp-item .del-kp {
+  font-size: 16px;
+  color: #ccc;
+  cursor: pointer;
+  padding: 2px 4px;
+  display: none;
+  border: none;
+  background: none;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.kp-item:hover .del-kp { display: block; }
+.kp-item .del-kp:hover { color: #e74c3c; }
+
+/* ========== 主内容区 ========== */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #f0f2f5;
+  overflow: hidden;
+}
+.main-header {
+  padding: 14px 20px;
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  z-index: 10;
+}
+.main-header .menu-btn {
+  display: none;
+  font-size: 22px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: #333;
+  line-height: 1;
+}
+.main-header .breadcrumb {
+  font-size: 14px;
+  color: #333;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.main-header .breadcrumb span { color: #999; font-weight: normal; }
+.main-header .add-btn {
+  padding: 9px 18px;
+  background: #4a90d9;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background .2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.main-header .add-btn:active { background: #3a7bc8; }
+.main-header .add-btn:disabled {
+  background: #c0c0c0;
+  cursor: not-allowed;
+  opacity: .7;
+}
+
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  -webkit-overflow-scrolling: touch;
+}
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #bbb;
+}
+.empty-state .empty-icon { font-size: 52px; margin-bottom: 14px; }
+.empty-state p { font-size: 14px; line-height: 1.8; }
+
+/* ========== 错题卡片 ========== */
+.question-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+.question-card {
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  display: flex;
+  flex-direction: column;
+}
+.card-img-wrap {
+  width: 100%;
+  height: 200px;
+  background: #fafafa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  border-bottom: 1px solid #eee;
+}
+.card-img-wrap img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.card-info { padding: 12px 14px; }
+.card-date {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 进度条 */
+.progress-section { margin-bottom: 6px; }
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.progress-header .review-label { font-size: 12px; color: #666; }
+.progress-header .review-count { font-size: 12px; font-weight: 600; color: #4a90d9; }
+
+.progress-bar-wrap {
+  width: 100%;
+  height: 8px;
+  background: #e8e8e8;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4a90d9, #5ba0e8);
+  border-radius: 4px;
+  transition: width .3s ease;
+}
+.progress-bar-fill.full { background: linear-gradient(90deg, #27ae60, #2ecc71); }
+
+.review-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.review-date-tag {
+  font-size: 10px;
+  padding: 2px 7px;
+  background: #e8f0fe;
+  color: #4a90d9;
+  border-radius: 3px;
+}
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f0f0;
+}
+.card-actions button {
+  flex: 1;
+  padding: 8px 0;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all .2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.card-actions .btn-review {
+  border-color: #4a90d9;
+  color: #4a90d9;
+  font-weight: 500;
+}
+.card-actions .btn-review:active { background: #4a90d9; color: #fff; }
+.card-actions .btn-review:disabled {
+  border-color: #ddd;
+  color: #ccc;
+  cursor: not-allowed;
+  background: #fafafa;
+}
+.card-actions .btn-delete {
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+.card-actions .btn-delete:active { background: #e74c3c; color: #fff; }
+
+/* ========== 弹窗 ========== */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px 20px;
+  width: 400px;
+  max-width: 100%;
+  box-shadow: 0 8px 40px rgba(0,0,0,.15);
+}
+.modal h3 { font-size: 16px; margin-bottom: 18px; color: #1a1a2e; }
+.modal .form-group { margin-bottom: 14px; }
+.modal .form-group label {
+  display: block;
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.modal .form-group input[type="text"],
+.modal .form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color .2s;
+  background: #fff;
+  -webkit-appearance: none;
+}
+.modal .form-group input:focus,
+.modal .form-group select:focus { border-color: #4a90d9; }
+
+.modal .image-upload-area {
+  width: 100%;
+  height: 150px;
+  border: 2px dashed #d9d9d9;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  overflow: hidden;
+  position: relative;
+}
+.modal .image-upload-area:active { background: #f8fafe; border-color: #4a90d9; }
+.modal .image-upload-area.has-image { border-style: solid; }
+.modal .image-upload-area img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.modal .image-upload-area .placeholder { color: #bbb; font-size: 13px; text-align: center; }
+.modal .image-upload-area .placeholder .upload-icon { font-size: 30px; display: block; margin-bottom: 4px; }
+.modal .image-upload-area input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.modal .modal-btns {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+}
+.modal .modal-btns button {
+  flex: 1;
+  padding: 11px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 15px;
+  border: none;
+  transition: opacity .2s;
+}
+.modal .modal-btns button:active { opacity: .8; }
+.modal .btn-cancel { background: #f0f0f0; color: #666; }
+.modal .btn-confirm { background: #4a90d9; color: #fff; }
+
+/* ========== 图片预览 ========== */
+.img-preview-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,.9);
+  z-index: 2000;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+}
+.img-preview-overlay.show { display: flex; }
+.img-preview-overlay img {
+  max-width: 92vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+/* ========== Toast ========== */
+.toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,.8);
+  color: #fff;
+  padding: 10px 22px;
+  border-radius: 20px;
+  font-size: 14px;
+  z-index: 3000;
+  opacity: 0;
+  transition: opacity .3s;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; }
+
+/* ========== 移动端适配 ========== */
+@media (max-width: 768px) {
+  /* 侧边栏变为抽屉 */
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.4);
+    z-index: 500;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s;
+  }
+  .sidebar-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: 280px;
+    z-index: 600;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+  }
+  .sidebar.open { transform: translateX(0); }
+
+  .main-header .menu-btn { display: block; }
+  .main-header { padding: 12px 14px; }
+  .main-header .breadcrumb { font-size: 13px; }
+  .main-header .add-btn { padding: 8px 14px; font-size: 12px; }
+
+  .main-content { padding: 12px; }
+
+  /* 卡片单列 */
+  .question-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .card-img-wrap { height: 180px; }
+
+  /* 弹窗全宽 */
+  .modal-overlay { padding: 12px; align-items: flex-end; }
+  .modal {
+    width: 100%;
+    border-radius: 16px 16px 8px 8px;
+    padding: 22px 18px;
+  }
+  .modal .image-upload-area { height: 130px; }
+  .modal .form-group input[type="text"],
+  .modal .form-group select { font-size: 16px; padding: 11px 14px; }
+}
+
+@media (max-width: 380px) {
+  .sidebar { width: 260px; }
+  .card-img-wrap { height: 160px; }
+}
+</style>
+</head>
+<body>
+
+<!-- 侧边栏遮罩（移动端） -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+<!-- 侧边栏 -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <h1>错题集</h1>
+    <div class="subtitle">按知识点分类</div>
+  </div>
+  <div class="sidebar-actions">
+    <button onclick="showChapterModal()">+ 章节</button>
+    <button onclick="showKpModal()">+ 知识点</button>
+  </div>
+  <div class="sidebar-tree" id="sidebarTree"></div>
+</aside>
+
+<!-- 主内容区 -->
+<main class="main">
+  <div class="main-header">
+    <button class="menu-btn" onclick="toggleSidebar()" title="目录">☰</button>
+    <div class="breadcrumb" id="breadcrumb"><span>选择知识点查看错题</span></div>
+    <button class="add-btn" id="addQuestionBtn" disabled onclick="showQuestionModal()">+ 错题</button>
+  </div>
+  <div class="main-content" id="mainContent">
+    <div class="empty-state">
+      <div class="empty-icon">📖</div>
+      <p>在目录中添加章节和知识点<br>即可开始记录错题</p>
+    </div>
+  </div>
+</main>
+
+<!-- 添加/编辑章节弹窗 -->
+<div class="modal-overlay" id="chapterModal">
+  <div class="modal">
+    <h3 id="chapterModalTitle">添加章节</h3>
+    <div class="form-group">
+      <label>章节名称</label>
+      <input type="text" id="chapterNameInput" placeholder="例如：高等数学" autocomplete="off">
+    </div>
+    <input type="hidden" id="editChapterId">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('chapterModal')">取消</button>
+      <button class="btn-confirm" onclick="saveChapter()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加知识点弹窗 -->
+<div class="modal-overlay" id="kpModal">
+  <div class="modal">
+    <h3>添加知识点</h3>
+    <div class="form-group">
+      <label>所属章节</label>
+      <select id="kpChapterSelect"></select>
+    </div>
+    <div class="form-group">
+      <label>知识点名称</label>
+      <input type="text" id="kpNameInput" placeholder="例如：极限与连续" autocomplete="off">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('kpModal')">取消</button>
+      <button class="btn-confirm" onclick="saveKnowledgePoint()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加错题弹窗 -->
+<div class="modal-overlay" id="questionModal">
+  <div class="modal">
+    <h3>添加错题</h3>
+    <div class="form-group">
+      <label>所属知识点</label>
+      <select id="qKpSelect"></select>
+    </div>
+    <div class="form-group">
+      <label>上传题目图片</label>
+      <div class="image-upload-area" id="imageUploadArea" onclick="">
+        <input type="file" id="imageFileInput" accept="image/*" capture="environment" onchange="handleImageSelect(event)">
+        <div class="placeholder">
+          <span class="upload-icon">🖼️</span>
+          点击上传或拍照
+        </div>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('questionModal')">取消</button>
+      <button class="btn-confirm" onclick="saveQuestion()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 图片预览弹窗 -->
+<div class="img-preview-overlay" id="imgPreview" onclick="closeImgPreview()">
+  <img id="imgPreviewSrc" src="">
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ==================== 侧边栏开关（移动端） ====================
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebarOverlay').classList.add('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+}
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+}
+
+// ==================== 数据库 ====================
+const DB_NAME = 'ErrorBookDB';
+const DB_VERSION = 1;
+let db = null;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains('chapters')) d.createObjectStore('chapters', { keyPath: 'id' });
+      if (!d.objectStoreNames.contains('knowledgePoints')) d.createObjectStore('knowledgePoints', { keyPath: 'id' });
+      if (!d.objectStoreNames.contains('questions')) d.createObjectStore('questions', { keyPath: 'id' });
+    };
+    req.onsuccess = (e) => { db = e.target.result; resolve(db); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function idbGet(storeName, id) {
+  return new Promise((resolve) => {
+    const tx = db.transaction(storeName, 'readonly');
+    const store = tx.objectStore(storeName);
+    const req = id ? store.get(id) : store.getAll();
+    req.onsuccess = () => resolve(req.result);
+  });
+}
+
+function idbPut(storeName, item) {
+  return new Promise((resolve) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    store.put(item);
+    tx.oncomplete = () => resolve();
+  });
+}
+
+function idbDelete(storeName, id) {
+  return new Promise((resolve) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    tx.objectStore(storeName).delete(id);
+    tx.oncomplete = () => resolve();
+  });
+}
+
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+// ==================== 全局状态 ====================
+let selectedChapterId = null;
+let selectedKpId = null;
+let selectedImageData = null;
+
+// ==================== Toast ====================
+let _toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ==================== 弹窗 ====================
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+  if (id === 'questionModal') {
+    selectedImageData = null;
+    document.getElementById('imageFileInput').value = '';
+    const area = document.getElementById('imageUploadArea');
+    area.classList.remove('has-image');
+    area.querySelector('img')?.remove();
+    area.querySelector('.placeholder').style.display = '';
+  }
+  if (id === 'chapterModal') {
+    document.getElementById('chapterNameInput').value = '';
+    document.getElementById('editChapterId').value = '';
+    document.getElementById('chapterModalTitle').textContent = '添加章节';
+  }
+  if (id === 'kpModal') {
+    document.getElementById('kpNameInput').value = '';
+  }
+}
+
+function showChapterModal(chapterId, currentName) {
+  if (chapterId) {
+    document.getElementById('chapterModalTitle').textContent = '编辑章节';
+    document.getElementById('chapterNameInput').value = currentName;
+    document.getElementById('editChapterId').value = chapterId;
+  } else {
+    document.getElementById('chapterModalTitle').textContent = '添加章节';
+    document.getElementById('chapterNameInput').value = '';
+    document.getElementById('editChapterId').value = '';
+  }
+  openModal('chapterModal');
+  setTimeout(() => document.getElementById('chapterNameInput').focus(), 100);
+}
+
+async function showKpModal() {
+  const chapters = await idbGet('chapters');
+  if (chapters.length === 0) { showToast('请先添加章节'); return; }
+  const sel = document.getElementById('kpChapterSelect');
+  sel.innerHTML = chapters.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  document.getElementById('kpNameInput').value = '';
+  openModal('kpModal');
+  setTimeout(() => document.getElementById('kpNameInput').focus(), 100);
+}
+
+async function showQuestionModal() {
+  if (!selectedKpId) { showToast('请先选择知识点'); return; }
+  const chapters = await idbGet('chapters');
+  const kps = await idbGet('knowledgePoints');
+  const sel = document.getElementById('qKpSelect');
+  sel.innerHTML = kps.map(kp => {
+    const ch = chapters.find(c => c.id === kp.chapterId);
+    return `<option value="${kp.id}" ${kp.id === selectedKpId ? 'selected' : ''}>
+      ${ch ? ch.name + ' > ' : ''}${kp.name}
+    </option>`;
+  }).join('');
+  selectedImageData = null;
+  document.getElementById('imageFileInput').value = '';
+  const area = document.getElementById('imageUploadArea');
+  area.classList.remove('has-image');
+  area.querySelector('img')?.remove();
+  area.querySelector('.placeholder').style.display = '';
+  openModal('questionModal');
+}
+
+function handleImageSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  // 压缩大图
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 1200, maxH = 1200;
+      let w = img.width, h = img.height;
+      if (w > maxW || h > maxH) {
+        const ratio = Math.min(maxW / w, maxH / h);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      selectedImageData = canvas.toDataURL('image/jpeg', 0.85);
+      const area = document.getElementById('imageUploadArea');
+      area.classList.add('has-image');
+      area.querySelector('.placeholder').style.display = 'none';
+      let preview = area.querySelector('img');
+      if (!preview) { preview = document.createElement('img'); area.appendChild(preview); }
+      preview.src = selectedImageData;
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function closeImgPreview() { document.getElementById('imgPreview').classList.remove('show'); }
+function previewImage(src) {
+  document.getElementById('imgPreviewSrc').src = src;
+  document.getElementById('imgPreview').classList.add('show');
+}
+
+// ==================== 数据操作 ====================
+async function saveChapter() {
+  const name = document.getElementById('chapterNameInput').value.trim();
+  if (!name) { showToast('请输入章节名称'); return; }
+  const editId = document.getElementById('editChapterId').value;
+  if (editId) {
+    const chapters = await idbGet('chapters');
+    const ch = chapters.find(c => c.id === editId);
+    if (ch) { ch.name = name; await idbPut('chapters', ch); }
+  } else {
+    await idbPut('chapters', { id: genId(), name });
+  }
+  closeModal('chapterModal');
+  await refreshSidebar();
+  showToast(editId ? '章节已更新' : '章节已添加');
+}
+
+async function saveKnowledgePoint() {
+  const chapterId = document.getElementById('kpChapterSelect').value;
+  const name = document.getElementById('kpNameInput').value.trim();
+  if (!name) { showToast('请输入知识点名称'); return; }
+  await idbPut('knowledgePoints', { id: genId(), chapterId, name });
+  closeModal('kpModal');
+  await refreshSidebar();
+  showToast('知识点已添加');
+}
+
+async function saveQuestion() {
+  if (!selectedImageData) { showToast('请上传题目图片'); return; }
+  const kpId = document.getElementById('qKpSelect').value;
+  const now = new Date().toISOString().slice(0, 10);
+  await idbPut('questions', {
+    id: genId(),
+    knowledgePointId: kpId,
+    imageData: selectedImageData,
+    firstUploadDate: now,
+    reviewCount: 0,
+    reviewDates: []
+  });
+  closeModal('questionModal');
+  await refreshMainContent();
+  await refreshSidebar();
+  showToast('错题已添加');
+}
+
+async function deleteChapter(id) {
+  if (!confirm('确定删除该章节及所有知识点和错题？')) return;
+  const kps = await idbGet('knowledgePoints');
+  const childKps = kps.filter(kp => kp.chapterId === id);
+  const questions = await idbGet('questions');
+  for (const kp of childKps) {
+    for (const q of questions.filter(q => q.knowledgePointId === kp.id)) {
+      await idbDelete('questions', q.id);
+    }
+    await idbDelete('knowledgePoints', kp.id);
+  }
+  await idbDelete('chapters', id);
+  if (selectedChapterId === id) {
+    selectedChapterId = null; selectedKpId = null;
+    updateMainHeader();
+    document.getElementById('mainContent').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">📖</div><p>选择知识点查看错题</p></div>';
+  }
+  await refreshSidebar();
+  showToast('已删除');
+}
+
+async function deleteKp(id) {
+  if (!confirm('确定删除该知识点及所有错题？')) return;
+  const questions = await idbGet('questions');
+  for (const q of questions.filter(q => q.knowledgePointId === id)) {
+    await idbDelete('questions', q.id);
+  }
+  await idbDelete('knowledgePoints', id);
+  if (selectedKpId === id) {
+    selectedKpId = null;
+    updateMainHeader();
+    document.getElementById('mainContent').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">📖</div><p>选择知识点查看错题</p></div>';
+  }
+  await refreshSidebar();
+  showToast('已删除');
+}
+
+async function deleteQuestion(id) {
+  if (!confirm('确定删除该错题？')) return;
+  await idbDelete('questions', id);
+  await refreshMainContent();
+  await refreshSidebar();
+  showToast('已删除');
+}
+
+async function addReview(id) {
+  const q = await idbGet('questions', id);
+  if (q.reviewCount >= 5) { showToast('已达最大次数（5次）'); return; }
+  q.reviewCount++;
+  q.reviewDates.push(new Date().toISOString().slice(0, 10));
+  await idbPut('questions', q);
+  await refreshMainContent();
+  showToast(`已记录第 ${q.reviewCount} 次`);
+}
+
+// ==================== 渲染 ====================
+async function refreshSidebar() {
+  const chapters = await idbGet('chapters');
+  const kps = await idbGet('knowledgePoints');
+  const questions = await idbGet('questions');
+  const container = document.getElementById('sidebarTree');
+
+  container.innerHTML = chapters.map(ch => {
+    const childKps = kps.filter(kp => kp.chapterId === ch.id);
+    const totalQuestions = childKps.reduce((sum, kp) =>
+      sum + questions.filter(q => q.knowledgePointId === kp.id).length, 0);
+    const isExpanded = selectedChapterId === ch.id;
+
+    return `
+      <div class="tree-chapter">
+        <div class="chapter-header ${selectedChapterId === ch.id ? 'active' : ''}"
+             onclick="selectChapter('${ch.id}')">
+          <span class="arrow ${isExpanded ? 'expanded' : ''}">▶</span>
+          <span class="icon">📁</span>
+          <span class="name">${escapeHtml(ch.name)}</span>
+          <span class="count">${totalQuestions}</span>
+          <button class="del-chapter" onclick="event.stopPropagation();deleteChapter('${ch.id}')">×</button>
+        </div>
+        <div class="kp-list ${isExpanded ? 'open' : ''}">
+          ${childKps.map(kp => {
+            const kpCount = questions.filter(q => q.knowledgePointId === kp.id).length;
+            return `
+              <div class="kp-item ${selectedKpId === kp.id ? 'active' : ''}"
+                   onclick="event.stopPropagation();selectKp('${kp.id}')">
+                <span class="kp-dot">●</span>
+                <span class="kp-name">${escapeHtml(kp.name)}</span>
+                <span class="kp-count">${kpCount}</span>
+                <button class="del-kp" onclick="event.stopPropagation();deleteKp('${kp.id}')">×</button>
+              </div>`;
+          }).join('')}
+          ${childKps.length === 0 ? '<div class="kp-item" style="color:#ccc;cursor:default;justify-content:center;">暂无知识点</div>' : ''}
+        </div>
+      </div>`;
+  }).join('') || '<div style="padding:24px;text-align:center;color:#bbb;font-size:13px;">暂无章节，点击上方添加</div>';
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function selectChapter(chapterId) {
+  selectedChapterId = (selectedChapterId === chapterId) ? null : chapterId;
+  selectedKpId = null;
+  updateMainHeader();
+  document.getElementById('mainContent').innerHTML =
+    '<div class="empty-state"><div class="empty-icon">📂</div><p>请选择具体知识点查看错题</p></div>';
+  refreshSidebar();
+  closeSidebar();
+}
+
+async function selectKp(kpId) {
+  selectedKpId = kpId;
+  const kp = await idbGet('knowledgePoints', kpId);
+  if (kp) {
+    selectedChapterId = kp.chapterId;
+  }
+  updateMainHeader();
+  await refreshSidebar();
+  await refreshMainContent();
+  closeSidebar();
+}
+
+async function refreshMainContent() {
+  updateMainHeader();
+  if (!selectedKpId) return;
+
+  const questions = await idbGet('questions');
+  const filtered = questions
+    .filter(q => q.knowledgePointId === selectedKpId)
+    .sort((a, b) => b.firstUploadDate.localeCompare(a.firstUploadDate));
+
+  const container = document.getElementById('mainContent');
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><p>该知识点下暂无错题</p></div>';
+    return;
+  }
+
+  container.innerHTML = `<div class="question-grid">${filtered.map(q => {
+    const pct = (q.reviewCount / 5) * 100;
+    const safeImg = q.imageData.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    return `
+      <div class="question-card">
+        <div class="card-img-wrap" onclick="previewImage('${safeImg}')">
+          <img src="${q.imageData}" alt="错题" loading="lazy">
+        </div>
+        <div class="card-info">
+          <div class="card-date">📅 首次上传：${q.firstUploadDate}</div>
+          <div class="progress-section">
+            <div class="progress-header">
+              <span class="review-label">刷题进度</span>
+              <span class="review-count">${q.reviewCount} / 5</span>
+            </div>
+            <div class="progress-bar-wrap">
+              <div class="progress-bar-fill ${q.reviewCount >= 5 ? 'full' : ''}"
+                   style="width:${pct}%"></div>
+            </div>
+            ${q.reviewDates.length > 0 ? `
+              <div class="review-dates">
+                ${q.reviewDates.map(d => `<span class="review-date-tag">${d}</span>`).join('')}
+              </div>` : '<div class="review-dates" style="height:20px"></div>'}
+          </div>
+          <div class="card-actions">
+            <button class="btn-review" ${q.reviewCount >= 5 ? 'disabled' : ''}
+                    onclick="addReview('${q.id}')">
+              ${q.reviewCount >= 5 ? '✓ 已完成' : '刷了一遍'}
+            </button>
+            <button class="btn-delete" onclick="deleteQuestion('${q.id}')">删除</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('')}</div>`;
+}
+
+async function updateMainHeader() {
+  const breadcrumb = document.getElementById('breadcrumb');
+  const addBtn = document.getElementById('addQuestionBtn');
+
+  if (!selectedKpId) {
+    breadcrumb.innerHTML = '<span>选择知识点查看错题</span>';
+    addBtn.disabled = true;
+    return;
+  }
+
+  const kp = await idbGet('knowledgePoints', selectedKpId);
+  const chapters = await idbGet('chapters');
+  const ch = chapters.find(c => c.id === kp.chapterId);
+  breadcrumb.innerHTML = `${escapeHtml(ch?.name || '')} <span>&gt;</span> ${escapeHtml(kp.name)}`;
+  addBtn.disabled = false;
+}
+
+// ==================== 弹窗遮罩点击关闭 ====================
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeModal(overlay.id);
+  });
+});
+
+// 阻止图片预览事件冒泡
+document.getElementById('imgPreview').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget || e.target.tagName === 'IMG') closeImgPreview();
+});
+
+// ==================== 启动 ====================
+(async function init() {
+  await openDB();
+  await refreshSidebar();
+})();
+</script>
+</body>
+</html>
