@@ -804,15 +804,6 @@ async function loadAllData() {
     cachedKps = kpRes.data || [];
     cachedQuestions = qRes.data || [];
 
-    // Debug: 检查数据结构
-    if (cachedKps.length > 0) {
-      console.log('原始 cachedKps[0]:', JSON.stringify(cachedKps[0]));
-      console.log('cachedKps keys:', Object.keys(cachedKps[0]));
-    }
-    if (cachedChapters.length > 0) {
-      console.log('原始 cachedChapters[0]:', JSON.stringify(cachedChapters[0]));
-    }
-
     statusEl.className = 'conn-status';
     statusEl.innerHTML = '<span class="dot"></span> 数据已同步';
     updateConnStatus(true);
@@ -864,15 +855,12 @@ async function saveKnowledgePoint() {
   try {
     const res = await sb.from('knowledge_points').insert({ chapter_id: chapterId, name });
     if (res.error) throw res.error;
-    console.log('知识点插入成功, data:', res.data);
     await loadAllData();
-    console.log('加载后 cachedKps 数量:', cachedKps.length, cachedKps.map(k => k.name));
     closeModal('kpModal');
     await refreshSidebar();
     updateConnStatus(true);
     showToast('知识点已添加');
   } catch (err) {
-    console.error('保存知识点失败:', err);
     showToast('保存失败: ' + (err.message || err.details || JSON.stringify(err)));
   }
 }
@@ -982,28 +970,28 @@ async function refreshSidebar() {
     const childKps = cachedKps.filter(kp => kp.chapter_id === ch.id);
     const totalQuestions = childKps.reduce((sum, kp) =>
       sum + cachedQuestions.filter(q => q.knowledge_point_id === kp.id).length, 0);
-    const isExpanded = selectedChapterId === ch.id;
+    const isExpanded = selectedChapterId == ch.id;
 
     return `
       <div class="tree-chapter">
-        <div class="chapter-header ${selectedChapterId === ch.id ? 'active' : ''}"
-             onclick="selectChapter('${ch.id}')">
+        <div class="chapter-header ${selectedChapterId == ch.id ? 'active' : ''}"
+             onclick="selectChapter(${ch.id})">
           <span class="arrow ${isExpanded ? 'expanded' : ''}">▶</span>
           <span class="icon">📁</span>
           <span class="name">${escapeHtml(ch.name)}</span>
           <span class="count">${totalQuestions}</span>
-          <button class="del-chapter" onclick="event.stopPropagation();deleteChapter('${ch.id}')">×</button>
+          <button class="del-chapter" onclick="event.stopPropagation();deleteChapter(${ch.id})">×</button>
         </div>
         <div class="kp-list ${isExpanded ? 'open' : ''}">
           ${childKps.map(kp => {
             const kpCount = cachedQuestions.filter(q => q.knowledge_point_id === kp.id).length;
             return `
-              <div class="kp-item ${selectedKpId === kp.id ? 'active' : ''}"
-                   onclick="event.stopPropagation();selectKp('${kp.id}')">
+              <div class="kp-item ${selectedKpId == kp.id ? 'active' : ''}"
+                   onclick="event.stopPropagation();selectKp(${kp.id})">
                 <span class="kp-dot">●</span>
                 <span class="kp-name">${escapeHtml(kp.name)}</span>
                 <span class="kp-count">${kpCount}</span>
-                <button class="del-kp" onclick="event.stopPropagation();deleteKp('${kp.id}')">×</button>
+                <button class="del-kp" onclick="event.stopPropagation();deleteKp(${kp.id})">×</button>
               </div>`;
           }).join('')}
           ${childKps.length === 0 ? '<div class="kp-item" style="color:#ccc;cursor:default;justify-content:center;">暂无知识点</div>' : ''}
@@ -1019,7 +1007,7 @@ function escapeHtml(str) {
 }
 
 function selectChapter(chapterId) {
-  selectedChapterId = (selectedChapterId === chapterId) ? null : chapterId;
+  selectedChapterId = (selectedChapterId == chapterId) ? null : chapterId;
   selectedKpId = null;
   updateMainHeader();
   document.getElementById('mainContent').innerHTML =
