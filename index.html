@@ -855,12 +855,15 @@ async function saveKnowledgePoint() {
   try {
     const res = await sb.from('knowledge_points').insert({ chapter_id: chapterId, name });
     if (res.error) throw res.error;
+    console.log('知识点插入成功, data:', res.data);
     await loadAllData();
+    console.log('加载后 cachedKps 数量:', cachedKps.length, cachedKps.map(k => k.name));
     closeModal('kpModal');
     await refreshSidebar();
     updateConnStatus(true);
     showToast('知识点已添加');
   } catch (err) {
+    console.error('保存知识点失败:', err);
     showToast('保存失败: ' + (err.message || err.details || JSON.stringify(err)));
   }
 }
