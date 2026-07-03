@@ -804,6 +804,15 @@ async function loadAllData() {
     cachedKps = kpRes.data || [];
     cachedQuestions = qRes.data || [];
 
+    // Debug: 检查数据结构
+    if (cachedKps.length > 0) {
+      console.log('原始 cachedKps[0]:', JSON.stringify(cachedKps[0]));
+      console.log('cachedKps keys:', Object.keys(cachedKps[0]));
+    }
+    if (cachedChapters.length > 0) {
+      console.log('原始 cachedChapters[0]:', JSON.stringify(cachedChapters[0]));
+    }
+
     statusEl.className = 'conn-status';
     statusEl.innerHTML = '<span class="dot"></span> 数据已同步';
     updateConnStatus(true);
