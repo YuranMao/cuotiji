@@ -830,58 +830,62 @@ async function saveChapter() {
   const name = document.getElementById('chapterNameInput').value.trim();
   if (!name) { showToast('请输入章节名称'); return; }
   const editId = document.getElementById('editChapterId').value;
-  updateConnStatus(false);
   try {
+    let res;
     if (editId) {
-      await sb.from('chapters').update({ name }).eq('id', editId);
+      res = await sb.from('chapters').update({ name }).eq('id', editId);
     } else {
-      await sb.from('chapters').insert({ name });
+      res = await sb.from('chapters').insert({ name });
     }
+    if (res.error) throw res.error;
     await loadAllData();
     closeModal('chapterModal');
     await refreshSidebar();
+    updateConnStatus(true);
     showToast(editId ? '章节已更新' : '章节已添加');
   } catch (err) {
-    showToast('保存失败: ' + err.message);
+    showToast('保存失败: ' + (err.message || err.details || JSON.stringify(err)));
   }
 }
 
 async function saveKnowledgePoint() {
-  const chapterId = document.getElementById('kpChapterSelect').value;
+  const chapterId = parseInt(document.getElementById('kpChapterSelect').value, 10);
   const name = document.getElementById('kpNameInput').value.trim();
   if (!name) { showToast('请输入知识点名称'); return; }
-  updateConnStatus(false);
   try {
-    await sb.from('knowledge_points').insert({ chapter_id: chapterId, name });
+    const res = await sb.from('knowledge_points').insert({ chapter_id: chapterId, name });
+    if (res.error) throw res.error;
     await loadAllData();
     closeModal('kpModal');
     await refreshSidebar();
+    updateConnStatus(true);
     showToast('知识点已添加');
   } catch (err) {
-    showToast('保存失败: ' + err.message);
+    showToast('保存失败: ' + (err.message || err.details || JSON.stringify(err)));
   }
 }
 
 async function saveQuestion() {
   if (!selectedImageData) { showToast('请上传题目图片'); return; }
-  const kpId = document.getElementById('qKpSelect').value;
+  const kpId = parseInt(document.getElementById('qKpSelect').value, 10);
   const now = new Date().toISOString().slice(0, 10);
-  updateConnStatus(false);
   try {
-    await sb.from('questions').insert({
+    const res = await sb.from('questions').insert({
       knowledge_point_id: kpId,
       image_data: selectedImageData,
       first_upload_date: now,
       review_count: 0,
       review_dates: []
     });
+    if (res.error) throw res.error;
     await loadAllData();
     closeModal('questionModal');
     await refreshMainContent();
     await refreshSidebar();
+    updateConnStatus(true);
     showToast('错题已添加');
   } catch (err) {
-    showToast('保存失败: ' + err.message);
+    showToast('保存失败: ' + (err.message || err.details || JSON.stringify(err)));
   }
 }
 
@@ -943,17 +947,18 @@ async function addReview(id) {
   if (q.review_count >= 5) { showToast('已达最大次数（5次）'); return; }
   const newCount = q.review_count + 1;
   const newDates = [...(q.review_dates || []), new Date().toISOString().slice(0, 10)];
-  updateConnStatus(false);
   try {
-    await sb.from('questions').update({
+    const res = await sb.from('questions').update({
       review_count: newCount,
       review_dates: newDates
     }).eq('id', id);
+    if (res.error) throw res.error;
     await loadAllData();
     await refreshMainContent();
+    updateConnStatus(true);
     showToast('已记录第 ' + newCount + ' 次');
   } catch (err) {
-    showToast('记录失败: ' + err.message);
+    showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err)));
   }
 }
 
