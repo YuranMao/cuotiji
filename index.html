@@ -499,6 +499,8 @@ body {
 }
 .conn-status.error { color: #e74c3c; }
 .conn-status.error .dot { background: #e74c3c; }
+.conn-status.warn { color: #f39c12; }
+.conn-status.warn .dot { background: #f39c12; }
 
 @media (max-width: 768px) {
   .sidebar-overlay {
@@ -786,7 +788,46 @@ function previewImage(src) {
   document.getElementById('imgPreview').classList.add('show');
 }
 
-// ==================== 数据加载（从 Supabase） ====================
+// ==================== 数据加载（Supabase 优先 + IndexedDB 兜底） ====================
+const DB_NAME = 'CuotijiCache';
+const DB_VERSION = 1;
+
+function openCacheDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache');
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveToCache(data) {
+  try {
+    const db = await openCacheDB();
+    const tx = db.transaction('cache', 'readwrite');
+    tx.objectStore('cache').put(data, 'data');
+    await new Promise(r => { tx.oncomplete = r; });
+    db.close();
+  } catch (e) { /* ignore */ }
+}
+
+async function loadFromCache() {
+  try {
+    const db = await openCacheDB();
+    const tx = db.transaction('cache', 'readonly');
+    const req = tx.objectStore('cache').get('data');
+    const data = await new Promise((resolve, reject) => {
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    return data;
+  } catch (e) { return null; }
+}
+
 async function loadAllData() {
   const statusEl = document.getElementById('connStatus');
   try {
@@ -804,13 +845,25 @@ async function loadAllData() {
     cachedKps = kpRes.data || [];
     cachedQuestions = qRes.data || [];
 
+    // 存一份到 IndexedDB 作为离线缓存
+    await saveToCache({ chapters: cachedChapters, kps: cachedKps, questions: cachedQuestions });
+
     statusEl.className = 'conn-status';
     statusEl.innerHTML = '<span class="dot"></span> 数据已同步';
-    updateConnStatus(true);
   } catch (err) {
-    console.error('加载数据失败:', err);
-    statusEl.className = 'conn-status error';
-    statusEl.innerHTML = '<span class="dot"></span> 连接失败，使用缓存';
+    console.warn('Supabase 加载失败，尝试离线缓存:', err.message);
+    // 回退到 IndexedDB 缓存
+    const cache = await loadFromCache();
+    if (cache) {
+      cachedChapters = cache.chapters || [];
+      cachedKps = cache.kps || [];
+      cachedQuestions = cache.questions || [];
+      statusEl.className = 'conn-status warn';
+      statusEl.innerHTML = '<span class="dot"></span> 离线模式（上次缓存）';
+    } else {
+      statusEl.className = 'conn-status error';
+      statusEl.innerHTML = '<span class="dot"></span> 无数据，请检查网络';
+    }
   }
 }
 
@@ -1051,6 +1104,7 @@ async function refreshMainContent() {
         </div>
         <div class="card-info">
           <div class="card-date">📅 首次上传：${q.first_upload_date}</div>
+          ${q.file_name ? `<div class="card-date" style="margin-top:4px;color:#888;">📄 ${escapeHtml(q.file_name)}</div>` : ''}
           <div class="progress-section">
             <div class="progress-header">
               <span class="review-label">刷题进度</span>
@@ -1067,10 +1121,10 @@ async function refreshMainContent() {
           </div>
           <div class="card-actions">
             <button class="btn-review" ${q.review_count >= 5 ? 'disabled' : ''}
-                    onclick="addReview('${q.id}')">
+                    onclick="addReview(${q.id})">
               ${q.review_count >= 5 ? '✓ 已完成' : '刷了一遍'}
             </button>
-            <button class="btn-delete" onclick="deleteQuestion('${q.id}')">删除</button>
+            <button class="btn-delete" onclick="deleteQuestion(${q.id})">删除</button>
           </div>
         </div>
       </div>`;
