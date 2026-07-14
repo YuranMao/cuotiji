@@ -108,8 +108,28 @@ body {
   line-height: 1;
   flex-shrink: 0;
 }
-.chapter-header:hover .del-chapter { display: block; }
+.chapter-header:hover .del-chapter,
+.chapter-header:hover .sort-btn { display: block; }
 .chapter-header .del-chapter:hover { color: #e74c3c; }
+.sort-btn {
+  font-size: 11px;
+  color: #bbb;
+  cursor: pointer;
+  padding: 1px 3px;
+  display: none;
+  border: none;
+  background: none;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.sort-btn:hover { color: #4a90d9; }
+.sort-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex-shrink: 0;
+  line-height: 1;
+}
 
 .kp-list { display: none; }
 .kp-list.open { display: block; }
@@ -147,6 +167,7 @@ body {
   flex-shrink: 0;
 }
 .kp-item:hover .del-kp { display: block; }
+.kp-item:hover .sort-btn { display: block; }
 .kp-item .del-kp:hover { color: #e74c3c; }
 
 .main {
@@ -850,8 +871,8 @@ async function loadAllData() {
   const statusEl = document.getElementById('connStatus');
   try {
     const [cRes, kpRes, qRes] = await Promise.all([
-      sb.from('chapters').select('*').order('id'),
-      sb.from('knowledge_points').select('*').order('id'),
+      sb.from('chapters').select('*').order('sort_order', { ascending: true }).order('id'),
+      sb.from('knowledge_points').select('*').order('sort_order', { ascending: true }).order('id'),
       sb.from('questions').select('*').order('created_at', { ascending: false })
     ]);
 
@@ -1013,6 +1034,37 @@ async function deleteQuestion(id) {
   }
 }
 
+async function moveChapter(id, dir) {
+  const idx = cachedChapters.findIndex(c => c.id == id);
+  if (idx < 0 || (dir < 0 && idx === 0) || (dir > 0 && idx === cachedChapters.length - 1)) return;
+  const swapIdx = idx + dir;
+  const a = cachedChapters[idx], b = cachedChapters[swapIdx];
+  try {
+    await sb.from('chapters').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id);
+    await sb.from('chapters').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
+    await loadAllData();
+    await refreshSidebar();
+  } catch (err) {
+    showToast('排序失败: ' + err.message);
+  }
+}
+
+async function moveKp(id, chapterId, dir) {
+  const childKps = cachedKps.filter(kp => kp.chapter_id == chapterId);
+  const idx = childKps.findIndex(kp => kp.id == id);
+  if (idx < 0 || (dir < 0 && idx === 0) || (dir > 0 && idx === childKps.length - 1)) return;
+  const swapIdx = idx + dir;
+  const a = childKps[idx], b = childKps[swapIdx];
+  try {
+    await sb.from('knowledge_points').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id);
+    await sb.from('knowledge_points').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
+    await loadAllData();
+    await refreshSidebar();
+  } catch (err) {
+    showToast('排序失败: ' + err.message);
+  }
+}
+
 async function markCorrect(id) {
   const q = cachedQuestions.find(q => q.id == id);
   if (!q) return;
@@ -1061,7 +1113,7 @@ async function markWrong(id) {
 async function refreshSidebar() {
   const container = document.getElementById('sidebarTree');
 
-  container.innerHTML = cachedChapters.map(ch => {
+  container.innerHTML = cachedChapters.map((ch, idx) => {
     const childKps = cachedKps.filter(kp => kp.chapter_id === ch.id);
     const totalQuestions = childKps.reduce((sum, kp) =>
       sum + cachedQuestions.filter(q => q.knowledge_point_id === kp.id).length, 0);
@@ -1075,10 +1127,16 @@ async function refreshSidebar() {
           <span class="icon">📁</span>
           <span class="name">${escapeHtml(ch.name)}</span>
           <span class="count">${totalQuestions}</span>
+          <div class="sort-wrap">
+            <button class="sort-btn" ${idx === 0 ? 'disabled style="visibility:hidden"' : ''}
+                    onclick="event.stopPropagation();moveChapter(${ch.id}, -1)">▲</button>
+            <button class="sort-btn" ${idx === cachedChapters.length - 1 ? 'disabled style="visibility:hidden"' : ''}
+                    onclick="event.stopPropagation();moveChapter(${ch.id}, 1)">▼</button>
+          </div>
           <button class="del-chapter" onclick="event.stopPropagation();deleteChapter(${ch.id})">×</button>
         </div>
         <div class="kp-list ${isExpanded ? 'open' : ''}">
-          ${childKps.map(kp => {
+          ${childKps.map((kp, kpIdx) => {
             const kpCount = cachedQuestions.filter(q => q.knowledge_point_id === kp.id).length;
             return `
               <div class="kp-item ${selectedKpId == kp.id ? 'active' : ''}"
@@ -1086,6 +1144,12 @@ async function refreshSidebar() {
                 <span class="kp-dot">●</span>
                 <span class="kp-name">${escapeHtml(kp.name)}</span>
                 <span class="kp-count">${kpCount}</span>
+                <div class="sort-wrap">
+                  <button class="sort-btn" ${kpIdx === 0 ? 'disabled style="visibility:hidden"' : ''}
+                          onclick="event.stopPropagation();moveKp(${kp.id}, ${ch.id}, -1)">▲</button>
+                  <button class="sort-btn" ${kpIdx === childKps.length - 1 ? 'disabled style="visibility:hidden"' : ''}
+                          onclick="event.stopPropagation();moveKp(${kp.id}, ${ch.id}, 1)">▼</button>
+                </div>
                 <button class="del-kp" onclick="event.stopPropagation();deleteKp(${kp.id})">×</button>
               </div>`;
           }).join('')}
