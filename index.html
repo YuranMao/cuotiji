@@ -286,17 +286,33 @@ body {
   flex-wrap: wrap;
   gap: 4px;
   margin-bottom: 8px;
+  min-height: 20px;
 }
 .review-date-tag {
   font-size: 10px;
   padding: 2px 7px;
-  background: #e8f0fe;
-  color: #4a90d9;
   border-radius: 3px;
+}
+.review-date-tag.tag-correct {
+  background: #e6f9ed;
+  color: #27ae60;
+}
+.review-date-tag.tag-wrong {
+  background: #fdeaea;
+  color: #e74c3c;
+}
+.card-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  background: #27ae60;
+  color: #fff;
+  border-radius: 4px;
+  margin-bottom: 4px;
 }
 .card-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   padding-top: 8px;
   border-top: 1px solid #f0f0f0;
 }
@@ -311,21 +327,23 @@ body {
   transition: all .2s;
   -webkit-tap-highlight-color: transparent;
 }
-.card-actions .btn-review {
-  border-color: #4a90d9;
-  color: #4a90d9;
+.card-actions .btn-correct {
+  border-color: #27ae60;
+  color: #27ae60;
   font-weight: 500;
 }
-.card-actions .btn-review:active { background: #4a90d9; color: #fff; }
-.card-actions .btn-review:disabled {
-  border-color: #ddd;
-  color: #ccc;
-  cursor: not-allowed;
-  background: #fafafa;
-}
-.card-actions .btn-delete {
+.card-actions .btn-correct:active { background: #27ae60; color: #fff; }
+.card-actions .btn-wrong {
   border-color: #e74c3c;
   color: #e74c3c;
+  font-weight: 500;
+}
+.card-actions .btn-wrong:active { background: #e74c3c; color: #fff; }
+.card-actions .btn-delete {
+  border-color: #bbb;
+  color: #999;
+  font-size: 12px;
+  flex: 0.6;
 }
 .card-actions .btn-delete:active { background: #e74c3c; color: #fff; }
 
@@ -927,8 +945,9 @@ async function saveQuestion() {
       knowledge_point_id: kpId,
       image_data: selectedImageData,
       first_upload_date: now,
-      review_count: 0,
-      review_dates: []
+      correct_count: 0,
+      wrong_count: 0,
+      review_log: []
     });
     if (res.error) throw res.error;
     await loadAllData();
@@ -994,22 +1013,45 @@ async function deleteQuestion(id) {
   }
 }
 
-async function addReview(id) {
-  const q = cachedQuestions.find(q => q.id === id);
+async function markCorrect(id) {
+  const q = cachedQuestions.find(q => q.id == id);
   if (!q) return;
-  if (q.review_count >= 5) { showToast('已达最大次数（5次）'); return; }
-  const newCount = q.review_count + 1;
-  const newDates = [...(q.review_dates || []), new Date().toISOString().slice(0, 10)];
+  const newCorrect = (q.correct_count || 0) + 1;
+  const today = new Date().toISOString().slice(0, 10);
+  const newLog = [...(q.review_log || []), { date: today, result: 'correct' }];
   try {
     const res = await sb.from('questions').update({
-      review_count: newCount,
-      review_dates: newDates
+      correct_count: newCorrect,
+      review_log: newLog
     }).eq('id', id);
     if (res.error) throw res.error;
     await loadAllData();
     await refreshMainContent();
-    updateConnStatus(true);
-    showToast('已记录第 ' + newCount + ' 次');
+    if (newCorrect >= 5) {
+      showToast('恭喜！已答对 5 次，完成！');
+    } else {
+      showToast('答对了（' + newCorrect + '/5）');
+    }
+  } catch (err) {
+    showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err)));
+  }
+}
+
+async function markWrong(id) {
+  const q = cachedQuestions.find(q => q.id == id);
+  if (!q) return;
+  const newWrong = (q.wrong_count || 0) + 1;
+  const today = new Date().toISOString().slice(0, 10);
+  const newLog = [...(q.review_log || []), { date: today, result: 'wrong' }];
+  try {
+    const res = await sb.from('questions').update({
+      wrong_count: newWrong,
+      review_log: newLog
+    }).eq('id', id);
+    if (res.error) throw res.error;
+    await loadAllData();
+    await refreshMainContent();
+    showToast('已记录，继续加油！（答错 ' + newWrong + ' 次）');
   } catch (err) {
     showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err)));
   }
@@ -1095,8 +1137,12 @@ async function refreshMainContent() {
   }
 
   container.innerHTML = `<div class="question-grid">${filtered.map(q => {
-    const pct = (q.review_count / 5) * 100;
-    const dates = q.review_dates || [];
+    const correct = q.correct_count || 0;
+    const wrong = q.wrong_count || 0;
+    const total = correct + wrong;
+    const pct = Math.min((correct / 5) * 100, 100);
+    const isCompleted = correct >= 5;
+    const log = q.review_log || [];
     return `
       <div class="question-card">
         <div class="card-img-wrap" onclick="previewImage(this.querySelector('img').src)">
@@ -1106,24 +1152,26 @@ async function refreshMainContent() {
           <div class="card-date">📅 首次上传：${q.first_upload_date}</div>
           ${q.file_name ? `<div class="card-date" style="margin-top:4px;color:#888;">📄 ${escapeHtml(q.file_name)}</div>` : ''}
           <div class="progress-section">
+            ${isCompleted ? '<span class="card-badge">✓ 已完成</span>' : ''}
             <div class="progress-header">
-              <span class="review-label">刷题进度</span>
-              <span class="review-count">${q.review_count} / 5</span>
+              <span class="review-label">答对 ${correct} / 5${total > 0 ? `（共答 ${total} 次）` : ''}</span>
             </div>
             <div class="progress-bar-wrap">
-              <div class="progress-bar-fill ${q.review_count >= 5 ? 'full' : ''}"
+              <div class="progress-bar-fill ${isCompleted ? 'full' : ''}"
                    style="width:${pct}%"></div>
             </div>
-            ${dates.length > 0 ? `
+            ${log.length > 0 ? `
               <div class="review-dates">
-                ${dates.map(d => `<span class="review-date-tag">${d}</span>`).join('')}
-              </div>` : '<div class="review-dates" style="height:20px"></div>'}
+                ${log.slice(-8).reverse().map(entry => {
+                  const cls = entry.result === 'correct' ? 'tag-correct' : 'tag-wrong';
+                  const emoji = entry.result === 'correct' ? '✓' : '✗';
+                  return `<span class="review-date-tag ${cls}">${entry.date} ${emoji}</span>`;
+                }).join('')}
+              </div>` : '<div class="review-dates"></div>'}
           </div>
           <div class="card-actions">
-            <button class="btn-review" ${q.review_count >= 5 ? 'disabled' : ''}
-                    onclick="addReview(${q.id})">
-              ${q.review_count >= 5 ? '✓ 已完成' : '刷了一遍'}
-            </button>
+            <button class="btn-correct" onclick="markCorrect(${q.id})">答对了</button>
+            <button class="btn-wrong" onclick="markWrong(${q.id})">还不会</button>
             <button class="btn-delete" onclick="deleteQuestion(${q.id})">删除</button>
           </div>
         </div>

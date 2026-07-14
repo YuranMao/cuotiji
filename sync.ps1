@@ -146,8 +146,9 @@ foreach ($chDir in $chapters) {
                     knowledge_point_id = $kpId
                     image_data         = $dataUri
                     first_upload_date  = $today
-                    review_count       = 0
-                    review_dates       = @()
+                    correct_count      = 0
+                    wrong_count        = 0
+                    review_log         = @()
                     file_name          = $imgFile.Name
                 } | ConvertTo-Json -Depth 5 -Compress
 
