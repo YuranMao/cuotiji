@@ -768,8 +768,17 @@ async function showKpModal() {
   const sel = document.getElementById('kpChapterSelect');
   sel.innerHTML = cachedChapters.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
   document.getElementById('kpNameInput').value = '';
+  document.getElementById('editKpId').value = '';
   openModal('kpModal');
   setTimeout(() => document.getElementById('kpNameInput').focus(), 100);
+}
+
+function showKpEditModal(kpId, currentName, chapterId) {
+  document.getElementById('kpChapterSelect').value = chapterId;
+  document.getElementById('kpNameInput').value = currentName;
+  document.getElementById('editKpId').value = kpId;
+  openModal('kpModal');
+  setTimeout(() => { document.getElementById('kpNameInput').focus(); document.getElementById('kpNameInput').select(); }, 100);
 }
 
 async function showQuestionModal() {
@@ -943,15 +952,21 @@ async function saveChapter() {
 async function saveKnowledgePoint() {
   const chapterId = parseInt(document.getElementById('kpChapterSelect').value, 10);
   const name = document.getElementById('kpNameInput').value.trim();
+  const editId = document.getElementById('editKpId').value;
   if (!name) { showToast('请输入知识点名称'); return; }
   try {
-    const res = await sb.from('knowledge_points').insert({ chapter_id: chapterId, name });
+    let res;
+    if (editId) {
+      res = await sb.from('knowledge_points').update({ name, chapter_id: chapterId }).eq('id', editId);
+    } else {
+      res = await sb.from('knowledge_points').insert({ chapter_id: chapterId, name });
+    }
     if (res.error) throw res.error;
     await loadAllData();
     closeModal('kpModal');
     await refreshSidebar();
     updateConnStatus(true);
-    showToast('知识点已添加');
+    showToast(editId ? '知识点已更新' : '知识点已添加');
   } catch (err) {
     showToast('保存失败: ' + (err.message || err.details || JSON.stringify(err)));
   }
@@ -1125,7 +1140,7 @@ async function refreshSidebar() {
              onclick="selectChapter(${ch.id})">
           <span class="arrow ${isExpanded ? 'expanded' : ''}">▶</span>
           <span class="icon">📁</span>
-          <span class="name">${escapeHtml(ch.name)}</span>
+          <span class="name" ondblclick="event.stopPropagation();showChapterModal(${ch.id}, '${escapeHtml(ch.name).replace(/'/g, "\\'")}')">${escapeHtml(ch.name)}</span>
           <span class="count">${totalQuestions}</span>
           <div class="sort-wrap">
             <button class="sort-btn" ${idx === 0 ? 'disabled style="visibility:hidden"' : ''}
@@ -1142,7 +1157,7 @@ async function refreshSidebar() {
               <div class="kp-item ${selectedKpId == kp.id ? 'active' : ''}"
                    onclick="event.stopPropagation();selectKp(${kp.id})">
                 <span class="kp-dot">●</span>
-                <span class="kp-name">${escapeHtml(kp.name)}</span>
+                <span class="kp-name" ondblclick="event.stopPropagation();showKpEditModal(${kp.id}, '${escapeHtml(kp.name).replace(/'/g, "\\'")}', ${ch.id})">${escapeHtml(kp.name)}</span>
                 <span class="kp-count">${kpCount}</span>
                 <div class="sort-wrap">
                   <button class="sort-btn" ${kpIdx === 0 ? 'disabled style="visibility:hidden"' : ''}
