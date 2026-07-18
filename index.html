@@ -185,6 +185,29 @@ body {
 .kp-item:hover .sort-btn { display: block; }
 .kp-item .del-kp:hover { color: #e74c3c; }
 
+/* ---- Tab Navigation ---- */
+.tab-nav {
+  display: flex;
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
+  gap: 0;
+}
+.tab-nav button {
+  flex: 1;
+  padding: 12px 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #999;
+  border-bottom: 2px solid transparent;
+  transition: all .2s;
+  position: relative;
+}
+.tab-nav button.active { color: #4a90d9; border-bottom-color: #4a90d9; }
+.tab-nav button:active { background: #f5f7fa; }
+
 .main {
   flex: 1;
   display: flex;
@@ -383,6 +406,227 @@ body {
 }
 .card-actions .btn-delete:active { background: #e74c3c; color: #fff; }
 
+/* ---- Ebbinghaus ---- */
+.ebb-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  font-size: 13px;
+}
+.ebb-table thead th {
+  background: #f5f7fa;
+  padding: 10px 6px;
+  font-weight: 600;
+  color: #555;
+  border-bottom: 1px solid #eee;
+  text-align: center;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.ebb-table tbody td {
+  padding: 10px 6px;
+  text-align: center;
+  border-bottom: 1px solid #f0f0f0;
+  vertical-align: middle;
+}
+.ebb-table .eb-name { text-align: left; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ebb-table .eb-date { font-size: 12px; color: #888; white-space: nowrap; }
+.ebb-chk {
+  width: 18px; height: 18px;
+  cursor: pointer;
+  accent-color: #4a90d9;
+}
+.ebb-chk:disabled { opacity: .4; cursor: not-allowed; }
+.ebb-future { color: #ccc; font-size: 11px; }
+.ebb-done { background: #e6f9ed; }
+.ebb-due { background: #fff8e1; }
+.ebb-head-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  align-items: center;
+}
+.ebb-head-actions button {
+  padding: 8px 14px;
+  background: #4a90d9;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.ebb-head-actions button:active { background: #3a7bc8; }
+.ebb-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.ebb-actions { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; }
+.ebb-actions button {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  cursor: pointer;
+  color: #666;
+}
+.ebb-actions button:active { background: #eee; }
+.ebb-actions .eb-del { color: #e74c3c; border-color: #f5c6cb; }
+.ebb-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+@media (max-width:768px) {
+  .ebb-table { font-size: 11px; }
+  .ebb-table thead th { padding: 8px 3px; font-size: 10px; }
+  .ebb-table tbody td { padding: 8px 3px; }
+  .ebb-table .eb-name { max-width: 80px; }
+}
+
+/* ---- Timeline ---- */
+.tl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tl-inner { min-width: 600px; }
+.tl-header {
+  display: flex;
+  border-bottom: 1px solid #e0e0e0;
+  background: #f5f7fa;
+  border-radius: 8px 8px 0 0;
+}
+.tl-label-col {
+  width: 70px; min-width: 70px;
+  padding: 10px 8px;
+  font-weight: 600;
+  color: #888;
+  font-size: 12px;
+  text-align: center;
+  border-right: 1px solid #e0e0e0;
+}
+.tl-days {
+  flex: 1;
+  display: flex;
+}
+.tl-day {
+  flex: 1;
+  min-width: 28px;
+  padding: 8px 0;
+  text-align: center;
+  font-size: 10px;
+  color: #999;
+  border-right: 1px solid #f0f0f0;
+}
+.tl-day.weekend { color: #e74c3c; }
+.tl-row {
+  display: flex;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fff;
+  position: relative;
+  min-height: 44px;
+}
+.tl-row-label {
+  width: 70px; min-width: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 13px;
+  color: #333;
+  border-right: 1px solid #e0e0e0;
+  padding: 4px;
+}
+.tl-row-track {
+  flex: 1;
+  display: flex;
+  position: relative;
+  min-height: 44px;
+}
+.tl-day-slot {
+  flex: 1;
+  min-width: 28px;
+  border-right: 1px solid #f8f8f8;
+  position: relative;
+}
+.tl-event {
+  position: absolute;
+  top: 4px;
+  height: 36px;
+  border-radius: 4px;
+  padding: 0 8px;
+  font-size: 11px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  z-index: 2;
+  transition: opacity .2s;
+}
+.tl-event:hover { opacity: .85; }
+.tl-event .tl-del {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0;
+  padding: 2px 4px;
+  background: rgba(0,0,0,.3);
+  border-radius: 3px;
+}
+.tl-event:hover .tl-del { opacity: 1; }
+.tl-today-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #e74c3c;
+  z-index: 3;
+  pointer-events: none;
+}
+.tl-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.tl-toolbar button {
+  padding: 8px 14px;
+  background: #4a90d9;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.tl-toolbar button:active { background: #3a7bc8; }
+.tl-toolbar .tl-nav {
+  background: #fff;
+  color: #333;
+  border: 1px solid #d9d9d9;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.tl-legend {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: #888;
+  align-items: center;
+}
+.tl-legend span { display: flex; align-items: center; gap: 3px; }
+.tl-l-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+/* ---- 弹窗 ---- */
 .modal-overlay {
   display: none;
   position: fixed;
@@ -412,6 +656,7 @@ body {
   font-weight: 600;
 }
 .modal .form-group input[type="text"],
+.modal .form-group input[type="date"],
 .modal .form-group select {
   width: 100%;
   padding: 10px 12px;
@@ -509,7 +754,6 @@ body {
 }
 .toast.show { opacity: 1; }
 
-/* loading */
 .loading-spinner {
   display: flex;
   align-items: center;
@@ -556,6 +800,20 @@ body {
 .conn-status.warn { color: #f39c12; }
 .conn-status.warn .dot { background: #f39c12; }
 
+/* 艾宾浩斯完成编辑 */
+.eb-edit-inline {
+  border: 1px solid #4a90d9;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 13px;
+  outline: none;
+  width: 120px;
+}
+
+/* 面板显隐 */
+.panel { display: none; }
+.panel.active { display: block; }
+
 @media (max-width: 768px) {
   .sidebar-overlay {
     display: block;
@@ -592,7 +850,9 @@ body {
   }
   .modal .image-upload-area { height: 130px; }
   .modal .form-group input[type="text"],
-  .modal .form-group select { font-size: 16px; padding: 11px 14px; }
+  .modal .form-group select,
+  .modal .form-group input[type="date"] { font-size: 16px; padding: 11px 14px; }
+  .tab-nav button { font-size: 12px; padding: 10px 2px; }
 }
 @media (max-width: 380px) {
   .sidebar { width: 260px; }
@@ -617,15 +877,39 @@ body {
 </aside>
 
 <main class="main">
+  <!-- 导航标签 -->
+  <div class="tab-nav" id="tabNav">
+    <button class="active" data-tab="cuoti" onclick="switchTab('cuoti')">错题集</button>
+    <button data-tab="ebb" onclick="switchTab('ebb')">遗忘表</button>
+    <button data-tab="timeline" onclick="switchTab('timeline')">进度表</button>
+  </div>
+
   <div class="main-header">
     <button class="menu-btn" onclick="toggleSidebar()" title="目录">☰</button>
     <div class="breadcrumb" id="breadcrumb"><span>选择知识点查看错题</span></div>
-    <button class="add-btn" id="addQuestionBtn" disabled onclick="showQuestionModal()">+ 错题</button>
+    <button class="add-btn" id="addBtn" disabled onclick="handleAddBtn()">+ 错题</button>
   </div>
   <div class="main-content" id="mainContent">
-    <div class="empty-state">
-      <div class="empty-icon">📖</div>
-      <p>在目录中添加章节和知识点<br>即可开始记录错题</p>
+    <!-- 错题集面板 -->
+    <div class="panel active" id="panelCuoti">
+      <div class="empty-state">
+        <div class="empty-icon">📖</div>
+        <p>在目录中添加章节和知识点<br>即可开始记录错题</p>
+      </div>
+    </div>
+    <!-- 艾宾浩斯面板 -->
+    <div class="panel" id="panelEbb">
+      <div class="empty-state">
+        <div class="empty-icon">🧠</div>
+        <p>点击上方 + 添加背诵知识点<br>按照遗忘曲线复习</p>
+      </div>
+    </div>
+    <!-- 进度表面板 -->
+    <div class="panel" id="panelTimeline">
+      <div class="empty-state">
+        <div class="empty-icon">📅</div>
+        <p>点击上方 + 添加任务进度<br>可视化考研复习安排</p>
+      </div>
     </div>
   </div>
 </main>
@@ -696,6 +980,59 @@ body {
   </div>
 </div>
 
+<!-- 艾宾浩斯弹窗 -->
+<div class="modal-overlay" id="ebbModal">
+  <div class="modal">
+    <h3 id="ebbModalTitle">添加背诵项</h3>
+    <div class="form-group">
+      <label>背诵内容</label>
+      <input type="text" id="ebbNameInput" placeholder="例如：泰勒公式" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>首次学习日期</label>
+      <input type="date" id="ebbDateInput">
+    </div>
+    <input type="hidden" id="editEbbId">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('ebbModal')">取消</button>
+      <button class="btn-confirm" onclick="saveEbbItem()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 进度条弹窗 -->
+<div class="modal-overlay" id="tlModal">
+  <div class="modal">
+    <h3 id="tlModalTitle">添加任务</h3>
+    <div class="form-group">
+      <label>科目</label>
+      <select id="tlSubjectSelect">
+        <option value="数学">数学</option>
+        <option value="专业课">专业课</option>
+        <option value="英语">英语</option>
+        <option value="政治">政治</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>任务名称</label>
+      <input type="text" id="tlLabelInput" placeholder="例如：强化阶段" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>开始日期</label>
+      <input type="date" id="tlStartDateInput">
+    </div>
+    <div class="form-group">
+      <label>结束日期</label>
+      <input type="date" id="tlEndDateInput">
+    </div>
+    <input type="hidden" id="editTlId">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('tlModal')">取消</button>
+      <button class="btn-confirm" onclick="saveTlEvent()">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- 图片预览 -->
 <div class="img-preview-overlay" id="imgPreview" onclick="closeImgPreview()">
   <img id="imgPreviewSrc" src="">
@@ -712,6 +1049,9 @@ const supabaseUrl = 'https://owuckenvwmdsithqvsod.supabase.co';
 const supabaseKey = 'sb_publishable_2Ccd-_BuUgE2RJ35YKyhBA_XhysffVW';
 const sb = supabase.createClient(supabaseUrl, supabaseKey);
 
+// ==================== 艾宾浩斯间隔 ====================
+const EBB_INTERVALS = [1, 2, 4, 7, 15, 30];
+
 // ==================== 侧边栏 ====================
 function openSidebar() {
   document.getElementById('sidebar').classList.add('open');
@@ -726,12 +1066,58 @@ function toggleSidebar() {
 }
 
 // ==================== 全局状态 ====================
+let currentTab = 'cuoti';
 let selectedChapterId = null;
 let selectedKpId = null;
 let selectedImageData = null;
 let cachedChapters = [];
 let cachedKps = [];
 let cachedQuestions = [];
+let cachedEbbItems = [];
+let cachedTimeline = [];
+
+// ==================== Tab 切换 ====================
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel' + tab.charAt(0).toUpperCase() + tab.slice(1)));
+
+  const addBtn = document.getElementById('addBtn');
+  const breadcrumb = document.getElementById('breadcrumb');
+  const sidebar = document.getElementById('sidebar');
+
+  if (tab === 'cuoti') {
+    sidebar.style.display = '';
+    addBtn.textContent = '+ 错题';
+    addBtn.disabled = !selectedKpId;
+    breadcrumb.innerHTML = selectedKpId ? getBreadcrumbHtml() : '<span>选择知识点查看错题</span>';
+    document.getElementById('mainContent').querySelector('#panelCuoti').innerHTML = document.getElementById('mainContent').querySelector('#panelCuoti').innerHTML || '';
+  } else if (tab === 'ebb') {
+    sidebar.style.display = 'none';
+    addBtn.textContent = '+ 背诵项';
+    addBtn.disabled = false;
+    breadcrumb.textContent = '艾宾浩斯遗忘表';
+    renderEbb();
+  } else if (tab === 'timeline') {
+    sidebar.style.display = 'none';
+    addBtn.textContent = '+ 任务';
+    addBtn.disabled = false;
+    breadcrumb.textContent = '考研进度时间表';
+    renderTimeline();
+  }
+}
+
+function handleAddBtn() {
+  if (currentTab === 'cuoti') showQuestionModal();
+  else if (currentTab === 'ebb') showEbbModal();
+  else if (currentTab === 'timeline') showTlModal();
+}
+
+function getBreadcrumbHtml() {
+  const kp = cachedKps.find(k => k.id == selectedKpId);
+  const ch = cachedChapters.find(c => c.id == (kp?.chapter_id));
+  return escapeHtml(ch?.name || '') + ' <span>&gt;</span> ' + escapeHtml(kp?.name || '');
+}
 
 // ==================== Toast ====================
 let _toastTimer = null;
@@ -743,7 +1129,7 @@ function showToast(msg) {
   _toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
 }
 
-// ==================== 弹窗 ====================
+// ==================== 弹窗通用 ====================
 function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) {
   document.getElementById(id).classList.remove('show');
@@ -762,9 +1148,19 @@ function closeModal(id) {
   }
   if (id === 'kpModal') {
     document.getElementById('kpNameInput').value = '';
+    document.getElementById('editKpId').value = '';
+  }
+  if (id === 'ebbModal') {
+    document.getElementById('ebbNameInput').value = '';
+    document.getElementById('editEbbId').value = '';
+  }
+  if (id === 'tlModal') {
+    document.getElementById('tlLabelInput').value = '';
+    document.getElementById('editTlId').value = '';
   }
 }
 
+// ==================== 章节弹窗 ====================
 function showChapterModal(chapterId, currentName) {
   if (chapterId) {
     document.getElementById('chapterModalTitle').textContent = '编辑章节';
@@ -790,7 +1186,9 @@ async function showKpModal() {
 }
 
 function showKpEditModal(kpId, currentName, chapterId) {
-  document.getElementById('kpChapterSelect').value = chapterId;
+  const sel = document.getElementById('kpChapterSelect');
+  sel.innerHTML = cachedChapters.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  sel.value = chapterId;
   document.getElementById('kpNameInput').value = currentName;
   document.getElementById('editKpId').value = kpId;
   openModal('kpModal');
@@ -801,8 +1199,8 @@ async function showQuestionModal() {
   if (!selectedKpId) { showToast('请先选择知识点'); return; }
   const sel = document.getElementById('qKpSelect');
   sel.innerHTML = cachedKps.map(kp => {
-    const ch = cachedChapters.find(c => c.id === kp.chapter_id);
-    return `<option value="${kp.id}" ${kp.id === selectedKpId ? 'selected' : ''}>
+    const ch = cachedChapters.find(c => c.id == kp.chapter_id);
+    return `<option value="${kp.id}" ${kp.id == selectedKpId ? 'selected' : ''}>
       ${ch ? ch.name + ' > ' : ''}${escapeHtml(kp.name)}
     </option>`;
   }).join('');
@@ -852,9 +1250,9 @@ function previewImage(src) {
   document.getElementById('imgPreview').classList.add('show');
 }
 
-// ==================== 数据加载（Supabase 优先 + IndexedDB 兜底） ====================
+// ==================== IndexedDB 缓存 ====================
 const DB_NAME = 'CuotijiCache';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 function openCacheDB() {
   return new Promise((resolve, reject) => {
@@ -875,7 +1273,7 @@ async function saveToCache(data) {
     tx.objectStore('cache').put(data, 'data');
     await new Promise(r => { tx.oncomplete = r; });
     db.close();
-  } catch (e) { /* ignore */ }
+  } catch (e) {}
 }
 
 async function loadFromCache() {
@@ -895,33 +1293,39 @@ async function loadFromCache() {
 async function loadAllData() {
   const statusEl = document.getElementById('connStatus');
   try {
-    const [cRes, kpRes, qRes] = await Promise.all([
+    const [cRes, kpRes, qRes, eRes, tRes] = await Promise.all([
       sb.from('chapters').select('*').order('sort_order', { ascending: true }).order('id'),
       sb.from('knowledge_points').select('*').order('sort_order', { ascending: true }).order('id'),
-      sb.from('questions').select('*').order('created_at', { ascending: false })
+      sb.from('questions').select('*').order('created_at', { ascending: false }),
+      sb.from('ebbinghaus_items').select('*').order('first_date', { ascending: false }),
+      sb.from('timeline_events').select('*').order('start_date')
     ]);
 
     if (cRes.error) throw cRes.error;
     if (kpRes.error) throw kpRes.error;
     if (qRes.error) throw qRes.error;
+    if (eRes.error) throw eRes.error;
+    if (tRes.error) throw tRes.error;
 
     cachedChapters = cRes.data || [];
     cachedKps = kpRes.data || [];
     cachedQuestions = qRes.data || [];
+    cachedEbbItems = eRes.data || [];
+    cachedTimeline = tRes.data || [];
 
-    // 存一份到 IndexedDB 作为离线缓存
-    await saveToCache({ chapters: cachedChapters, kps: cachedKps, questions: cachedQuestions });
+    await saveToCache({ chapters: cachedChapters, kps: cachedKps, questions: cachedQuestions, ebbItems: cachedEbbItems, timeline: cachedTimeline });
 
     statusEl.className = 'conn-status';
     statusEl.innerHTML = '<span class="dot"></span> 数据已同步';
   } catch (err) {
     console.warn('Supabase 加载失败，尝试离线缓存:', err.message);
-    // 回退到 IndexedDB 缓存
     const cache = await loadFromCache();
     if (cache) {
       cachedChapters = cache.chapters || [];
       cachedKps = cache.kps || [];
       cachedQuestions = cache.questions || [];
+      cachedEbbItems = cache.ebbItems || [];
+      cachedTimeline = cache.timeline || [];
       statusEl.className = 'conn-status warn';
       statusEl.innerHTML = '<span class="dot"></span> 离线模式（上次缓存）';
     } else {
@@ -931,18 +1335,7 @@ async function loadAllData() {
   }
 }
 
-function updateConnStatus(ok) {
-  const el = document.getElementById('connStatus');
-  if (ok) {
-    el.className = 'conn-status';
-    el.innerHTML = '<span class="dot"></span> 数据已同步';
-  } else {
-    el.className = 'conn-status error';
-    el.innerHTML = '<span class="dot"></span> 连接失败';
-  }
-}
-
-// ==================== 数据操作 ====================
+// ==================== 章节 / 知识点操作 ====================
 async function saveChapter() {
   const name = document.getElementById('chapterNameInput').value.trim();
   if (!name) { showToast('请输入章节名称'); return; }
@@ -958,7 +1351,6 @@ async function saveChapter() {
     await loadAllData();
     closeModal('chapterModal');
     await refreshSidebar();
-    updateConnStatus(true);
     showToast(editId ? '章节已更新' : '章节已添加');
   } catch (err) {
     showToast('保存失败: ' + (err.message || err.details || JSON.stringify(err)));
@@ -981,7 +1373,6 @@ async function saveKnowledgePoint() {
     await loadAllData();
     closeModal('kpModal');
     await refreshSidebar();
-    updateConnStatus(true);
     showToast(editId ? '知识点已更新' : '知识点已添加');
   } catch (err) {
     showToast('保存失败: ' + (err.message || err.details || JSON.stringify(err)));
@@ -1006,7 +1397,6 @@ async function saveQuestion() {
     closeModal('questionModal');
     await refreshMainContent();
     await refreshSidebar();
-    updateConnStatus(true);
     showToast('错题已添加');
   } catch (err) {
     showToast('保存失败: ' + (err.message || err.details || JSON.stringify(err)));
@@ -1015,56 +1405,78 @@ async function saveQuestion() {
 
 async function deleteChapter(id) {
   if (!confirm('确定删除该章节及所有知识点和错题？')) return;
-  updateConnStatus(false);
   try {
     await sb.from('chapters').delete().eq('id', id);
     await loadAllData();
-    if (selectedChapterId === id) {
+    if (selectedChapterId == id) {
       selectedChapterId = null; selectedKpId = null;
       updateMainHeader();
-      document.getElementById('mainContent').innerHTML =
+      document.getElementById('panelCuoti').innerHTML =
         '<div class="empty-state"><div class="empty-icon">📖</div><p>选择知识点查看错题</p></div>';
     }
     await refreshSidebar();
     showToast('已删除');
-  } catch (err) {
-    showToast('删除失败: ' + err.message);
-  }
+  } catch (err) { showToast('删除失败: ' + err.message); }
 }
 
 async function deleteKp(id) {
   if (!confirm('确定删除该知识点及所有错题？')) return;
-  updateConnStatus(false);
   try {
     await sb.from('knowledge_points').delete().eq('id', id);
     await loadAllData();
-    if (selectedKpId === id) {
+    if (selectedKpId == id) {
       selectedKpId = null;
       updateMainHeader();
-      document.getElementById('mainContent').innerHTML =
+      document.getElementById('panelCuoti').innerHTML =
         '<div class="empty-state"><div class="empty-icon">📖</div><p>选择知识点查看错题</p></div>';
     }
     await refreshSidebar();
     showToast('已删除');
-  } catch (err) {
-    showToast('删除失败: ' + err.message);
-  }
+  } catch (err) { showToast('删除失败: ' + err.message); }
 }
 
 async function deleteQuestion(id) {
   if (!confirm('确定删除该错题？')) return;
-  updateConnStatus(false);
   try {
     await sb.from('questions').delete().eq('id', id);
     await loadAllData();
     await refreshMainContent();
     await refreshSidebar();
     showToast('已删除');
-  } catch (err) {
-    showToast('删除失败: ' + err.message);
-  }
+  } catch (err) { showToast('删除失败: ' + err.message); }
 }
 
+async function markCorrect(id) {
+  const q = cachedQuestions.find(q => q.id == id);
+  if (!q) return;
+  const newCorrect = (q.correct_count || 0) + 1;
+  const today = new Date().toISOString().slice(0, 10);
+  const newLog = [...(q.review_log || []), { date: today, result: 'correct' }];
+  try {
+    const res = await sb.from('questions').update({ correct_count: newCorrect, review_log: newLog }).eq('id', id);
+    if (res.error) throw res.error;
+    await loadAllData();
+    await refreshMainContent();
+    showToast(newCorrect >= 5 ? '恭喜！已完成！' : '答对了（' + newCorrect + '/5）');
+  } catch (err) { showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err))); }
+}
+
+async function markWrong(id) {
+  const q = cachedQuestions.find(q => q.id == id);
+  if (!q) return;
+  const newWrong = (q.wrong_count || 0) + 1;
+  const today = new Date().toISOString().slice(0, 10);
+  const newLog = [...(q.review_log || []), { date: today, result: 'wrong' }];
+  try {
+    const res = await sb.from('questions').update({ wrong_count: newWrong, review_log: newLog }).eq('id', id);
+    if (res.error) throw res.error;
+    await loadAllData();
+    await refreshMainContent();
+    showToast('已记录（答错 ' + newWrong + ' 次）');
+  } catch (err) { showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err))); }
+}
+
+// ==================== 排序 ====================
 async function moveChapter(id, dir) {
   const idx = cachedChapters.findIndex(c => c.id == id);
   if (idx < 0 || (dir < 0 && idx === 0) || (dir > 0 && idx === cachedChapters.length - 1)) return;
@@ -1075,9 +1487,7 @@ async function moveChapter(id, dir) {
     await sb.from('chapters').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
     await loadAllData();
     await refreshSidebar();
-  } catch (err) {
-    showToast('排序失败: ' + err.message);
-  }
+  } catch (err) { showToast('排序失败: ' + err.message); }
 }
 
 async function moveKp(id, chapterId, dir) {
@@ -1091,56 +1501,10 @@ async function moveKp(id, chapterId, dir) {
     await sb.from('knowledge_points').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
     await loadAllData();
     await refreshSidebar();
-  } catch (err) {
-    showToast('排序失败: ' + err.message);
-  }
+  } catch (err) { showToast('排序失败: ' + err.message); }
 }
 
-async function markCorrect(id) {
-  const q = cachedQuestions.find(q => q.id == id);
-  if (!q) return;
-  const newCorrect = (q.correct_count || 0) + 1;
-  const today = new Date().toISOString().slice(0, 10);
-  const newLog = [...(q.review_log || []), { date: today, result: 'correct' }];
-  try {
-    const res = await sb.from('questions').update({
-      correct_count: newCorrect,
-      review_log: newLog
-    }).eq('id', id);
-    if (res.error) throw res.error;
-    await loadAllData();
-    await refreshMainContent();
-    if (newCorrect >= 5) {
-      showToast('恭喜！已答对 5 次，完成！');
-    } else {
-      showToast('答对了（' + newCorrect + '/5）');
-    }
-  } catch (err) {
-    showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err)));
-  }
-}
-
-async function markWrong(id) {
-  const q = cachedQuestions.find(q => q.id == id);
-  if (!q) return;
-  const newWrong = (q.wrong_count || 0) + 1;
-  const today = new Date().toISOString().slice(0, 10);
-  const newLog = [...(q.review_log || []), { date: today, result: 'wrong' }];
-  try {
-    const res = await sb.from('questions').update({
-      wrong_count: newWrong,
-      review_log: newLog
-    }).eq('id', id);
-    if (res.error) throw res.error;
-    await loadAllData();
-    await refreshMainContent();
-    showToast('已记录，继续加油！（答错 ' + newWrong + ' 次）');
-  } catch (err) {
-    showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err)));
-  }
-}
-
-// ==================== 渲染 ====================
+// ==================== 渲染：侧边栏 ====================
 async function refreshSidebar() {
   const container = document.getElementById('sidebarTree');
 
@@ -1204,7 +1568,7 @@ function selectChapter(chapterId) {
   selectedChapterId = (selectedChapterId == chapterId) ? null : chapterId;
   selectedKpId = null;
   updateMainHeader();
-  document.getElementById('mainContent').innerHTML =
+  document.getElementById('panelCuoti').innerHTML =
     '<div class="empty-state"><div class="empty-icon">📂</div><p>请选择具体知识点查看错题</p></div>';
   refreshSidebar();
   closeSidebar();
@@ -1225,10 +1589,10 @@ async function refreshMainContent() {
   if (!selectedKpId) return;
 
   const filtered = cachedQuestions
-    .filter(q => q.knowledge_point_id === selectedKpId)
+    .filter(q => q.knowledge_point_id == selectedKpId)
     .sort((a, b) => b.first_upload_date.localeCompare(a.first_upload_date));
 
-  const container = document.getElementById('mainContent');
+  const container = document.getElementById('panelCuoti');
 
   if (filtered.length === 0) {
     container.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><p>该知识点下暂无错题</p></div>';
@@ -1253,7 +1617,7 @@ async function refreshMainContent() {
           <div class="progress-section">
             ${isCompleted ? '<span class="card-badge">✓ 已完成</span>' : ''}
             <div class="progress-header">
-              <span class="review-label">答对 ${correct} / 5${total > 0 ? `（共答 ${total} 次）` : ''}</span>
+              <span class="review-label">答对 ${correct} / 5${total > 0 ? '（共答 ' + total + ' 次）' : ''}</span>
             </div>
             <div class="progress-bar-wrap">
               <div class="progress-bar-fill ${isCompleted ? 'full' : ''}"
@@ -1278,20 +1642,284 @@ async function refreshMainContent() {
   }).join('')}</div>`;
 }
 
-async function updateMainHeader() {
-  const breadcrumb = document.getElementById('breadcrumb');
-  const addBtn = document.getElementById('addQuestionBtn');
+function updateMainHeader() {
+  if (currentTab === 'cuoti') {
+    const breadcrumb = document.getElementById('breadcrumb');
+    const addBtn = document.getElementById('addBtn');
+    if (!selectedKpId) {
+      breadcrumb.innerHTML = '<span>选择知识点查看错题</span>';
+      addBtn.disabled = true;
+    } else {
+      breadcrumb.innerHTML = getBreadcrumbHtml();
+      addBtn.disabled = false;
+    }
+  }
+}
 
-  if (!selectedKpId) {
-    breadcrumb.innerHTML = '<span>选择知识点查看错题</span>';
-    addBtn.disabled = true;
+// ==================== 艾宾浩斯遗忘表 ====================
+function showEbbModal(id, name, firstDate) {
+  if (id) {
+    document.getElementById('ebbModalTitle').textContent = '编辑背诵项';
+    document.getElementById('ebbNameInput').value = name;
+    document.getElementById('ebbDateInput').value = firstDate;
+    document.getElementById('editEbbId').value = id;
+  } else {
+    document.getElementById('ebbModalTitle').textContent = '添加背诵项';
+    document.getElementById('ebbNameInput').value = '';
+    document.getElementById('ebbDateInput').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('editEbbId').value = '';
+  }
+  openModal('ebbModal');
+  setTimeout(() => document.getElementById('ebbNameInput').focus(), 100);
+}
+
+async function saveEbbItem() {
+  const name = document.getElementById('ebbNameInput').value.trim();
+  const firstDate = document.getElementById('ebbDateInput').value;
+  const editId = document.getElementById('editEbbId').value;
+  if (!name) { showToast('请输入背诵内容'); return; }
+  try {
+    let res;
+    if (editId) {
+      res = await sb.from('ebbinghaus_items').update({ name, first_date: firstDate }).eq('id', editId);
+    } else {
+      res = await sb.from('ebbinghaus_items').insert({ name, first_date: firstDate, reviews: [] });
+    }
+    if (res.error) throw res.error;
+    await loadAllData();
+    closeModal('ebbModal');
+    renderEbb();
+    showToast(editId ? '已更新' : '已添加');
+  } catch (err) { showToast('保存失败: ' + (err.message || err.details || JSON.stringify(err))); }
+}
+
+async function deleteEbbItem(id) {
+  if (!confirm('确定删除？')) return;
+  try {
+    await sb.from('ebbinghaus_items').delete().eq('id', id);
+    await loadAllData();
+    renderEbb();
+    showToast('已删除');
+  } catch (err) { showToast('删除失败: ' + err.message); }
+}
+
+async function toggleEbbReview(itemId, day) {
+  const item = cachedEbbItems.find(e => e.id == itemId);
+  if (!item) return;
+  const reviews = item.reviews || [];
+  const already = reviews.includes(day);
+  const newReviews = already ? reviews.filter(d => d !== day) : [...reviews, day];
+  try {
+    const res = await sb.from('ebbinghaus_items').update({ reviews: newReviews }).eq('id', itemId);
+    if (res.error) throw res.error;
+    await loadAllData();
+    renderEbb();
+  } catch (err) { showToast('更新失败: ' + (err.message || err.details || JSON.stringify(err))); }
+}
+
+function formatDate(d) {
+  d = new Date(d);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function getEbbSchedule(firstDate) {
+  const d = new Date(firstDate);
+  return EBB_INTERVALS.map(interval => {
+    const target = new Date(d);
+    target.setDate(target.getDate() + interval);
+    return formatDate(target);
+  });
+}
+
+function renderEbb() {
+  const container = document.getElementById('panelEbb');
+  if (cachedEbbItems.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>暂无背诵内容</p></div>';
     return;
   }
 
-  const kp = cachedKps.find(k => k.id === selectedKpId);
-  const ch = cachedChapters.find(c => c.id === (kp?.chapter_id));
-  breadcrumb.innerHTML = `${escapeHtml(ch?.name || '')} <span>&gt;</span> ${escapeHtml(kp?.name || '')}`;
-  addBtn.disabled = false;
+  const today = formatDate(new Date());
+  const headerCols = EBB_INTERVALS.map((d, i) => `<th>第${d}天<br>(${i+1})</th>`).join('');
+
+  container.innerHTML = `
+    <div class="ebb-toolbar">
+      <span style="font-size:12px;color:#888;">💡 按照遗忘曲线复习：学习后第 1、2、4、7、15、30 天各复习一次</span>
+    </div>
+    <div class="ebb-wrap">
+      <table class="ebb-table">
+        <thead><tr><th>背诵内容</th><th>学习日期</th>${headerCols}<th style="width:60px;">操作</th></tr></thead>
+        <tbody>
+        ${cachedEbbItems.map(item => {
+          const schedule = getEbbSchedule(item.first_date);
+          const reviews = item.reviews || [];
+          let allDone = true;
+          const cells = schedule.map(sDate => {
+            const done = reviews.includes(sDate);
+            if (!done) allDone = false;
+            const isFuture = sDate > today;
+            const cls = done ? 'ebb-done' : (sDate <= today && !done ? 'ebb-due' : '');
+            return `<td class="${cls}">${
+              isFuture
+                ? `<span class="ebb-future">${sDate.slice(5)}</span>`
+                : `<input type="checkbox" class="ebb-chk" ${done ? 'checked' : ''} onchange="toggleEbbReview(${item.id}, '${sDate}')">`
+            }</td>`;
+          }).join('');
+
+          return `<tr>
+            <td class="eb-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</td>
+            <td class="eb-date">${item.first_date}</td>
+            ${cells}
+            <td><div class="ebb-actions"><button onclick="showEbbModal(${item.id}, '${escapeHtml(item.name).replace(/'/g, "\\'")}', '${item.first_date}')">编辑</button><button class="eb-del" onclick="deleteEbbItem(${item.id})">删除</button></div></td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ==================== 考研进度时间表 ====================
+const SUBJECT_COLORS = { '数学': '#4a90d9', '专业课': '#27ae60', '英语': '#e67e22', '政治': '#9b59b6' };
+let tlRangeStart = null;
+let tlRangeEnd = null;
+
+function showTlModal(id, subject, label, startDate, endDate) {
+  if (id) {
+    document.getElementById('tlModalTitle').textContent = '编辑任务';
+    document.getElementById('tlSubjectSelect').value = subject;
+    document.getElementById('tlLabelInput').value = label;
+    document.getElementById('tlStartDateInput').value = startDate;
+    document.getElementById('tlEndDateInput').value = endDate;
+    document.getElementById('editTlId').value = id;
+  } else {
+    document.getElementById('tlModalTitle').textContent = '添加任务';
+    document.getElementById('tlLabelInput').value = '';
+    document.getElementById('editTlId').value = '';
+    const now = new Date().toISOString().slice(0, 10);
+    document.getElementById('tlStartDateInput').value = now;
+    document.getElementById('tlEndDateInput').value = now;
+  }
+  openModal('tlModal');
+  setTimeout(() => document.getElementById('tlLabelInput').focus(), 100);
+}
+
+async function saveTlEvent() {
+  const subject = document.getElementById('tlSubjectSelect').value;
+  const label = document.getElementById('tlLabelInput').value.trim();
+  const startDate = document.getElementById('tlStartDateInput').value;
+  const endDate = document.getElementById('tlEndDateInput').value;
+  const editId = document.getElementById('editTlId').value;
+  if (!label) { showToast('请输入任务名称'); return; }
+  if (endDate < startDate) { showToast('结束日期不能早于开始日期'); return; }
+  try {
+    let res;
+    if (editId) {
+      res = await sb.from('timeline_events').update({ subject, label, start_date: startDate, end_date: endDate }).eq('id', editId);
+    } else {
+      res = await sb.from('timeline_events').insert({ subject, label, start_date: startDate, end_date: endDate, color: SUBJECT_COLORS[subject] });
+    }
+    if (res.error) throw res.error;
+    await loadAllData();
+    closeModal('tlModal');
+    renderTimeline();
+    showToast(editId ? '已更新' : '已添加');
+  } catch (err) { showToast('保存失败: ' + (err.message || err.details || JSON.stringify(err))); }
+}
+
+async function deleteTlEvent(id) {
+  if (!confirm('确定删除？')) return;
+  try {
+    await sb.from('timeline_events').delete().eq('id', id);
+    await loadAllData();
+    renderTimeline();
+    showToast('已删除');
+  } catch (err) { showToast('删除失败: ' + err.message); }
+}
+
+function moveTimeline(dir) {
+  const days = dir * 14;
+  tlRangeStart = new Date(tlRangeStart);
+  tlRangeStart.setDate(tlRangeStart.getDate() + days);
+  tlRangeStart = formatDate(tlRangeStart);
+  tlRangeEnd = new Date(tlRangeEnd);
+  tlRangeEnd.setDate(tlRangeEnd.getDate() + days);
+  tlRangeEnd = formatDate(tlRangeEnd);
+  renderTimeline();
+}
+
+function renderTimeline() {
+  const container = document.getElementById('panelTimeline');
+
+  // compute date range
+  const today = formatDate(new Date());
+  if (!tlRangeStart) {
+    // default: today - 7 to today + 28
+    const s = new Date(); s.setDate(s.getDate() - 7); tlRangeStart = formatDate(s);
+    const e = new Date(); e.setDate(e.getDate() + 35); tlRangeEnd = formatDate(e);
+  }
+
+  const startD = new Date(tlRangeStart);
+  const endD = new Date(tlRangeEnd);
+  const dayCount = Math.round((endD - startD) / 86400000) + 1;
+  
+  // generate day headers
+  const dayHeaders = [];
+  for (let i = 0; i < dayCount; i++) {
+    const d = new Date(startD);
+    d.setDate(d.getDate() + i);
+    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+    const isToday = formatDate(d) === today;
+    dayHeaders.push(`<div class="tl-day${isToday ? ' today' : ''}${isWeekend ? ' weekend' : ''}" style="${isToday ? 'font-weight:700;color:#e74c3c' : ''}">
+      ${d.getMonth()+1}/${d.getDate()}
+    </div>`);
+  }
+  const daySlots = '<div class="tl-day-slot"></div>'.repeat(dayCount);
+
+  const subjects = ['数学', '专业课', '英语', '政治'];
+
+  // Position today line
+  const todayIdx = Math.round((new Date(today) - startD) / 86400000);
+  const todayPct = (todayIdx / dayCount) * 100;
+
+  container.innerHTML = `
+    <div class="tl-toolbar">
+      <button class="tl-nav" onclick="moveTimeline(-1)">◀ 前两周</button>
+      <span style="font-size:12px;color:#888;">${tlRangeStart} ~ ${tlRangeEnd}</span>
+      <button class="tl-nav" onclick="moveTimeline(1)">后两周 ▶</button>
+    </div>
+    <div class="tl-legend">
+      ${subjects.map(s => `<span><span class="tl-l-dot" style="background:${SUBJECT_COLORS[s]}"></span>${s}</span>`).join('')}
+    </div>
+    <div class="tl-wrap">
+      <div class="tl-inner">
+        <div class="tl-header">
+          <div class="tl-label-col">科目</div>
+          <div class="tl-days">${dayHeaders.join('')}</div>
+        </div>
+        ${subjects.map(subj => {
+          const events = cachedTimeline.filter(e => e.subject === subj);
+          return `<div class="tl-row">
+            <div class="tl-row-label">${subj}</div>
+            <div class="tl-row-track">
+              ${daySlots}
+              ${todayIdx >= 0 && todayIdx < dayCount ? `<div class="tl-today-line" style="left:${todayPct}%"></div>` : ''}
+              ${events.map(ev => {
+                const evStart = new Date(ev.start_date);
+                const evEnd = new Date(ev.end_date);
+                const startIdx = Math.round((evStart - startD) / 86400000);
+                const endIdx = Math.round((evEnd - startD) / 86400000);
+                if (endIdx < 0 || startIdx >= dayCount) return '';
+                const left = Math.max(0, (startIdx / dayCount) * 100);
+                const width = Math.max(2, ((Math.min(endIdx, dayCount - 1) - Math.max(startIdx, 0) + 1) / dayCount) * 100);
+                return `<div class="tl-event" style="left:${left}%;width:${width}%;background:${ev.color || SUBJECT_COLORS[subj]}" onclick="showTlModal(${ev.id}, '${ev.subject}', '${escapeHtml(ev.label).replace(/'/g, "\\'")}', '${ev.start_date}', '${ev.end_date}')">
+                  ${escapeHtml(ev.label)}
+                  <span class="tl-del" onclick="event.stopPropagation();deleteTlEvent(${ev.id})">×</span>
+                </div>`;
+              }).join('')}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
 }
 
 // ==================== 弹窗遮罩点击关闭 ====================
