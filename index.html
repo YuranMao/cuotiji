@@ -569,9 +569,10 @@ body {
   text-overflow: ellipsis;
   cursor: pointer;
   z-index: 2;
-  transition: opacity .2s;
+  transition: opacity .2s, box-shadow .2s;
+  box-shadow: 0 2px 4px rgba(0,0,0,.15);
 }
-.tl-event:hover { opacity: .85; }
+.tl-event:hover { opacity: .85; box-shadow: 0 4px 8px rgba(0,0,0,.25); }
 .tl-event .tl-del {
   position: absolute;
   right: 2px;
@@ -856,8 +857,12 @@ body {
   .modal .form-group select,
   .modal .form-group input[type="date"] { font-size: 16px; padding: 11px 14px; }
   .tab-nav button { font-size: 12px; padding: 10px 2px; }
-}
-@media (max-width: 380px) {
+    /* Calendar mobile: 2 cols */
+    #panelTimeline > div[style*="grid-template-columns:repeat(3"] {
+      grid-template-columns: repeat(2, 1fr) !important;
+    }
+  }
+  @media (max-width: 380px) {
   .sidebar { width: 260px; }
   .card-img-wrap { height: 160px; }
 }
@@ -1604,7 +1609,6 @@ function selectChapter(chapterId) {
   document.getElementById('panelCuoti').innerHTML =
     '<div class="empty-state"><div class="empty-icon">📂</div><p>请选择具体知识点查看错题</p></div>';
   refreshSidebar();
-  closeSidebar();
 }
 
 async function selectKp(kpId) {
@@ -1614,7 +1618,6 @@ async function selectKp(kpId) {
   updateMainHeader();
   await refreshSidebar();
   await refreshMainContent();
-  closeSidebar();
 }
 
 async function refreshMainContent() {
@@ -1736,18 +1739,42 @@ async function deleteEbbItem(id) {
   } catch (err) { showToast('删除失败: ' + err.message); }
 }
 
-async function toggleEbbReview(itemId, day) {
+async function toggleEbbReview(itemId, intervalDay) {
   const item = cachedEbbItems.find(e => e.id == itemId);
   if (!item) return;
-  const reviews = item.reviews || [];
-  const already = reviews.includes(day);
-  const newReviews = already ? reviews.filter(d => d !== day) : [...reviews, day];
+  let reviews = item.reviews || [];
+  // Normalize old format (array of strings) to new format (array of objects)
+  reviews = reviews.map(r => typeof r === 'string' ? { day: parseInt(r, 10) || 0, date: r } : r);
+  const existing = reviews.find(r => r.day === intervalDay);
+  if (existing) {
+    reviews = reviews.filter(r => r.day !== intervalDay);
+  } else {
+    reviews.push({ day: intervalDay, date: formatDate(new Date()) });
+  }
   try {
-    const res = await sb.from('ebbinghaus_items').update({ reviews: newReviews }).eq('id', itemId);
+    const res = await sb.from('ebbinghaus_items').update({ reviews }).eq('id', itemId);
     if (res.error) throw res.error;
     await reloadEbb();
     renderEbb();
   } catch (err) { showToast('更新失败: ' + (err.message || err.details || JSON.stringify(err))); }
+}
+
+// 后延：将某个未完成的复习日期加1天
+async function postponeEbb(itemId, intervalDay) {
+  const item = cachedEbbItems.find(e => e.id == itemId);
+  if (!item) return;
+  let reviews = item.reviews || [];
+  reviews = reviews.map(r => typeof r === 'string' ? { day: parseInt(r, 10) || 0, date: r } : r);
+  // Instead of storing postponement, just mark as done with today's date
+  // This effectively shifts subsequent reviews
+  reviews.push({ day: intervalDay, date: formatDate(new Date()) });
+  try {
+    const res = await sb.from('ebbinghaus_items').update({ reviews }).eq('id', itemId);
+    if (res.error) throw res.error;
+    await reloadEbb();
+    renderEbb();
+    showToast('已延期到今日完成');
+  } catch (err) { showToast('延期失败: ' + (err.message || err.details || JSON.stringify(err))); }
 }
 
 function formatDate(d) {
@@ -1755,13 +1782,45 @@ function formatDate(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-function getEbbSchedule(firstDate) {
-  const d = new Date(firstDate);
-  return EBB_INTERVALS.map(interval => {
-    const target = new Date(d);
-    target.setDate(target.getDate() + interval);
-    return formatDate(target);
-  });
+// 动态计算每个复习轮次的应复习日期
+function getEbbDynamicSchedule(item) {
+  let reviews = item.reviews || [];
+  reviews = reviews.map(r => typeof r === 'string' ? { day: parseInt(r, 10) || 0, date: r } : r);
+  const firstDate = item.first_date;
+  const result = [];
+
+  for (let i = 0; i < EBB_INTERVALS.length; i++) {
+    const interval = EBB_INTERVALS[i];
+    const prevInterval = i > 0 ? EBB_INTERVALS[i - 1] : 0;
+
+    // 基准日期 = 上一次实际完成的日期（如果有的话）
+    const prevReview = i > 0 ? reviews.find(r => r.day === EBB_INTERVALS[i - 1]) : null;
+
+    let scheduled;
+    if (i === 0) {
+      scheduled = firstDate;
+      const d = new Date(firstDate);
+      d.setDate(d.getDate() + interval);
+      scheduled = formatDate(d);
+    } else if (prevReview) {
+      // 基于上次实际日期向后推
+      const d = new Date(prevReview.date);
+      d.setDate(d.getDate() + (interval - prevInterval));
+      scheduled = formatDate(d);
+    } else {
+      // 上次没完成，仍从 first_date 算
+      const d = new Date(firstDate);
+      d.setDate(d.getDate() + interval);
+      scheduled = formatDate(d);
+    }
+
+    result.push({
+      day: interval,
+      scheduled,
+      done: !!reviews.find(r => r.day === interval)
+    });
+  }
+  return result;
 }
 
 function renderEbb() {
@@ -1772,36 +1831,43 @@ function renderEbb() {
   }
 
   const today = formatDate(new Date());
-  const headerCols = EBB_INTERVALS.map((d, i) => `<th>第${d}天<br>(${i+1})</th>`).join('');
+  const headerCols = EBB_INTERVALS.map((d, i) => `<th title="学习后第${d}天">第${d}天<br><small>(${i+1})</small></th>`).join('');
 
   container.innerHTML = `
     <div class="ebb-toolbar">
-      <span style="font-size:12px;color:#888;">💡 按照遗忘曲线复习：学习后第 1、2、4、7、15、30 天各复习一次</span>
+      <span style="font-size:12px;color:#888;">依照遗忘曲线：第1、2、4、7、15、30天各复习一次，基于上次实际完成时间动态推进</span>
     </div>
-    <div class="ebb-wrap">
-      <table class="ebb-table">
-        <thead><tr><th>背诵内容</th><th>学习日期</th>${headerCols}<th style="width:60px;">操作</th></tr></thead>
+    <div class="ebb-wrap" style="max-height:calc(100vh - 200px);overflow:auto;">
+      <table class="ebb-table" style="min-width:720px;">
+        <thead><tr><th style="width:120px;">背诵内容</th><th style="width:90px;">学习日期</th>${headerCols}<th style="width:60px;">操作</th></tr></thead>
         <tbody>
         ${cachedEbbItems.map(item => {
-          const schedule = getEbbSchedule(item.first_date);
-          const reviews = item.reviews || [];
-          let allDone = true;
-          const cells = schedule.map(sDate => {
-            const done = reviews.includes(sDate);
-            if (!done) allDone = false;
-            const isFuture = sDate > today;
-            const cls = done ? 'ebb-done' : (sDate <= today && !done ? 'ebb-due' : '');
-            return `<td class="${cls}">${
-              isFuture
-                ? `<span class="ebb-future">${sDate.slice(5)}</span>`
-                : `<input type="checkbox" class="ebb-chk" ${done ? 'checked' : ''} onchange="toggleEbbReview(${item.id}, '${sDate}')">`
-            }</td>`;
-          }).join('');
-
+          const schedule = getEbbDynamicSchedule(item);
           return `<tr>
-            <td class="eb-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</td>
+            <td class="eb-name" title="${escapeHtml(item.name)}">
+              <span ondblclick="editEbbInline(${item.id})">${escapeHtml(item.name)}</span>
+            </td>
             <td class="eb-date">${item.first_date}</td>
-            ${cells}
+            ${schedule.map(slot => {
+              const done = slot.done;
+              const isFuture = slot.scheduled > today;
+              const isOverdue = slot.scheduled <= today && !done;
+              let cls = '';
+              if (done) cls = 'ebb-done';
+              else if (isOverdue) cls = 'ebb-due';
+              return `<td class="${cls}">${
+                done
+                  ? `<span style="color:#27ae60;font-size:11px;">✓ ${slot.scheduled.slice(5)}</span>`
+                  : isFuture
+                    ? `<span class="ebb-future">${slot.scheduled.slice(5)}</span>`
+                    : isOverdue
+                      ? `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+                          <input type="checkbox" class="ebb-chk" onchange="toggleEbbReview(${item.id}, ${slot.day})">
+                          <button style="font-size:10px;padding:1px 5px;background:#fff3cd;border:1px solid #ffc107;border-radius:3px;cursor:pointer;color:#856404;" onclick="event.stopPropagation();postponeEbb(${item.id}, ${slot.day})" title="延期到今天">后延</button>
+                        </div>`
+                      : `<input type="checkbox" class="ebb-chk" onchange="toggleEbbReview(${item.id}, ${slot.day})">`
+              }</td>`;
+            }).join('')}
             <td><div class="ebb-actions"><button onclick="showEbbModal(${item.id}, '${escapeHtml(item.name).replace(/'/g, "\\'")}', '${item.first_date}')">编辑</button><button class="eb-del" onclick="deleteEbbItem(${item.id})">删除</button></div></td>
           </tr>`;
         }).join('')}
@@ -1810,10 +1876,38 @@ function renderEbb() {
     </div>`;
 }
 
+function editEbbInline(id) {
+  const item = cachedEbbItems.find(e => e.id == id);
+  if (!item) return;
+  const newName = prompt('修改背诵内容', item.name);
+  if (newName && newName.trim() && newName.trim() !== item.name) {
+    sb.from('ebbinghaus_items').update({ name: newName.trim() }).eq('id', id).then(async () => {
+      await reloadEbb();
+      renderEbb();
+      showToast('已更新');
+    }).catch(() => showToast('更新失败'));
+  }
+}
+
 // ==================== 考研进度时间表 ====================
 const SUBJECT_COLORS = { '数学': '#4a90d9', '专业课': '#27ae60', '英语': '#e67e22', '政治': '#9b59b6' };
+const SUBJECT_GRADIENTS = {
+  '数学': 'linear-gradient(135deg, #4a90d9, #7bb3f0)',
+  '专业课': 'linear-gradient(135deg, #27ae60, #5dd39e)',
+  '英语': 'linear-gradient(135deg, #e67e22, #f0a04b)',
+  '政治': 'linear-gradient(135deg, #9b59b6, #c39bd3)'
+};
 let tlRangeStart = null;
 let tlRangeEnd = null;
+let tlViewMode = 'gantt'; // 'gantt' | 'calendar'
+
+// 考研重要日期
+const IMPORTANT_DATES = [
+  { date: '2026-12-19', label: '考研初试', color: '#e74c3c', icon: '🎯' },
+  { date: '2026-10-10', label: '正式报名', color: '#e67e22', icon: '📝' },
+  { date: '2026-09-24', label: '预报名', color: '#3498db', icon: '📋' },
+  { date: '2026-11-01', label: '网上确认', color: '#9b59b6', icon: '✅' },
+];
 
 function showTlModal(id, subject, label, startDate, endDate) {
   if (id) {
@@ -1868,6 +1962,11 @@ async function deleteTlEvent(id) {
   } catch (err) { showToast('删除失败: ' + err.message); }
 }
 
+function setTlView(mode) {
+  tlViewMode = mode;
+  renderTimeline();
+}
+
 function moveTimeline(dir) {
   const days = dir * 14;
   tlRangeStart = new Date(tlRangeStart);
@@ -1881,11 +1980,27 @@ function moveTimeline(dir) {
 
 function renderTimeline() {
   const container = document.getElementById('panelTimeline');
-
-  // compute date range
   const today = formatDate(new Date());
+
+  // View mode buttons
+  const viewToggle = `
+    <div class="tl-toolbar" style="justify-content:space-between;">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="setTlView('gantt')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${tlViewMode==='gantt'?'background:#4a90d9;color:#fff;border-color:#4a90d9':'background:#fff;color:#333'}">甘特图</button>
+        <button onclick="setTlView('calendar')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${tlViewMode==='calendar'?'background:#4a90d9;color:#fff;border-color:#4a90d9':'background:#fff;color:#333'}">月历</button>
+      </div>
+      ${tlViewMode === 'gantt' ? `<div><button class="tl-nav" onclick="moveTimeline(-1)">◀ 前两周</button>
+        <span style="font-size:12px;color:#888;margin:0 8px;">${tlRangeStart} ~ ${tlRangeEnd}</span>
+        <button class="tl-nav" onclick="moveTimeline(1)">后两周 ▶</button></div>` : ''}
+    </div>`;
+
+  if (tlViewMode === 'calendar') {
+    container.innerHTML = viewToggle + renderCalendar();
+    return;
+  }
+
+  // ---- Gantt view ----
   if (!tlRangeStart) {
-    // default: today - 7 to today + 28
     const s = new Date(); s.setDate(s.getDate() - 7); tlRangeStart = formatDate(s);
     const e = new Date(); e.setDate(e.getDate() + 35); tlRangeEnd = formatDate(e);
   }
@@ -1893,8 +2008,7 @@ function renderTimeline() {
   const startD = new Date(tlRangeStart);
   const endD = new Date(tlRangeEnd);
   const dayCount = Math.round((endD - startD) / 86400000) + 1;
-  
-  // generate day headers
+
   const dayHeaders = [];
   for (let i = 0; i < dayCount; i++) {
     const d = new Date(startD);
@@ -1908,17 +2022,10 @@ function renderTimeline() {
   const daySlots = '<div class="tl-day-slot"></div>'.repeat(dayCount);
 
   const subjects = ['数学', '专业课', '英语', '政治'];
-
-  // Position today line
   const todayIdx = Math.round((new Date(today) - startD) / 86400000);
   const todayPct = (todayIdx / dayCount) * 100;
 
-  container.innerHTML = `
-    <div class="tl-toolbar">
-      <button class="tl-nav" onclick="moveTimeline(-1)">◀ 前两周</button>
-      <span style="font-size:12px;color:#888;">${tlRangeStart} ~ ${tlRangeEnd}</span>
-      <button class="tl-nav" onclick="moveTimeline(1)">后两周 ▶</button>
-    </div>
+  container.innerHTML = viewToggle + `
     <div class="tl-legend">
       ${subjects.map(s => `<span><span class="tl-l-dot" style="background:${SUBJECT_COLORS[s]}"></span>${s}</span>`).join('')}
     </div>
@@ -1943,7 +2050,8 @@ function renderTimeline() {
                 if (endIdx < 0 || startIdx >= dayCount) return '';
                 const left = Math.max(0, (startIdx / dayCount) * 100);
                 const width = Math.max(2, ((Math.min(endIdx, dayCount - 1) - Math.max(startIdx, 0) + 1) / dayCount) * 100);
-                return `<div class="tl-event" style="left:${left}%;width:${width}%;background:${ev.color || SUBJECT_COLORS[subj]}" onclick="showTlModal(${ev.id}, '${ev.subject}', '${escapeHtml(ev.label).replace(/'/g, "\\'")}', '${ev.start_date}', '${ev.end_date}')">
+                const grad = SUBJECT_GRADIENTS[subj] || `linear-gradient(135deg, ${SUBJECT_COLORS[subj]}, ${SUBJECT_COLORS[subj]})`;
+                return `<div class="tl-event" style="left:${left}%;width:${width}%;background:${grad}" onclick="showTlModal(${ev.id}, '${ev.subject}', '${escapeHtml(ev.label).replace(/'/g, "\\'")}', '${ev.start_date}', '${ev.end_date}')">
                   ${escapeHtml(ev.label)}
                   <span class="tl-del" onclick="event.stopPropagation();deleteTlEvent(${ev.id})">×</span>
                 </div>`;
@@ -1952,6 +2060,69 @@ function renderTimeline() {
           </div>`;
         }).join('')}
       </div>
+    </div>`;
+}
+
+function renderCalendar() {
+  const months = [
+    { name: '7月', start: new Date(2026, 6, 1), days: 31 },
+    { name: '8月', start: new Date(2026, 7, 1), days: 31 },
+    { name: '9月', start: new Date(2026, 8, 1), days: 30 },
+    { name: '10月', start: new Date(2026, 9, 1), days: 31 },
+    { name: '11月', start: new Date(2026, 10, 1), days: 30 },
+    { name: '12月', start: new Date(2026, 11, 1), days: 31 },
+  ];
+  const today = formatDate(new Date());
+  const subjects = ['数学', '专业课', '英语', '政治'];
+
+  return `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+      ${months.map(m => {
+        const startDow = m.start.getDay(); // 0=Sun
+        const todayMonth = 2026 + '-' + String(m.start.getMonth() + 1).padStart(2, '0');
+
+        // Gather events for this month
+        const monthDates = [];
+        for (let d = 1; d <= m.days; d++) {
+          const ds = todayMonth + '-' + String(d).padStart(2, '0');
+          const events = cachedTimeline.filter(ev => ev.start_date <= ds && ev.end_date >= ds);
+          const impDate = IMPORTANT_DATES.find(id => id.date === ds);
+          monthDates.push({ day: d, date: ds, events, impDate });
+        }
+
+        // Get the day key for today
+        const todayKey = today;
+
+        return `<div style="background:#fff;border-radius:10px;padding:8px;box-shadow:0 1px 3px rgba(0,0,0,.05);">
+          <div style="font-weight:700;font-size:14px;text-align:center;padding:4px 0 8px;color:#333;">${m.name}</div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:10px;text-align:center;color:#999;margin-bottom:2px;">
+            ${['日','一','二','三','四','五','六'].map(d => `<div>${d}</div>`).join('')}
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;">
+            ${'<div></div>'.repeat(startDow)}
+            ${monthDates.map(md => {
+              const isToday = md.date === todayKey;
+              const hasEvents = md.events.length > 0;
+              const hasImp = md.impDate;
+              let bg = '';
+              let bd = '';
+              let extra = '';
+              if (isToday) bg = 'background:#e74c3c;color:#fff;font-weight:700;';
+              else if (hasImp) { bg = 'background:' + md.impDate.color + ';color:#fff;'; extra = `<span style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);font-size:7px;">${md.impDate.icon}</span>`; }
+              else if (hasEvents) bg = 'background:#f0f6ff;';
+              return `<div style="position:relative;height:28px;display:flex;align-items:center;justify-content:center;border-radius:3px;cursor:${hasImp?'pointer':'default'};${bg}" title="${md.date}${md.impDate?' · '+md.impDate.label:''}${hasEvents?' · '+md.events.map(e=>e.label).join(', '):''}">
+                ${md.day}
+                ${extra}
+                ${hasEvents && !hasImp ? `<span style="position:absolute;bottom:1px;left:0;right:0;display:flex;gap:1px;justify-content:center;">${md.events.slice(0,3).map(e => `<span style="width:4px;height:4px;border-radius:50%;background:${e.color || SUBJECT_COLORS[e.subject]}"></span>`).join('')}</span>` : ''}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;font-size:11px;color:#888;">
+      <span>重要节点：</span>
+      ${IMPORTANT_DATES.map(d => `<span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:${d.color};display:inline-block;"></span>${d.date} ${d.icon} ${d.label}</span>`).join('')}
     </div>`;
 }
 
