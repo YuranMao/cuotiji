@@ -1083,6 +1083,8 @@ let cachedKps = [];
 let cachedQuestions = [];
 let cachedEbbItems = [];
 let cachedTimeline = [];
+let ebbLoaded = false;
+let tlLoaded = false;
 
 // ==================== Tab 切换 ====================
 function switchTab(tab) {
@@ -1105,13 +1107,15 @@ function switchTab(tab) {
     addBtn.textContent = '+ 背诵项';
     addBtn.disabled = false;
     breadcrumb.textContent = '艾宾浩斯遗忘表';
-    renderEbb();
+    if (!ebbLoaded) { reloadEbb().then(() => { ebbLoaded = true; renderEbb(); }); }
+    else renderEbb();
   } else if (tab === 'timeline') {
     sidebar.style.display = 'none';
     addBtn.textContent = '+ 任务';
     addBtn.disabled = false;
     breadcrumb.textContent = '考研进度时间表';
-    renderTimeline();
+    if (!tlLoaded) { reloadTimelineData().then(() => { tlLoaded = true; renderTimeline(); }); }
+    else renderTimeline();
   }
 }
 
@@ -1301,25 +1305,19 @@ async function loadFromCache() {
 async function loadAllData() {
   const statusEl = document.getElementById('connStatus');
   try {
-    const [cRes, kpRes, qRes, eRes, tRes] = await Promise.all([
+    const [cRes, kpRes, qRes] = await Promise.all([
       sb.from('chapters').select('*').order('sort_order', { ascending: true }).order('id'),
       sb.from('knowledge_points').select('*').order('sort_order', { ascending: true }).order('id'),
-      sb.from('questions').select('*').order('created_at', { ascending: false }),
-      sb.from('ebbinghaus_items').select('*').order('first_date', { ascending: false }),
-      sb.from('timeline_events').select('*').order('start_date')
+      sb.from('questions').select('*').order('created_at', { ascending: false })
     ]);
 
     if (cRes.error) throw cRes.error;
     if (kpRes.error) throw kpRes.error;
     if (qRes.error) throw qRes.error;
-    if (eRes.error) throw eRes.error;
-    if (tRes.error) throw tRes.error;
 
     cachedChapters = cRes.data || [];
     cachedKps = kpRes.data || [];
     cachedQuestions = qRes.data || [];
-    cachedEbbItems = eRes.data || [];
-    cachedTimeline = tRes.data || [];
 
     await saveToCache({ chapters: cachedChapters, kps: cachedKps, questions: cachedQuestions, ebbItems: cachedEbbItems, timeline: cachedTimeline });
 
@@ -1343,6 +1341,33 @@ async function loadAllData() {
   }
 }
 
+// ==================== 按表重载（性能优化） ====================
+async function reloadChapters() {
+  const r = await sb.from('chapters').select('*').order('sort_order', { ascending: true }).order('id');
+  if (!r.error) cachedChapters = r.data || [];
+}
+async function reloadKps() {
+  const r = await sb.from('knowledge_points').select('*').order('sort_order', { ascending: true }).order('id');
+  if (!r.error) cachedKps = r.data || [];
+}
+async function reloadQuestions() {
+  const r = await sb.from('questions').select('*').order('created_at', { ascending: false });
+  if (!r.error) cachedQuestions = r.data || [];
+}
+async function reloadAllCore() {
+  await Promise.all([reloadChapters(), reloadKps(), reloadQuestions()]);
+}
+async function reloadEbb() {
+  const r = await sb.from('ebbinghaus_items').select('*').order('first_date', { ascending: false });
+  if (!r.error) cachedEbbItems = r.data || [];
+  ebbLoaded = true;
+}
+async function reloadTimelineData() {
+  const r = await sb.from('timeline_events').select('*').order('start_date');
+  if (!r.error) cachedTimeline = r.data || [];
+  tlLoaded = true;
+}
+
 // ==================== 章节 / 知识点操作 ====================
 async function saveChapter() {
   const name = document.getElementById('chapterNameInput').value.trim();
@@ -1356,7 +1381,7 @@ async function saveChapter() {
       res = await sb.from('chapters').insert({ name });
     }
     if (res.error) throw res.error;
-    await loadAllData();
+    await reloadChapters();
     closeModal('chapterModal');
     await refreshSidebar();
     showToast(editId ? '章节已更新' : '章节已添加');
@@ -1378,7 +1403,7 @@ async function saveKnowledgePoint() {
       res = await sb.from('knowledge_points').insert({ chapter_id: chapterId, name });
     }
     if (res.error) throw res.error;
-    await loadAllData();
+    await reloadKps();
     closeModal('kpModal');
     await refreshSidebar();
     showToast(editId ? '知识点已更新' : '知识点已添加');
@@ -1401,7 +1426,7 @@ async function saveQuestion() {
       review_log: []
     });
     if (res.error) throw res.error;
-    await loadAllData();
+    await reloadQuestions();
     closeModal('questionModal');
     await refreshMainContent();
     await refreshSidebar();
@@ -1415,7 +1440,7 @@ async function deleteChapter(id) {
   if (!confirm('确定删除该章节及所有知识点和错题？')) return;
   try {
     await sb.from('chapters').delete().eq('id', id);
-    await loadAllData();
+    await reloadAllCore();
     if (selectedChapterId == id) {
       selectedChapterId = null; selectedKpId = null;
       updateMainHeader();
@@ -1431,7 +1456,7 @@ async function deleteKp(id) {
   if (!confirm('确定删除该知识点及所有错题？')) return;
   try {
     await sb.from('knowledge_points').delete().eq('id', id);
-    await loadAllData();
+    await reloadAllCore();
     if (selectedKpId == id) {
       selectedKpId = null;
       updateMainHeader();
@@ -1447,7 +1472,7 @@ async function deleteQuestion(id) {
   if (!confirm('确定删除该错题？')) return;
   try {
     await sb.from('questions').delete().eq('id', id);
-    await loadAllData();
+    await reloadQuestions();
     await refreshMainContent();
     await refreshSidebar();
     showToast('已删除');
@@ -1463,7 +1488,7 @@ async function markCorrect(id) {
   try {
     const res = await sb.from('questions').update({ correct_count: newCorrect, review_log: newLog }).eq('id', id);
     if (res.error) throw res.error;
-    await loadAllData();
+    await reloadQuestions();
     await refreshMainContent();
     showToast(newCorrect >= 5 ? '恭喜！已完成！' : '答对了（' + newCorrect + '/5）');
   } catch (err) { showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err))); }
@@ -1478,7 +1503,7 @@ async function markWrong(id) {
   try {
     const res = await sb.from('questions').update({ wrong_count: newWrong, review_log: newLog }).eq('id', id);
     if (res.error) throw res.error;
-    await loadAllData();
+    await reloadQuestions();
     await refreshMainContent();
     showToast('已记录（答错 ' + newWrong + ' 次）');
   } catch (err) { showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err))); }
@@ -1493,7 +1518,7 @@ async function moveChapter(id, dir) {
   try {
     await sb.from('chapters').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id);
     await sb.from('chapters').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
-    await loadAllData();
+    await reloadChapters();
     await refreshSidebar();
   } catch (err) { showToast('排序失败: ' + err.message); }
 }
@@ -1507,7 +1532,7 @@ async function moveKp(id, chapterId, dir) {
   try {
     await sb.from('knowledge_points').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id);
     await sb.from('knowledge_points').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
-    await loadAllData();
+    await reloadKps();
     await refreshSidebar();
   } catch (err) { showToast('排序失败: ' + err.message); }
 }
@@ -1694,7 +1719,7 @@ async function saveEbbItem() {
       res = await sb.from('ebbinghaus_items').insert({ name, first_date: firstDate, reviews: [] });
     }
     if (res.error) throw res.error;
-    await loadAllData();
+    await reloadEbb();
     closeModal('ebbModal');
     renderEbb();
     showToast(editId ? '已更新' : '已添加');
@@ -1705,7 +1730,7 @@ async function deleteEbbItem(id) {
   if (!confirm('确定删除？')) return;
   try {
     await sb.from('ebbinghaus_items').delete().eq('id', id);
-    await loadAllData();
+    await reloadEbb();
     renderEbb();
     showToast('已删除');
   } catch (err) { showToast('删除失败: ' + err.message); }
@@ -1720,7 +1745,7 @@ async function toggleEbbReview(itemId, day) {
   try {
     const res = await sb.from('ebbinghaus_items').update({ reviews: newReviews }).eq('id', itemId);
     if (res.error) throw res.error;
-    await loadAllData();
+    await reloadEbb();
     renderEbb();
   } catch (err) { showToast('更新失败: ' + (err.message || err.details || JSON.stringify(err))); }
 }
@@ -1826,7 +1851,7 @@ async function saveTlEvent() {
       res = await sb.from('timeline_events').insert({ subject, label, start_date: startDate, end_date: endDate, color: SUBJECT_COLORS[subject] });
     }
     if (res.error) throw res.error;
-    await loadAllData();
+    await reloadTimelineData();
     closeModal('tlModal');
     renderTimeline();
     showToast(editId ? '已更新' : '已添加');
@@ -1837,7 +1862,7 @@ async function deleteTlEvent(id) {
   if (!confirm('确定删除？')) return;
   try {
     await sb.from('timeline_events').delete().eq('id', id);
-    await loadAllData();
+    await reloadTimelineData();
     renderTimeline();
     showToast('已删除');
   } catch (err) { showToast('删除失败: ' + err.message); }
