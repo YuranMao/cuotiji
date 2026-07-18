@@ -199,6 +199,8 @@ body {
   background: #fff;
   border-bottom: 1px solid #e0e0e0;
   gap: 0;
+  position: relative;
+  z-index: 601;
 }
 .tab-nav button {
   flex: 1;
@@ -1888,10 +1890,10 @@ function editEbbInline(id) {
 // ==================== 考研进度时间表 ====================
 const SUBJECT_COLORS = { '数学': '#4a90d9', '专业课': '#27ae60', '英语': '#e67e22', '政治': '#9b59b6' };
 const SUBJECT_GRADIENTS = {
-  '数学': 'linear-gradient(135deg, #4a90d9, #7bb3f0)',
-  '专业课': 'linear-gradient(135deg, #27ae60, #5dd39e)',
-  '英语': 'linear-gradient(135deg, #e67e22, #f0a04b)',
-  '政治': 'linear-gradient(135deg, #9b59b6, #c39bd3)'
+  '数学': 'linear-gradient(90deg, #7bb3f0, #3a7bc8)',
+  '专业课': 'linear-gradient(90deg, #5dd39e, #219a52)',
+  '英语': 'linear-gradient(90deg, #f0a04b, #d35400)',
+  '政治': 'linear-gradient(90deg, #c39bd3, #8e44ad)'
 };
 let tlRangeStart = null;
 let tlRangeEnd = null;
@@ -2046,7 +2048,7 @@ function renderTimeline() {
                 if (endIdx < 0 || startIdx >= dayCount) return '';
                 const left = Math.max(0, (startIdx / dayCount) * 100);
                 const width = Math.max(2, ((Math.min(endIdx, dayCount - 1) - Math.max(startIdx, 0) + 1) / dayCount) * 100);
-                const grad = SUBJECT_GRADIENTS[subj] || `linear-gradient(135deg, ${SUBJECT_COLORS[subj]}, ${SUBJECT_COLORS[subj]})`;
+                const grad = SUBJECT_GRADIENTS[subj] || `linear-gradient(90deg, ${SUBJECT_COLORS[subj]}, ${SUBJECT_COLORS[subj]})`;
                 return `<div class="tl-event" style="left:${left}%;width:${width}%;background:${grad}" onclick="showTlModal(${ev.id}, '${ev.subject}', '${escapeHtml(ev.label).replace(/'/g, "\\'")}', '${ev.start_date}', '${ev.end_date}')">
                   ${escapeHtml(ev.label)}
                   <span class="tl-del" onclick="event.stopPropagation();deleteTlEvent(${ev.id})">×</span>
