@@ -871,6 +871,11 @@ body {
   .sidebar { width: 260px; }
   .card-img-wrap { height: 160px; }
 }
+
+/* ---- 非错题集 tab：隐藏侧边栏 ---- */
+.not-cuoti .sidebar { display: none !important; }
+.not-cuoti .sidebar-overlay { display: none !important; }
+.not-cuoti .main-header .menu-btn { display: none !important; }
 </style>
 </head>
 <body>
@@ -1109,27 +1114,26 @@ function switchTab(tab) {
 
   const addBtn = document.getElementById('addBtn');
   const breadcrumb = document.getElementById('breadcrumb');
-  const sidebar = document.getElementById('sidebar');
-  const menuBtn = document.querySelector('.main-header .menu-btn');
+  const appLayout = document.querySelector('.app-layout');
 
   if (tab === 'cuoti') {
-    sidebar.style.display = '';
-    if (menuBtn) menuBtn.style.display = '';
+    appLayout.classList.remove('not-cuoti');
+    closeSidebar();
     addBtn.textContent = '+ 错题';
     addBtn.disabled = !selectedKpId;
     breadcrumb.innerHTML = selectedKpId ? getBreadcrumbHtml() : '<span>选择知识点查看错题</span>';
     document.getElementById('mainContent').querySelector('#panelCuoti').innerHTML = document.getElementById('mainContent').querySelector('#panelCuoti').innerHTML || '';
   } else if (tab === 'ebb') {
-    sidebar.style.display = 'none';
-    if (menuBtn) menuBtn.style.display = 'none';
+    appLayout.classList.add('not-cuoti');
+    closeSidebar();
     addBtn.textContent = '+ 背诵项';
     addBtn.disabled = false;
     breadcrumb.textContent = '艾宾浩斯遗忘表';
     if (!ebbLoaded) { reloadEbb().then(() => { ebbLoaded = true; renderEbb(); }); }
     else renderEbb();
   } else if (tab === 'timeline') {
-    sidebar.style.display = 'none';
-    if (menuBtn) menuBtn.style.display = 'none';
+    appLayout.classList.add('not-cuoti');
+    closeSidebar();
     addBtn.textContent = '+ 任务';
     addBtn.disabled = false;
     breadcrumb.textContent = '考研进度时间表';
@@ -1845,14 +1849,18 @@ function renderEbb() {
               if (slot.done) {
                 return `<td class="ebb-done"><div style="font-size:11px;color:#27ae60;">✓ ${slot.scheduled.slice(5)}</div></td>`;
               }
-              const isOverdue = slot.scheduled < today;
-              return `<td class="${isOverdue ? 'ebb-due' : ''}">
+              const isFuture = slot.scheduled > today;
+              if (isFuture) {
+                return `<td><div style="font-size:11px;color:#bbb;">${slot.scheduled.slice(5)}</div></td>`;
+              }
+              const isToday = slot.scheduled === today;
+              return `<td class="${isToday ? 'ebb-due' : ''}">
                 <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
-                  <span style="font-size:11px;${isOverdue ? 'color:#e74c3c;font-weight:600;' : 'color:#888;'}">${slot.scheduled.slice(5)}${isOverdue ? ' ⚠' : ''}</span>
+                  <span style="font-size:11px;color:#e74c3c;font-weight:600;">${slot.scheduled.slice(5)}</span>
                   <button onclick="toggleEbbReview(${item.id}, ${slot.day})"
                     style="font-size:11px;padding:3px 10px;border-radius:4px;cursor:pointer;white-space:nowrap;
-                    ${isOverdue ? 'background:#fdeaea;color:#e74c3c;border:1px solid #e74c3c;' : 'background:#e8f5e9;color:#27ae60;border:1px solid #27ae60;'}">
-                    ${isOverdue ? '补背' : '已背'}
+                    background:#fdeaea;color:#e74c3c;border:1px solid #e74c3c;">
+                    已背
                   </button>
                 </div></td>`;
             }).join('')}
@@ -2093,15 +2101,14 @@ function renderCalendar() {
               const hasEvents = md.events.length > 0;
               const hasImp = md.impDate;
               let bg = '';
-              let bd = '';
-              let extra = '';
-              if (isToday) bg = 'background:#e74c3c;color:#fff;font-weight:700;';
-              else if (hasImp) { bg = 'background:' + md.impDate.color + ';color:#fff;'; extra = `<span style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);font-size:7px;">${md.impDate.icon}</span>`; }
+              let textColor = '';
+              if (isToday) { bg = 'background:#e74c3c;'; textColor = 'color:#fff;font-weight:700;'; }
+              else if (hasImp) { bg = 'background:' + md.impDate.color + ';'; textColor = 'color:#fff;'; }
               else if (hasEvents) bg = 'background:#f0f6ff;';
-              return `<div style="position:relative;height:28px;display:flex;align-items:center;justify-content:center;border-radius:3px;cursor:${hasImp?'pointer':'default'};${bg}" title="${md.date}${md.impDate?' · '+md.impDate.label:''}${hasEvents?' · '+md.events.map(e=>e.label).join(', '):''}">
-                ${md.day}
-                ${extra}
-                ${hasEvents && !hasImp ? `<span style="position:absolute;bottom:1px;left:0;right:0;display:flex;gap:1px;justify-content:center;">${md.events.slice(0,3).map(e => `<span style="width:4px;height:4px;border-radius:50%;background:${e.color || SUBJECT_COLORS[e.subject]}"></span>`).join('')}</span>` : ''}
+              return `<div style="position:relative;height:38px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:3px;cursor:${hasImp?'pointer':'default'};${bg}${textColor}" title="${md.date}${md.impDate?' · '+md.impDate.label:''}${hasEvents?' · '+md.events.map(e=>e.label).join(', '):''}">
+                <span style="font-size:10px;line-height:1;">${md.day}</span>
+                ${hasImp ? `<span style="font-size:7px;line-height:1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${md.impDate.icon}</span>` : ''}
+                ${hasEvents ? md.events.slice(0,2).map(e => `<span style="font-size:7px;line-height:1.1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${textColor ? '#fff' : (e.color || SUBJECT_COLORS[e.subject])};">${escapeHtml(e.label)}</span>`).join('') : ''}
               </div>`;
             }).join('')}
           </div>
