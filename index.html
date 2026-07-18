@@ -15,6 +15,7 @@ body {
 }
 .app-layout {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   overflow: hidden;
 }
@@ -26,7 +27,11 @@ body {
   display: flex;
   flex-direction: column;
   box-shadow: 2px 0 8px rgba(0,0,0,.05);
-  z-index: 100;
+}
+.body-row {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
 }
 .sidebar-header {
   padding: 20px 16px 12px;
@@ -872,7 +877,17 @@ body {
 
 <div class="app-layout">
 
+<!-- 导航标签 —— 顶部全宽 -->
+<div class="tab-nav" id="tabNav">
+  <button class="active" data-tab="cuoti" onclick="switchTab('cuoti')">错题集</button>
+  <button data-tab="ebb" onclick="switchTab('ebb')">遗忘表</button>
+  <button data-tab="timeline" onclick="switchTab('timeline')">进度表</button>
+</div>
+
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+<!-- 主内容区：侧边栏 + 内容 并列 -->
+<div class="body-row">
 
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
@@ -887,13 +902,6 @@ body {
 </aside>
 
 <main class="main">
-  <!-- 导航标签 -->
-  <div class="tab-nav" id="tabNav">
-    <button class="active" data-tab="cuoti" onclick="switchTab('cuoti')">错题集</button>
-    <button data-tab="ebb" onclick="switchTab('ebb')">遗忘表</button>
-    <button data-tab="timeline" onclick="switchTab('timeline')">进度表</button>
-  </div>
-
   <div class="main-header">
     <button class="menu-btn" onclick="toggleSidebar()" title="目录">☰</button>
     <div class="breadcrumb" id="breadcrumb"><span>选择知识点查看错题</span></div>
@@ -923,6 +931,8 @@ body {
     </div>
   </div>
 </main>
+
+</div><!-- /body-row -->
 
 </div>
 <!-- /app-layout -->
@@ -2055,7 +2065,7 @@ function renderCalendar() {
         const monthDates = [];
         for (let d = 1; d <= m.days; d++) {
           const ds = todayMonth + '-' + String(d).padStart(2, '0');
-          const events = cachedTimeline.filter(ev => ev.start_date <= ds && ev.end_date >= ds);
+          const events = cachedTimeline.filter(ev => ev.end_date === ds);
           const impDate = IMPORTANT_DATES.find(id => id.date === ds);
           monthDates.push({ day: d, date: ds, events, impDate });
         }
