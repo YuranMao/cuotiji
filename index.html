@@ -1109,19 +1109,27 @@ function switchTab(tab) {
 
   const addBtn = document.getElementById('addBtn');
   const breadcrumb = document.getElementById('breadcrumb');
+  const sidebar = document.getElementById('sidebar');
+  const menuBtn = document.querySelector('.main-header .menu-btn');
 
   if (tab === 'cuoti') {
+    sidebar.style.display = '';
+    if (menuBtn) menuBtn.style.display = '';
     addBtn.textContent = '+ 错题';
     addBtn.disabled = !selectedKpId;
     breadcrumb.innerHTML = selectedKpId ? getBreadcrumbHtml() : '<span>选择知识点查看错题</span>';
     document.getElementById('mainContent').querySelector('#panelCuoti').innerHTML = document.getElementById('mainContent').querySelector('#panelCuoti').innerHTML || '';
   } else if (tab === 'ebb') {
+    sidebar.style.display = 'none';
+    if (menuBtn) menuBtn.style.display = 'none';
     addBtn.textContent = '+ 背诵项';
     addBtn.disabled = false;
     breadcrumb.textContent = '艾宾浩斯遗忘表';
     if (!ebbLoaded) { reloadEbb().then(() => { ebbLoaded = true; renderEbb(); }); }
     else renderEbb();
   } else if (tab === 'timeline') {
+    sidebar.style.display = 'none';
+    if (menuBtn) menuBtn.style.display = 'none';
     addBtn.textContent = '+ 任务';
     addBtn.disabled = false;
     breadcrumb.textContent = '考研进度时间表';
