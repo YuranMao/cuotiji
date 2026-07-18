@@ -9,11 +9,14 @@
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Microsoft YaHei", "PingFang SC", sans-serif;
   background: #f0f2f5;
-  height: 100vh;
-  overflow: hidden;
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
   user-select: none;
+}
+.app-layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
 }
 .sidebar-overlay { display: none; }
 .sidebar {
@@ -862,6 +865,8 @@ body {
 </head>
 <body>
 
+<div class="app-layout">
+
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
 <aside class="sidebar" id="sidebar">
@@ -913,6 +918,9 @@ body {
     </div>
   </div>
 </main>
+
+</div>
+<!-- /app-layout -->
 
 <!-- 连接状态 -->
 <div class="conn-status" id="connStatus">
