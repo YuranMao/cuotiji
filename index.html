@@ -1099,23 +1099,19 @@ function switchTab(tab) {
 
   const addBtn = document.getElementById('addBtn');
   const breadcrumb = document.getElementById('breadcrumb');
-  const sidebar = document.getElementById('sidebar');
 
   if (tab === 'cuoti') {
-    sidebar.style.display = '';
     addBtn.textContent = '+ 错题';
     addBtn.disabled = !selectedKpId;
     breadcrumb.innerHTML = selectedKpId ? getBreadcrumbHtml() : '<span>选择知识点查看错题</span>';
     document.getElementById('mainContent').querySelector('#panelCuoti').innerHTML = document.getElementById('mainContent').querySelector('#panelCuoti').innerHTML || '';
   } else if (tab === 'ebb') {
-    sidebar.style.display = 'none';
     addBtn.textContent = '+ 背诵项';
     addBtn.disabled = false;
     breadcrumb.textContent = '艾宾浩斯遗忘表';
     if (!ebbLoaded) { reloadEbb().then(() => { ebbLoaded = true; renderEbb(); }); }
     else renderEbb();
   } else if (tab === 'timeline') {
-    sidebar.style.display = 'none';
     addBtn.textContent = '+ 任务';
     addBtn.disabled = false;
     breadcrumb.textContent = '考研进度时间表';
@@ -1759,60 +1755,41 @@ async function toggleEbbReview(itemId, intervalDay) {
   } catch (err) { showToast('更新失败: ' + (err.message || err.details || JSON.stringify(err))); }
 }
 
-// 后延：将某个未完成的复习日期加1天
-async function postponeEbb(itemId, intervalDay) {
-  const item = cachedEbbItems.find(e => e.id == itemId);
-  if (!item) return;
-  let reviews = item.reviews || [];
-  reviews = reviews.map(r => typeof r === 'string' ? { day: parseInt(r, 10) || 0, date: r } : r);
-  // Instead of storing postponement, just mark as done with today's date
-  // This effectively shifts subsequent reviews
-  reviews.push({ day: intervalDay, date: formatDate(new Date()) });
-  try {
-    const res = await sb.from('ebbinghaus_items').update({ reviews }).eq('id', itemId);
-    if (res.error) throw res.error;
-    await reloadEbb();
-    renderEbb();
-    showToast('已延期到今日完成');
-  } catch (err) { showToast('延期失败: ' + (err.message || err.details || JSON.stringify(err))); }
-}
-
 function formatDate(d) {
   d = new Date(d);
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-// 动态计算每个复习轮次的应复习日期
+// 动态计算每个复习轮次的应复习日期（逾期自动后延到今日）
 function getEbbDynamicSchedule(item) {
   let reviews = item.reviews || [];
   reviews = reviews.map(r => typeof r === 'string' ? { day: parseInt(r, 10) || 0, date: r } : r);
   const firstDate = item.first_date;
+  const today = formatDate(new Date());
   const result = [];
 
   for (let i = 0; i < EBB_INTERVALS.length; i++) {
     const interval = EBB_INTERVALS[i];
     const prevInterval = i > 0 ? EBB_INTERVALS[i - 1] : 0;
-
-    // 基准日期 = 上一次实际完成的日期（如果有的话）
     const prevReview = i > 0 ? reviews.find(r => r.day === EBB_INTERVALS[i - 1]) : null;
 
     let scheduled;
     if (i === 0) {
-      scheduled = firstDate;
       const d = new Date(firstDate);
       d.setDate(d.getDate() + interval);
       scheduled = formatDate(d);
     } else if (prevReview) {
-      // 基于上次实际日期向后推
       const d = new Date(prevReview.date);
       d.setDate(d.getDate() + (interval - prevInterval));
       scheduled = formatDate(d);
     } else {
-      // 上次没完成，仍从 first_date 算
       const d = new Date(firstDate);
       d.setDate(d.getDate() + interval);
       scheduled = formatDate(d);
     }
+
+    // 逾期自动后延到今日
+    if (scheduled < today) scheduled = today;
 
     result.push({
       day: interval,
@@ -1831,42 +1808,35 @@ function renderEbb() {
   }
 
   const today = formatDate(new Date());
-  const headerCols = EBB_INTERVALS.map((d, i) => `<th title="学习后第${d}天">第${d}天<br><small>(${i+1})</small></th>`).join('');
+  const headerCols = EBB_INTERVALS.map((d, i) => `<th title="第${d}天">${i+1}<br><small>d${d}</small></th>`).join('');
 
   container.innerHTML = `
     <div class="ebb-toolbar">
-      <span style="font-size:12px;color:#888;">依照遗忘曲线：第1、2、4、7、15、30天各复习一次，基于上次实际完成时间动态推进</span>
+      <span style="font-size:12px;color:#888;">学习后第 1、2、4、7、15、30 天各复习一次；基于上次实际完成时间动态推进，逾期自动顺延至今日</span>
     </div>
     <div class="ebb-wrap" style="max-height:calc(100vh - 200px);overflow:auto;">
       <table class="ebb-table" style="min-width:720px;">
-        <thead><tr><th style="width:120px;">背诵内容</th><th style="width:90px;">学习日期</th>${headerCols}<th style="width:60px;">操作</th></tr></thead>
+        <thead><tr><th style="width:120px;">内容</th><th style="width:80px;">学习日</th>${headerCols}<th style="width:60px;"></th></tr></thead>
         <tbody>
         ${cachedEbbItems.map(item => {
           const schedule = getEbbDynamicSchedule(item);
           return `<tr>
-            <td class="eb-name" title="${escapeHtml(item.name)}">
-              <span ondblclick="editEbbInline(${item.id})">${escapeHtml(item.name)}</span>
-            </td>
+            <td class="eb-name" title="${escapeHtml(item.name)}" ondblclick="editEbbInline(${item.id})">${escapeHtml(item.name)}</td>
             <td class="eb-date">${item.first_date}</td>
             ${schedule.map(slot => {
-              const done = slot.done;
-              const isFuture = slot.scheduled > today;
-              const isOverdue = slot.scheduled <= today && !done;
-              let cls = '';
-              if (done) cls = 'ebb-done';
-              else if (isOverdue) cls = 'ebb-due';
-              return `<td class="${cls}">${
-                done
-                  ? `<span style="color:#27ae60;font-size:11px;">✓ ${slot.scheduled.slice(5)}</span>`
-                  : isFuture
-                    ? `<span class="ebb-future">${slot.scheduled.slice(5)}</span>`
-                    : isOverdue
-                      ? `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
-                          <input type="checkbox" class="ebb-chk" onchange="toggleEbbReview(${item.id}, ${slot.day})">
-                          <button style="font-size:10px;padding:1px 5px;background:#fff3cd;border:1px solid #ffc107;border-radius:3px;cursor:pointer;color:#856404;" onclick="event.stopPropagation();postponeEbb(${item.id}, ${slot.day})" title="延期到今天">后延</button>
-                        </div>`
-                      : `<input type="checkbox" class="ebb-chk" onchange="toggleEbbReview(${item.id}, ${slot.day})">`
-              }</td>`;
+              if (slot.done) {
+                return `<td class="ebb-done"><div style="font-size:11px;color:#27ae60;">✓ ${slot.scheduled.slice(5)}</div></td>`;
+              }
+              const isOverdue = slot.scheduled < today;
+              return `<td class="${isOverdue ? 'ebb-due' : ''}">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+                  <span style="font-size:11px;${isOverdue ? 'color:#e74c3c;font-weight:600;' : 'color:#888;'}">${slot.scheduled.slice(5)}${isOverdue ? ' ⚠' : ''}</span>
+                  <button onclick="toggleEbbReview(${item.id}, ${slot.day})"
+                    style="font-size:11px;padding:3px 10px;border-radius:4px;cursor:pointer;white-space:nowrap;
+                    ${isOverdue ? 'background:#fdeaea;color:#e74c3c;border:1px solid #e74c3c;' : 'background:#e8f5e9;color:#27ae60;border:1px solid #27ae60;'}">
+                    ${isOverdue ? '补背' : '已背'}
+                  </button>
+                </div></td>`;
             }).join('')}
             <td><div class="ebb-actions"><button onclick="showEbbModal(${item.id}, '${escapeHtml(item.name).replace(/'/g, "\\'")}', '${item.first_date}')">编辑</button><button class="eb-del" onclick="deleteEbbItem(${item.id})">删除</button></div></td>
           </tr>`;
@@ -1940,7 +1910,7 @@ async function saveTlEvent() {
   try {
     let res;
     if (editId) {
-      res = await sb.from('timeline_events').update({ subject, label, start_date: startDate, end_date: endDate }).eq('id', editId);
+      res = await sb.from('timeline_events').update({ subject, label, start_date: startDate, end_date: endDate, color: SUBJECT_COLORS[subject] }).eq('id', editId);
     } else {
       res = await sb.from('timeline_events').insert({ subject, label, start_date: startDate, end_date: endDate, color: SUBJECT_COLORS[subject] });
     }
