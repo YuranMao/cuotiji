@@ -1015,6 +1015,14 @@ body {
   <div class="modal">
     <h3 id="ebbModalTitle">添加背诵项</h3>
     <div class="form-group">
+      <label>科目</label>
+      <select id="ebbSubjectSelect">
+        <option value="专业课">专业课</option>
+        <option value="单词">单词</option>
+        <option value="政治">政治</option>
+      </select>
+    </div>
+    <div class="form-group">
       <label>背诵内容</label>
       <input type="text" id="ebbNameInput" placeholder="例如：泰勒公式" autocomplete="off">
     </div>
@@ -1107,6 +1115,7 @@ let cachedEbbItems = [];
 let cachedTimeline = [];
 let ebbLoaded = false;
 let tlLoaded = false;
+let ebbSubject = '专业课';
 
 // ==================== Tab 切换 ====================
 function switchTab(tab) {
@@ -1713,16 +1722,18 @@ function updateMainHeader() {
 }
 
 // ==================== 艾宾浩斯遗忘表 ====================
-function showEbbModal(id, name, firstDate) {
+function showEbbModal(id, name, firstDate, subject) {
   if (id) {
     document.getElementById('ebbModalTitle').textContent = '编辑背诵项';
     document.getElementById('ebbNameInput').value = name;
     document.getElementById('ebbDateInput').value = firstDate;
+    document.getElementById('ebbSubjectSelect').value = subject || '专业课';
     document.getElementById('editEbbId').value = id;
   } else {
     document.getElementById('ebbModalTitle').textContent = '添加背诵项';
     document.getElementById('ebbNameInput').value = '';
     document.getElementById('ebbDateInput').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('ebbSubjectSelect').value = ebbSubject;
     document.getElementById('editEbbId').value = '';
   }
   openModal('ebbModal');
@@ -1732,14 +1743,15 @@ function showEbbModal(id, name, firstDate) {
 async function saveEbbItem() {
   const name = document.getElementById('ebbNameInput').value.trim();
   const firstDate = document.getElementById('ebbDateInput').value;
+  const subject = document.getElementById('ebbSubjectSelect').value;
   const editId = document.getElementById('editEbbId').value;
   if (!name) { showToast('请输入背诵内容'); return; }
   try {
     let res;
     if (editId) {
-      res = await sb.from('ebbinghaus_items').update({ name, first_date: firstDate }).eq('id', editId);
+      res = await sb.from('ebbinghaus_items').update({ name, first_date: firstDate, subject }).eq('id', editId);
     } else {
-      res = await sb.from('ebbinghaus_items').insert({ name, first_date: firstDate, reviews: [] });
+      res = await sb.from('ebbinghaus_items').insert({ name, first_date: firstDate, subject, reviews: [] });
     }
     if (res.error) throw res.error;
     await reloadEbb();
@@ -1824,25 +1836,40 @@ function getEbbDynamicSchedule(item) {
   return result;
 }
 
+function setEbbSubject(subj) {
+  ebbSubject = subj;
+  renderEbb();
+}
+
 function renderEbb() {
   const container = document.getElementById('panelEbb');
-  if (cachedEbbItems.length === 0) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>暂无背诵内容</p></div>';
+  const subjects = ['专业课', '单词', '政治'];
+  const subjectIcons = { '专业课': '📘', '单词': '📖', '政治': '📙' };
+
+  const filteredItems = cachedEbbItems.filter(item => (item.subject || '专业课') === ebbSubject);
+
+  // Subject sub-tabs
+  const subTabs = `<div class="ebb-toolbar">
+    <div style="display:flex;gap:4px;">
+      ${subjects.map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#4a90d9;color:#fff;border-color:#4a90d9;' : 'background:#fff;color:#333;'}">${subjectIcons[s]} ${s}</button>`).join('')}
+    </div>
+    <span style="font-size:12px;color:#888;">逾期自动顺延至今日，仅当天可记录</span>
+  </div>`;
+
+  if (filteredItems.length === 0) {
+    container.innerHTML = subTabs + '<div class="empty-state"><div class="empty-icon">📭</div><p>暂无背诵内容</p></div>';
     return;
   }
 
   const today = formatDate(new Date());
   const headerCols = EBB_INTERVALS.map((d, i) => `<th title="第${d}天">${i+1}<br><small>d${d}</small></th>`).join('');
 
-  container.innerHTML = `
-    <div class="ebb-toolbar">
-      <span style="font-size:12px;color:#888;">学习后第 1、2、4、7、15、30 天各复习一次；基于上次实际完成时间动态推进，逾期自动顺延至今日</span>
-    </div>
-    <div class="ebb-wrap" style="max-height:calc(100vh - 200px);overflow:auto;">
+  container.innerHTML = subTabs + `
+    <div class="ebb-wrap" style="max-height:calc(100vh - 240px);overflow:auto;">
       <table class="ebb-table" style="min-width:720px;">
         <thead><tr><th style="width:120px;">内容</th><th style="width:80px;">学习日</th>${headerCols}<th style="width:60px;"></th></tr></thead>
         <tbody>
-        ${cachedEbbItems.map(item => {
+        ${filteredItems.map(item => {
           const schedule = getEbbDynamicSchedule(item);
           return `<tr>
             <td class="eb-name" title="${escapeHtml(item.name)}" ondblclick="editEbbInline(${item.id})">${escapeHtml(item.name)}</td>
@@ -1866,7 +1893,7 @@ function renderEbb() {
                   </button>
                 </div></td>`;
             }).join('')}
-            <td><div class="ebb-actions"><button onclick="showEbbModal(${item.id}, '${escapeHtml(item.name).replace(/'/g, "\\'")}', '${item.first_date}')">编辑</button><button class="eb-del" onclick="deleteEbbItem(${item.id})">删除</button></div></td>
+            <td><div class="ebb-actions"><button onclick="showEbbModal(${item.id}, '${escapeHtml(item.name).replace(/'/g, "\\'")}', '${item.first_date}', '${(item.subject || '专业课').replace(/'/g, "\\'")}')">编辑</button><button class="eb-del" onclick="deleteEbbItem(${item.id})">删除</button></div></td>
           </tr>`;
         }).join('')}
         </tbody>
