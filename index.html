@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>错题集（按知识点分类）</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>📖</text></svg>">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -1392,7 +1393,12 @@ async function reloadAllCore() {
   await Promise.all([reloadChapters(), reloadKps(), reloadQuestions()]);
 }
 async function reloadEbb() {
-  const r = await sb.from('ebbinghaus_items').select('*').order('first_date', { ascending: false });
+  // Try ordered query first; fall back if column missing
+  let r = await sb.from('ebbinghaus_items').select('*').order('first_date', { ascending: false });
+  if (r.error) {
+    console.warn('ebbinghaus_items 查询失败，尝试无排序:', r.error.message);
+    r = await sb.from('ebbinghaus_items').select('*');
+  }
   if (!r.error) cachedEbbItems = r.data || [];
   ebbLoaded = true;
 }
@@ -1748,10 +1754,22 @@ async function saveEbbItem() {
   if (!name) { showToast('请输入背诵内容'); return; }
   try {
     let res;
+    const payload = { name, first_date: firstDate, subject, reviews: [] };
     if (editId) {
-      res = await sb.from('ebbinghaus_items').update({ name, first_date: firstDate, subject }).eq('id', editId);
+      // Try with subject first, fallback without
+      res = await sb.from('ebbinghaus_items').update(payload).eq('id', editId);
+      if (res.error) {
+        console.warn('update 带 subject 失败，重试无 subject:', res.error.message);
+        delete payload.subject;
+        res = await sb.from('ebbinghaus_items').update(payload).eq('id', editId);
+      }
     } else {
-      res = await sb.from('ebbinghaus_items').insert({ name, first_date: firstDate, subject, reviews: [] });
+      res = await sb.from('ebbinghaus_items').insert(payload);
+      if (res.error) {
+        console.warn('insert 带 subject 失败，重试无 subject:', res.error.message);
+        delete payload.subject;
+        res = await sb.from('ebbinghaus_items').insert(payload);
+      }
     }
     if (res.error) throw res.error;
     await reloadEbb();
@@ -2062,21 +2080,48 @@ function renderTimeline() {
         </div>
         ${subjects.map(subj => {
           const events = cachedTimeline.filter(e => e.subject === subj);
-          return `<div class="tl-row">
-            <div class="tl-row-label">${subj}</div>
-            <div class="tl-row-track">
+          if (events.length === 0) {
+            return `<div class="tl-row">
+              <div class="tl-row-label">${subj}</div>
+              <div class="tl-row-track">${daySlots}${todayIdx >= 0 && todayIdx < dayCount ? `<div class="tl-today-line" style="left:${todayPct}%"></div>` : ''}</div>
+            </div>`;
+          }
+          // Compute lane assignment for overlapping events
+          const BAR_H = 28, BAR_GAP = 4, TOP_PAD = 4;
+          const eventMeta = events.map(ev => {
+            const evStart = new Date(ev.start_date);
+            const evEnd = new Date(ev.end_date);
+            const startIdx = Math.round((evStart - startD) / 86400000);
+            const endIdx = Math.round((evEnd - startD) / 86400000);
+            return { ev, startIdx, endIdx, lane: -1 };
+          }).filter(m => m.endIdx >= 0 && m.startIdx < dayCount);
+          let maxLane = 0;
+          for (const m of eventMeta) {
+            let lane = 0;
+            while (true) {
+              const conflict = eventMeta.find(o => o !== m && o.lane === lane &&
+                !(m.endIdx < o.startIdx || m.startIdx > o.endIdx));
+              if (!conflict) break;
+              lane++;
+            }
+            m.lane = lane;
+            if (lane > maxLane) maxLane = lane;
+          }
+          const numLanes = maxLane + 1;
+          const rowH = TOP_PAD * 2 + numLanes * (BAR_H + BAR_GAP);
+          return `<div class="tl-row" style="min-height:${rowH}px">
+            <div class="tl-row-label" style="min-height:${rowH}px">${subj}</div>
+            <div class="tl-row-track" style="min-height:${rowH}px">
               ${daySlots}
               ${todayIdx >= 0 && todayIdx < dayCount ? `<div class="tl-today-line" style="left:${todayPct}%"></div>` : ''}
-              ${events.map(ev => {
-                const evStart = new Date(ev.start_date);
-                const evEnd = new Date(ev.end_date);
-                const startIdx = Math.round((evStart - startD) / 86400000);
-                const endIdx = Math.round((evEnd - startD) / 86400000);
-                if (endIdx < 0 || startIdx >= dayCount) return '';
+              ${eventMeta.map(m => {
+                const ev = m.ev;
+                const startIdx = m.startIdx, endIdx = m.endIdx;
                 const left = Math.max(0, (startIdx / dayCount) * 100);
                 const width = Math.max(2, ((Math.min(endIdx, dayCount - 1) - Math.max(startIdx, 0) + 1) / dayCount) * 100);
+                const top = TOP_PAD + m.lane * (BAR_H + BAR_GAP);
                 const grad = SUBJECT_GRADIENTS[subj] || `linear-gradient(90deg, ${SUBJECT_COLORS[subj]}, ${SUBJECT_COLORS[subj]})`;
-                return `<div class="tl-event" style="left:${left}%;width:${width}%;background:${grad}" onclick="showTlModal(${ev.id}, '${ev.subject}', '${escapeHtml(ev.label).replace(/'/g, "\\'")}', '${ev.start_date}', '${ev.end_date}')">
+                return `<div class="tl-event" style="left:${left}%;width:${width}%;top:${top}px;height:${BAR_H}px;background:${grad}" onclick="showTlModal(${ev.id}, '${ev.subject}', '${escapeHtml(ev.label).replace(/'/g, "\\'")}', '${ev.start_date}', '${ev.end_date}')">
                   ${escapeHtml(ev.label)}
                   <span class="tl-del" onclick="event.stopPropagation();deleteTlEvent(${ev.id})">×</span>
                 </div>`;
