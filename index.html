@@ -1110,6 +1110,10 @@ body {
       <div id="schTimeSlotList" style="display:flex;flex-wrap:wrap;gap:4px;max-height:160px;overflow-y:auto;padding:4px;"></div>
     </div>
     <div class="form-group">
+      <label>日期</label>
+      <input type="date" id="schDate" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+    </div>
+    <div class="form-group">
       <label>科目</label>
       <select id="schSubject" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
         <option>数学</option><option>专业课</option><option>英语</option><option>政治</option>
@@ -1120,7 +1124,6 @@ body {
       <input type="text" id="schLabel" placeholder="例如：做完一章习题" autocomplete="off">
     </div>
     <input type="hidden" id="schId">
-    <input type="hidden" id="schDate">
     <input type="hidden" id="schOldLabel" value="">
     <input type="hidden" id="schOldSubject" value="">
     <div class="modal-btns">
@@ -2331,7 +2334,8 @@ function renderEbb() {
                       <span style="font-size:11px;color:#27ae60;font-weight:600;">✓ ${reviewDate}</span>
                       <textarea id="ebbNote_${item.id}_${slot.day}"
                         onblur="saveEbbNoteInline(${item.id}, ${slot.day}, this.value)"
-                        style="width:96%;min-height:32px;font-size:9px;padding:3px 4px;border:1px solid #d0d0d0;border-radius:4px;resize:vertical;background:#fdfcf0;white-space:pre-wrap;word-break:break-all;line-height:1.3;text-align:left;"
+                        oninput="autoResizeTextarea(this)"
+                        style="width:96%;min-height:32px;font-size:9px;padding:4px 6px;border:1px solid #c8c8c8;border-radius:8px;resize:none;overflow:hidden;background:#fdfcf0;white-space:pre-wrap;word-break:break-all;line-height:1.5;text-align:left;"
                         placeholder="备注...">${slot.reviewNote ? escapeHtml(slot.reviewNote) : ''}</textarea>
                     </div></td>`;
                 }
@@ -2389,6 +2393,11 @@ async function saveEbbNoteInline(itemId, day, noteText) {
     if (res.error) throw res.error;
     await reloadEbb();
   } catch (err) { /* silent fail for inline save */ }
+}
+
+function autoResizeTextarea(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.max(32, el.scrollHeight) + 'px';
 }
 
 // ==================== 考研进度时间表 ====================
