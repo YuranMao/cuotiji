@@ -1223,7 +1223,7 @@ function switchTab(tab) {
     addBtn.textContent = '+ 任务';
     addBtn.disabled = false;
     breadcrumb.textContent = '考研进度时间表';
-    if (!tlLoaded) { Promise.all([reloadTimelineData(), reloadTimeSlots()]).then(() => { tlLoaded = true; renderTimeline(); }); }
+    if (!tlLoaded) { Promise.all([reloadTimelineData(), reloadTimeSlots().catch(() => {})]).then(() => { tlLoaded = true; renderTimeline(); }); }
     else renderTimeline();
   }
 }
@@ -1526,8 +1526,10 @@ async function reloadCoreQuestions() {
   coreLoaded = true;
 }
 async function reloadTimeSlots() {
-  const r = await sb.from('schedule_time_slots').select('*').order('sort_order', { ascending: true }).order('id');
-  if (!r.error) scheduleTimeSlots = (r.data || []).map(s => s.slot_name);
+  try {
+    const r = await sb.from('schedule_time_slots').select('*').order('sort_order', { ascending: true }).order('id');
+    if (!r.error) scheduleTimeSlots = (r.data || []).map(s => s.slot_name);
+  } catch (err) { /* table may not exist yet */ }
 }
 
 async function reloadSchedule() {
@@ -2655,7 +2657,7 @@ function renderTimeline() {
 
   if (tlViewMode === 'calendar') {
     container.innerHTML = viewToggle + renderCalendar() + '<div id="scheduleSection"></div>';
-    if (!scheduleLoaded) { Promise.all([reloadSchedule(), reloadTimeSlots()]).then(() => renderScheduleGrid()); }
+    if (!scheduleLoaded) { Promise.all([reloadSchedule(), reloadTimeSlots().catch(() => {})]).then(() => { scheduleLoaded = true; renderScheduleGrid(); }); }
     else renderScheduleGrid();
     return;
   }
@@ -2749,7 +2751,7 @@ function renderTimeline() {
         }).join('')}
       </div>
     </div>` + '<div id="scheduleSection"></div>';
-  if (!scheduleLoaded) { Promise.all([reloadSchedule(), reloadTimeSlots()]).then(() => renderScheduleGrid()); }
+  if (!scheduleLoaded) { Promise.all([reloadSchedule(), reloadTimeSlots().catch(() => {})]).then(() => { scheduleLoaded = true; renderScheduleGrid(); }); }
   else renderScheduleGrid();
 }
 
