@@ -81,14 +81,6 @@ body {
 }
 .chapter-header:hover { background: #f5f7fa; }
 .chapter-header.active { background: #e8f0fe; color: #4a90d9; }
-.chapter-header .arrow {
-  font-size: 10px;
-  transition: transform .2s;
-  color: #aaa;
-  width: 12px;
-  flex-shrink: 0;
-}
-.chapter-header .arrow.expanded { transform: rotate(90deg); }
 .chapter-header .icon { font-size: 15px; flex-shrink: 0; }
 .chapter-header .name {
   flex: 1;
@@ -117,21 +109,8 @@ body {
   line-height: 1;
   flex-shrink: 0;
 }
-.chapter-header:hover .del-chapter,
-.chapter-header:hover .sort-btn { display: block; }
+.chapter-header:hover .del-chapter { display: block; }
 .chapter-header .del-chapter:hover { color: #e74c3c; }
-.sort-btn {
-  font-size: 11px;
-  color: #bbb;
-  cursor: pointer;
-  padding: 1px 3px;
-  display: none;
-  border: none;
-  background: none;
-  line-height: 1;
-  flex-shrink: 0;
-}
-.sort-btn:hover { color: #4a90d9; }
 .edit-btn {
   font-size: 12px;
   color: #bbb;
@@ -147,13 +126,6 @@ body {
 .kp-item:hover .edit-btn { opacity: 1; }
 .edit-btn:hover { color: #4a90d9; }
 .kp-edit-btn { font-size: 10px; }
-.sort-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  flex-shrink: 0;
-  line-height: 1;
-}
 
 .kp-list { display: none; }
 .kp-list.open { display: block; }
@@ -191,8 +163,38 @@ body {
   flex-shrink: 0;
 }
 .kp-item:hover .del-kp { display: block; }
-.kp-item:hover .sort-btn { display: block; }
 .kp-item .del-kp:hover { color: #e74c3c; }
+
+/* ---- 拖拽排序 ---- */
+.chapter-header { cursor: grab; }
+.chapter-header:active { cursor: grabbing; }
+.kp-item { cursor: grab; }
+.kp-item:active { cursor: grabbing; }
+.dragging { opacity: 0.4; }
+.drag-over-chapter { background: #e8f0fe !important; outline: 2px dashed #4a90d9; outline-offset: -2px; }
+.drag-over-kp { background: #e8f0fe !important; outline: 2px dashed #4a90d9; outline-offset: -2px; }
+.drag-handle {
+  display: inline-block;
+  color: #ccc;
+  cursor: grab;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+  user-select: none;
+}
+.kp-move-btn {
+  font-size: 12px;
+  color: #bbb;
+  cursor: pointer;
+  padding: 2px 5px;
+  border: none;
+  background: none;
+  display: none;
+  flex-shrink: 0;
+}
+.kp-item:hover .kp-move-btn { display: block; }
+.kp-move-btn:hover { color: #e67e22; }
 
 /* ---- Tab Navigation ---- */
 .tab-nav {
@@ -1012,10 +1014,10 @@ body {
   </div>
 </div>
 
-<!-- 母题弹窗 -->
+<!-- 重要例题弹窗 -->
 <div class="modal-overlay" id="coreQuestionModal">
   <div class="modal">
-    <h3>添加母题</h3>
+    <h3>添加重要例题</h3>
     <div class="form-group">
       <label>题型标签</label>
       <input type="text" id="coreTagInput" placeholder="例如：选择题、填空题、证明题" autocomplete="off">
@@ -1104,8 +1106,8 @@ body {
   <div class="modal">
     <h3 id="schModalTitle">添加记录</h3>
     <div class="form-group">
-      <label>时段</label>
-      <select id="schTimeSlot" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></select>
+      <label>时段（可多选）</label>
+      <div id="schTimeSlotList" style="display:flex;flex-wrap:wrap;gap:4px;max-height:160px;overflow-y:auto;padding:4px;"></div>
     </div>
     <div class="form-group">
       <label>科目</label>
@@ -1119,26 +1121,11 @@ body {
     </div>
     <input type="hidden" id="schId">
     <input type="hidden" id="schDate">
+    <input type="hidden" id="schOldLabel" value="">
+    <input type="hidden" id="schOldSubject" value="">
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal('scheduleRecordModal')">取消</button>
       <button class="btn-confirm" id="schSaveBtn" onclick="saveScheduleRecord()">保存</button>
-    </div>
-  </div>
-</div>
-
-<!-- 遗忘表备注弹窗 -->
-<div class="modal-overlay" id="ebbNoteModal">
-  <div class="modal">
-    <h3>背诵备注</h3>
-    <div class="form-group">
-      <label>第 <span id="ebbNoteDay"></span> 天复习备注</label>
-      <textarea id="ebbNoteInput" rows="4" style="width:100%;resize:vertical;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;white-space:pre-wrap;" placeholder="输入备注（支持换行）..."></textarea>
-    </div>
-    <input type="hidden" id="ebbNoteItemId">
-    <input type="hidden" id="ebbNoteDayVal">
-    <div class="modal-btns">
-      <button class="btn-cancel" onclick="closeModal('ebbNoteModal')">取消</button>
-      <button class="btn-confirm" onclick="saveEbbNote()">保存</button>
     </div>
   </div>
 </div>
@@ -1213,8 +1200,8 @@ function switchTab(tab) {
     addBtn.disabled = !selectedKpId && !selectedCoreChapterId;
     if (selectedCoreChapterId) {
       const ch = cachedChapters.find(c => c.id == selectedCoreChapterId);
-      breadcrumb.innerHTML = '★ 母题 <span>&gt;</span> ' + escapeHtml(ch?.name || '');
-      addBtn.textContent = '+ 母题';
+      breadcrumb.innerHTML = '★ 重要例题 <span>&gt;</span> ' + escapeHtml(ch?.name || '');
+      addBtn.textContent = '+ 重要例题';
       addBtn.disabled = false;
     } else {
       breadcrumb.innerHTML = selectedKpId ? getBreadcrumbHtml() : '<span>选择知识点查看错题</span>';
@@ -1234,7 +1221,7 @@ function switchTab(tab) {
     addBtn.textContent = '+ 任务';
     addBtn.disabled = false;
     breadcrumb.textContent = '考研进度时间表';
-    if (!tlLoaded) { reloadTimelineData().then(() => { tlLoaded = true; renderTimeline(); }); }
+    if (!tlLoaded) { Promise.all([reloadTimelineData(), reloadTimeSlots()]).then(() => { tlLoaded = true; renderTimeline(); }); }
     else renderTimeline();
   }
 }
@@ -1532,10 +1519,15 @@ async function reloadTimelineData() {
   tlLoaded = true;
 }
 async function reloadCoreQuestions() {
-  const r = await sb.from('core_questions').select('*').order('created_at', { ascending: false });
+  const r = await sb.from('core_questions').select('*').order('sort_order', { ascending: true }).order('id', { ascending: true });
   if (!r.error) cachedCoreQuestions = r.data || [];
   coreLoaded = true;
 }
+async function reloadTimeSlots() {
+  const r = await sb.from('schedule_time_slots').select('*').order('sort_order', { ascending: true }).order('id');
+  if (!r.error) scheduleTimeSlots = (r.data || []).map(s => s.slot_name);
+}
+
 async function reloadSchedule() {
   if (!scheduleDateRange.start) {
     const s = new Date(); s.setDate(s.getDate() - 7);
@@ -1692,12 +1684,58 @@ async function markWrong(id) {
   } catch (err) { showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err))); }
 }
 
-// ==================== 排序 ====================
-async function moveChapter(id, dir) {
-  const idx = cachedChapters.findIndex(c => c.id == id);
-  if (idx < 0 || (dir < 0 && idx === 0) || (dir > 0 && idx === cachedChapters.length - 1)) return;
-  const swapIdx = idx + dir;
-  const a = cachedChapters[idx], b = cachedChapters[swapIdx];
+// ==================== 拖拽排序 ====================
+let dragData = null; // { type: 'chapter'|'kp', id, chapterId? }
+
+function onDragStart(e, type, id, chapterId) {
+  dragData = { type, id, chapterId };
+  e.target.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', ''); // Firefox 需要
+}
+
+function onDragOverChapter(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('drag-over-chapter');
+}
+function onDragLeaveChapter(e) {
+  e.currentTarget.classList.remove('drag-over-chapter');
+}
+async function onDropChapter(e, targetId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over-chapter');
+  document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+  if (!dragData || dragData.type !== 'chapter') { dragData = null; return; }
+  if (dragData.id === targetId) { dragData = null; return; }
+  await swapChapterOrder(dragData.id, targetId);
+  dragData = null;
+}
+
+function onDragOverKp(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('drag-over-kp');
+}
+function onDragLeaveKp(e) {
+  e.currentTarget.classList.remove('drag-over-kp');
+}
+async function onDropKp(e, targetId, targetChapterId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over-kp');
+  document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+  if (!dragData || dragData.type !== 'kp') { dragData = null; return; }
+  if (dragData.id === targetId) { dragData = null; return; }
+  // Only reorder within same chapter
+  if (dragData.chapterId !== targetChapterId) { dragData = null; return; }
+  await swapKpOrder(dragData.id, targetId, targetChapterId);
+  dragData = null;
+}
+
+async function swapChapterOrder(id1, id2) {
+  const a = cachedChapters.find(c => c.id == id1);
+  const b = cachedChapters.find(c => c.id == id2);
+  if (!a || !b) return;
   try {
     await sb.from('chapters').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id);
     await sb.from('chapters').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
@@ -1706,12 +1744,11 @@ async function moveChapter(id, dir) {
   } catch (err) { showToast('排序失败: ' + err.message); }
 }
 
-async function moveKp(id, chapterId, dir) {
+async function swapKpOrder(id1, id2, chapterId) {
   const childKps = cachedKps.filter(kp => kp.chapter_id == chapterId);
-  const idx = childKps.findIndex(kp => kp.id == id);
-  if (idx < 0 || (dir < 0 && idx === 0) || (dir > 0 && idx === childKps.length - 1)) return;
-  const swapIdx = idx + dir;
-  const a = childKps[idx], b = childKps[swapIdx];
+  const a = childKps.find(kp => kp.id == id1);
+  const b = childKps.find(kp => kp.id == id2);
+  if (!a || !b) return;
   try {
     await sb.from('knowledge_points').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id);
     await sb.from('knowledge_points').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
@@ -1720,7 +1757,55 @@ async function moveKp(id, chapterId, dir) {
   } catch (err) { showToast('排序失败: ' + err.message); }
 }
 
-// ==================== 母题库 ====================
+// ==================== 知识点转移 ====================
+async function moveKpToChapter(kpId, fromChapterId) {
+  const kp = cachedKps.find(k => k.id == kpId);
+  if (!kp) return;
+  const otherChapters = cachedChapters.filter(c => c.id != fromChapterId);
+  if (otherChapters.length === 0) { showToast('没有其他章节可转移'); return; }
+
+  const html = otherChapters.map(c =>
+    `<option value="${c.id}">${escapeHtml(c.name)}</option>`
+  ).join('');
+  const selId = 'kpMoveChapterSelect_' + kpId;
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay show';
+  modal.innerHTML = `<div class="modal">
+    <h3>转移知识点</h3>
+    <p style="margin-bottom:12px;font-size:13px;color:#666;">将「<b>${escapeHtml(kp.name)}</b>」及其中 <b>${cachedQuestions.filter(q => q.knowledge_point_id == kpId).length}</b> 道错题转移到：</p>
+    <div class="form-group">
+      <select id="${selId}" style="width:100%;padding:10px;border:1px solid #d9d9d9;border-radius:8px;font-size:14px;">${html}</select>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" id="kpMoveCancel">取消</button>
+      <button class="btn-confirm" id="kpMoveConfirm">转移</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+
+  modal.querySelector('#kpMoveCancel').onclick = () => modal.remove();
+  modal.querySelector('#kpMoveConfirm').onclick = async () => {
+    const targetChapterId = parseInt(modal.querySelector('#' + selId).value, 10);
+    modal.remove();
+    try {
+      const res = await sb.from('knowledge_points').update({ chapter_id: targetChapterId }).eq('id', kpId);
+      if (res.error) throw res.error;
+      await reloadKps();
+      if (selectedKpId == kpId) {
+        selectedKpId = null;
+        selectedChapterId = targetChapterId;
+        updateMainHeader();
+        document.getElementById('panelCuoti').innerHTML = '<div class="empty-state"><div class="empty-icon">📂</div><p>知识点已转移，请重新选择</p></div>';
+      }
+      await refreshSidebar();
+      showToast('已转移到「' + escapeHtml(cachedChapters.find(c => c.id == targetChapterId)?.name || '') + '」');
+    } catch (err) { showToast('转移失败: ' + err.message); }
+  };
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+}
+
+// ==================== 重要例题库 ====================
 function selectCore(chapterId) {
   selectedCoreChapterId = chapterId;
   selectedKpId = null;
@@ -1753,7 +1838,7 @@ async function saveCoreQuestion() {
     closeModal('coreQuestionModal');
     await refreshSidebar();
     await refreshMainContent();
-    showToast('母题已添加');
+    showToast('重要例题已添加');
   } catch (err) { showToast('保存失败: ' + err.message); }
 }
 
@@ -1770,7 +1855,7 @@ async function editCoreTag(id, currentTag) {
 }
 
 async function deleteCoreQuestion(id) {
-  if (!confirm('确定删除该母题？')) return;
+  if (!confirm('确定删除该重要例题？')) return;
   try {
     await sb.from('core_questions').delete().eq('id', id);
     await reloadCoreQuestions();
@@ -1778,6 +1863,20 @@ async function deleteCoreQuestion(id) {
     await refreshMainContent();
     showToast('已删除');
   } catch (err) { showToast('删除失败: ' + err.message); }
+}
+
+async function moveCoreQuestion(id, dir) {
+  const list = cachedCoreQuestions.filter(q => q.chapter_id == selectedCoreChapterId);
+  list.sort((a, b) => (a.sort_order || a.id) - (b.sort_order || b.id));
+  const idx = list.findIndex(q => q.id == id);
+  if (idx < 0 || (dir < 0 && idx === 0) || (dir > 0 && idx === list.length - 1)) return;
+  const a = list[idx], b = list[idx + dir];
+  try {
+    await sb.from('core_questions').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id);
+    await sb.from('core_questions').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
+    await reloadCoreQuestions();
+    await refreshMainContent();
+  } catch (err) { showToast('排序失败: ' + err.message); }
 }
 
 async function markCoreCorrect(id) {
@@ -1824,19 +1923,18 @@ async function refreshSidebar() {
     return `
       <div class="tree-chapter">
         <div class="chapter-header ${selectedChapterId == ch.id ? 'active' : ''}"
+             draggable="true"
+             ondragstart="onDragStart(event, 'chapter', ${ch.id})"
+             ondragover="onDragOverChapter(event)"
+             ondragleave="onDragLeaveChapter(event)"
+             ondrop="onDropChapter(event, ${ch.id})"
              onclick="selectChapter(${ch.id})">
-          <span class="arrow ${isExpanded ? 'expanded' : ''}">▶</span>
+          <span class="drag-handle" title="拖动排序">⠿</span>
           <span class="icon">📁</span>
           <span class="name">${escapeHtml(ch.name)}
             <button class="edit-btn" onclick="event.stopPropagation();showChapterModal(${ch.id}, '${escapeHtml(ch.name).replace(/'/g, "\\'")}')" title="重命名">✎</button>
           </span>
           <span class="count">${totalQuestions}</span>
-          <div class="sort-wrap">
-            <button class="sort-btn" ${idx === 0 ? 'disabled style="visibility:hidden"' : ''}
-                    onclick="event.stopPropagation();moveChapter(${ch.id}, -1)">▲</button>
-            <button class="sort-btn" ${idx === cachedChapters.length - 1 ? 'disabled style="visibility:hidden"' : ''}
-                    onclick="event.stopPropagation();moveChapter(${ch.id}, 1)">▼</button>
-          </div>
           <button class="del-chapter" onclick="event.stopPropagation();deleteChapter(${ch.id})">×</button>
         </div>
         <div class="kp-list ${isExpanded ? 'open' : ''}">
@@ -1844,18 +1942,18 @@ async function refreshSidebar() {
             const kpCount = cachedQuestions.filter(q => q.knowledge_point_id === kp.id).length;
             return `
               <div class="kp-item ${selectedKpId == kp.id ? 'active' : ''}"
+                   draggable="true"
+                   ondragstart="onDragStart(event, 'kp', ${kp.id}, ${ch.id})"
+                   ondragover="onDragOverKp(event)"
+                   ondragleave="onDragLeaveKp(event)"
+                   ondrop="onDropKp(event, ${kp.id}, ${ch.id})"
                    onclick="event.stopPropagation();selectKp(${kp.id})">
-                <span class="kp-dot">●</span>
+                <span class="drag-handle" title="拖动排序">⠿</span>
                 <span class="kp-name">${escapeHtml(kp.name)}
                   <button class="edit-btn kp-edit-btn" onclick="event.stopPropagation();showKpEditModal(${kp.id}, '${escapeHtml(kp.name).replace(/'/g, "\\'")}', ${ch.id})" title="重命名">✎</button>
                 </span>
                 <span class="kp-count">${kpCount}</span>
-                <div class="sort-wrap">
-                  <button class="sort-btn" ${kpIdx === 0 ? 'disabled style="visibility:hidden"' : ''}
-                          onclick="event.stopPropagation();moveKp(${kp.id}, ${ch.id}, -1)">▲</button>
-                  <button class="sort-btn" ${kpIdx === childKps.length - 1 ? 'disabled style="visibility:hidden"' : ''}
-                          onclick="event.stopPropagation();moveKp(${kp.id}, ${ch.id}, 1)">▼</button>
-                </div>
+                <button class="kp-move-btn" onclick="event.stopPropagation();moveKpToChapter(${kp.id}, ${ch.id})" title="转移到其他章节">↗</button>
                 <button class="del-kp" onclick="event.stopPropagation();deleteKp(${kp.id})">×</button>
               </div>`;
           }).join('')}
@@ -1865,7 +1963,7 @@ async function refreshSidebar() {
                style="font-weight:600;color:#e67e22;" 
                onclick="event.stopPropagation();selectCore(${ch.id})">
             <span class="kp-dot" style="color:#e67e22;">★</span>
-            <span style="font-size:12px;">母题</span>
+            <span style="font-size:12px;">重要例题</span>
             <span class="kp-count">${cachedCoreQuestions.filter(q => q.chapter_id == ch.id).length}</span>
           </div>
         </div>
@@ -1911,13 +2009,13 @@ async function refreshMainContent() {
 
     const container = document.getElementById('panelCuoti');
     if (coreQList.length === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-icon">★</div><p>该章节下暂无母题<br><button onclick="showCoreQuestionModal(' + selectedCoreChapterId + ')" style="margin-top:12px;padding:8px 20px;background:#e67e22;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">+ 添加母题</button></p></div>';
+      container.innerHTML = '<div class="empty-state"><div class="empty-icon">★</div><p>该章节下暂无重要例题<br><button onclick="showCoreQuestionModal(' + selectedCoreChapterId + ')" style="margin-top:12px;padding:8px 20px;background:#e67e22;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">+ 添加重要例题</button></p></div>';
       return;
     }
 
     container.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;padding:0 0 12px;">
-      <span style="font-size:13px;color:#888;">母题集 · 共 ${coreQList.length} 题</span>
-      <button onclick="showCoreQuestionModal(${selectedCoreChapterId})" style="padding:6px 14px;background:#e67e22;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;">+ 添加母题</button>
+      <span style="font-size:13px;color:#888;">重要例题集 · 共 ${coreQList.length} 题</span>
+      <button onclick="showCoreQuestionModal(${selectedCoreChapterId})" style="padding:6px 14px;background:#e67e22;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;">+ 添加重要例题</button>
     </div><div class="question-grid">${coreQList.map(q => {
       const correct = q.correct_count || 0;
       const wrong = q.wrong_count || 0;
@@ -1928,12 +2026,18 @@ async function refreshMainContent() {
       return `
       <div class="question-card" style="border-left:3px solid #e67e22;">
         <div class="card-img-wrap" onclick="previewImage(this.querySelector('img').src)">
-          <img src="${q.image_data}" alt="母题" loading="lazy">
+          <img src="${q.image_data}" alt="重要例题" loading="lazy">
         </div>
         <div class="card-info">
-          <div class="card-date">
-            🏷 ${escapeHtml(q.tag || '未分类')}
-            <button class="edit-btn" style="opacity:1;margin-left:4px;font-size:10px;" onclick="event.stopPropagation();editCoreTag(${q.id}, '${escapeHtml(q.tag || '').replace(/'/g, "\\'")}')">✎</button>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span style="display:inline-block;padding:4px 12px;background:#fef3e2;color:#e67e22;border:1px solid #f0c78e;border-radius:4px;font-size:14px;font-weight:600;">
+              ${escapeHtml(q.tag || '未分类')}
+              <button class="edit-btn" style="opacity:1;margin-left:4px;font-size:11px;color:#e67e22;" onclick="event.stopPropagation();editCoreTag(${q.id}, '${escapeHtml(q.tag || '').replace(/'/g, "\\'")}')">✎</button>
+            </span>
+            <div style="display:flex;flex-direction:column;gap:0;flex-shrink:0;line-height:1;">
+              <button style="display:inline;font-size:11px;color:#bbb;cursor:pointer;padding:1px 3px;border:none;background:none;line-height:1;" onclick="event.stopPropagation();moveCoreQuestion(${q.id}, -1)">▲</button>
+              <button style="display:inline;font-size:11px;color:#bbb;cursor:pointer;padding:1px 3px;border:none;background:none;line-height:1;" onclick="event.stopPropagation();moveCoreQuestion(${q.id}, 1)">▼</button>
+            </div>
           </div>
           <div class="progress-section">
             ${isCompleted ? '<span class="card-badge">✓ 已完成</span>' : ''}
@@ -2027,8 +2131,8 @@ function updateMainHeader() {
     const addBtn = document.getElementById('addBtn');
     if (selectedCoreChapterId) {
       const ch = cachedChapters.find(c => c.id == selectedCoreChapterId);
-      breadcrumb.innerHTML = '★ 母题 <span>&gt;</span> ' + escapeHtml(ch?.name || '');
-      addBtn.textContent = '+ 母题';
+      breadcrumb.innerHTML = '★ 重要例题 <span>&gt;</span> ' + escapeHtml(ch?.name || '');
+      addBtn.textContent = '+ 重要例题';
       addBtn.disabled = false;
       addBtn.onclick = () => showCoreQuestionModal(selectedCoreChapterId);
     } else if (!selectedKpId) {
@@ -2222,11 +2326,13 @@ function renderEbb() {
               if (slot.done) {
                 const reviewDate = slot.reviewDate ? slot.reviewDate.slice(5) : slot.scheduled.slice(5);
                 if (ebbSubject === '专业课') {
-                  return `<td class="ebb-done">
-                    <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
-                      <span style="font-size:11px;color:#27ae60;">✓ ${reviewDate}</span>
-                      ${slot.reviewNote ? `<span style="font-size:9px;color:#666;max-width:80px;white-space:pre-wrap;word-break:break-all;line-height:1.3;text-align:left;">${escapeHtml(slot.reviewNote)}</span>` : ''}
-                      <button onclick="event.stopPropagation();editEbbNote(${item.id}, ${slot.day})" style="font-size:9px;padding:1px 4px;border-radius:3px;border:1px solid #ccc;background:#fff;cursor:pointer;color:#888;">备注</button>
+                  return `<td class="ebb-done" style="padding:2px;vertical-align:top;">
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;">
+                      <span style="font-size:11px;color:#27ae60;font-weight:600;">✓ ${reviewDate}</span>
+                      <textarea id="ebbNote_${item.id}_${slot.day}"
+                        onblur="saveEbbNoteInline(${item.id}, ${slot.day}, this.value)"
+                        style="width:96%;min-height:32px;font-size:9px;padding:3px 4px;border:1px solid #d0d0d0;border-radius:4px;resize:vertical;background:#fdfcf0;white-space:pre-wrap;word-break:break-all;line-height:1.3;text-align:left;"
+                        placeholder="备注...">${slot.reviewNote ? escapeHtml(slot.reviewNote) : ''}</textarea>
                     </div></td>`;
                 }
                 return `<td class="ebb-done"><div style="font-size:11px;color:#27ae60;">✓ ${reviewDate}</div></td>`;
@@ -2267,41 +2373,22 @@ function editEbbInline(id) {
   }
 }
 
-function editEbbNote(itemId, day) {
-  const item = cachedEbbItems.find(e => e.id == itemId);
-  if (!item) return;
-  let reviews = item.reviews || [];
-  reviews = reviews.map(r => typeof r === 'string' ? { day: parseInt(r, 10) || 0, date: r } : r);
-  const existing = reviews.find(r => r.day === day);
-  document.getElementById('ebbNoteDay').textContent = day;
-  document.getElementById('ebbNoteDayVal').value = day;
-  document.getElementById('ebbNoteItemId').value = itemId;
-  document.getElementById('ebbNoteInput').value = existing ? (existing.note || '') : '';
-  openModal('ebbNoteModal');
-  setTimeout(() => document.getElementById('ebbNoteInput').focus(), 100);
-}
-
-async function saveEbbNote() {
-  const itemId = document.getElementById('ebbNoteItemId').value;
-  const day = parseInt(document.getElementById('ebbNoteDayVal').value, 10);
-  const note = document.getElementById('ebbNoteInput').value;
+async function saveEbbNoteInline(itemId, day, noteText) {
   const item = cachedEbbItems.find(e => e.id == itemId);
   if (!item) return;
   let reviews = item.reviews || [];
   reviews = reviews.map(r => typeof r === 'string' ? { day: parseInt(r, 10) || 0, date: r } : r);
   const existing = reviews.find(r => r.day === day);
   if (!existing) {
-    reviews.push({ day, date: formatDate(new Date()), note });
+    reviews.push({ day, date: formatDate(new Date()), note: noteText });
   } else {
-    existing.note = note;
+    existing.note = noteText;
   }
   try {
     const res = await sb.from('ebbinghaus_items').update({ reviews }).eq('id', itemId);
     if (res.error) throw res.error;
     await reloadEbb();
-    closeModal('ebbNoteModal');
-    renderEbb();
-  } catch (err) { showToast('更新备注失败'); }
+  } catch (err) { /* silent fail for inline save */ }
 }
 
 // ==================== 考研进度时间表 ====================
@@ -2411,7 +2498,7 @@ function renderTimeline() {
 
   if (tlViewMode === 'calendar') {
     container.innerHTML = viewToggle + renderCalendar() + '<div id="scheduleSection"></div>';
-    if (!scheduleLoaded) { reloadSchedule().then(() => renderScheduleGrid()); }
+    if (!scheduleLoaded) { Promise.all([reloadSchedule(), reloadTimeSlots()]).then(() => renderScheduleGrid()); }
     else renderScheduleGrid();
     return;
   }
@@ -2505,7 +2592,7 @@ function renderTimeline() {
         }).join('')}
       </div>
     </div>` + '<div id="scheduleSection"></div>';
-  if (!scheduleLoaded) { reloadSchedule().then(() => renderScheduleGrid()); }
+  if (!scheduleLoaded) { Promise.all([reloadSchedule(), reloadTimeSlots()]).then(() => renderScheduleGrid()); }
   else renderScheduleGrid();
 }
 
@@ -2571,7 +2658,7 @@ function renderCalendar() {
     </div>`;
 }
 
-// ==================== 每日复习记录时间表 ====================
+// ==================== 滚动复习记录时间表 ====================
 function renderScheduleGrid() {
   const container = document.getElementById('scheduleSection');
   if (!container) return;
@@ -2588,27 +2675,63 @@ function renderScheduleGrid() {
     dates.push({ date: formatDate(d), day: d.getDate(), month: d.getMonth() + 1, dow: d.getDay() });
   }
 
-  // Table body: if no slots, show empty hint row with add button
+  // Build groups: key = "date|subject|label"
+  const groups = {};
+  cachedSchedule.forEach(r => {
+    const key = r.record_date + '|' + r.subject + '|' + r.label;
+    if (!groups[key]) groups[key] = { date: r.record_date, subject: r.subject, label: r.label, slots: [] };
+    groups[key].slots.push(r.time_slot);
+  });
+
+  // For each time_slot row, determine cell content and rowspan
+  const sortedSlots = [...scheduleTimeSlots].sort();
+
   const tbodyHTML = scheduleTimeSlots.length === 0 ? `
     <tr>
       <td colspan="${dates.length + 1}" style="padding:24px;text-align:center;color:#bbb;">
         暂无时段，点击 <button onclick="addTimeSlot()" style="font-size:12px;padding:4px 12px;background:#4a90d9;color:#fff;border:none;border-radius:4px;cursor:pointer;">+ 添加时段</button> 开始记录
       </td>
-    </tr>` : scheduleTimeSlots.map(slot => {
+    </tr>` : sortedSlots.map((slot, slotIdx) => {
+      // Calculate which records should be rendered in this row (and their rowspans)
+      const slotRecords = []; // { groupKey, rowspan }
+      Object.entries(groups).forEach(([key, grp]) => {
+        if (!grp.slots.includes(slot)) return;
+        // Check if this is the first slot in a consecutive run
+        const slotIdxInGroup = sortedSlots.indexOf(slot);
+        const prevSlot = sortedSlots[slotIdxInGroup - 1];
+        if (prevSlot && grp.slots.includes(prevSlot)) return; // skip: covered by rowspan of previous row
+        // Calculate rowspan: how many consecutive slots does this group occupy starting from here?
+        let rowspan = 1;
+        for (let n = slotIdxInGroup + 1; n < sortedSlots.length; n++) {
+          if (grp.slots.includes(sortedSlots[n])) rowspan++;
+          else break;
+        }
+        slotRecords.push({ key, grp, rowspan, hasRowspan: rowspan > 1 });
+      });
+      
       return `<tr>
-        <td style="padding:6px 8px;border-right:1px solid #e0e0e0;border-bottom:1px solid #f0f0f0;text-align:center;font-weight:600;color:#555;position:relative;">
+        <td style="padding:6px 8px;border-right:1px solid #e0e0e0;border-bottom:1px solid #f0f0f0;text-align:center;font-weight:600;color:#555;position:relative;${slotRecords.length>1?'background:#fafafa;':''}">
           ${slot}
-          <button onclick="deleteTimeSlot('${slot}')" style="position:absolute;right:2px;top:50%;transform:translateY(-50%);font-size:14px;color:#ccc;background:none;border:none;cursor:pointer;display:none;" class="slot-del">×</button>
+          <button onclick="deleteTimeSlot('${slot}')" class="slot-del" style="position:absolute;right:2px;top:50%;transform:translateY(-50%);font-size:14px;color:#ccc;background:none;border:none;cursor:pointer;display:none;">×</button>
         </td>
         ${dates.map(d => {
-          const records = cachedSchedule.filter(r => r.time_slot === slot && r.record_date === d.date);
-          return `<td style="padding:2px;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:top;cursor:pointer;min-height:36px;" 
-            onclick="openScheduleModal('${slot}', '${d.date}')" title="${slot} ${d.date}">
-            ${records.map(r => `<div style="margin:1px 0;padding:2px 4px;border-radius:3px;font-size:9px;color:#fff;white-space:normal;word-break:break-all;line-height:1.3;background:${SUBJECT_GRADIENTS[r.subject] || '#888'};cursor:pointer;"
-              onclick="event.stopPropagation();editScheduleRecordModal(${r.id}, '${r.subject}', '${escapeHtml(r.label || '').replace(/'/g, "\\'")}', '${slot}')" title="${r.subject}: ${escapeHtml(r.label || '')}">
-              ${escapeHtml(r.label || r.subject)}
-            </div>`).join('')}
-          </td>`;
+          const dateRecords = slotRecords.filter(sr => sr.grp.date === d.date);
+          if (dateRecords.length === 0) {
+            return `<td style="padding:2px;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:top;cursor:pointer;"
+              onclick="openScheduleModal('${slot}', '${d.date}')"></td>`;
+          }
+          return dateRecords.map(sr => {
+            const mergeStyle = sr.hasRowspan ? 'border:2px solid rgba(0,0,0,0.08);' : '';
+            const recordId = cachedSchedule.find(r => r.record_date===d.date && r.subject===sr.grp.subject && r.label===sr.grp.label && r.time_slot===slot)?.id || '';
+            return `<td style="padding:2px;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:top;cursor:pointer;${mergeStyle}"
+              ${sr.hasRowspan ? `rowspan="${sr.rowspan}"` : ''}
+              onclick="openScheduleModal('${slot}', '${d.date}')">
+              <div style="margin:1px 0;padding:${sr.hasRowspan?'4px':'2px'} 4px;border-radius:3px;font-size:9px;color:#fff;white-space:normal;word-break:break-all;line-height:1.3;${sr.hasRowspan?'min-height:'+(28*sr.rowspan-4)+'px;display:flex;align-items:center;justify-content:center;':''}background:${SUBJECT_GRADIENTS[sr.grp.subject] || '#888'};cursor:pointer;"
+                onclick="event.stopPropagation();editScheduleRecordModal(${recordId}, '${sr.grp.subject.replace(/'/g, "\\'")}', '${sr.grp.label.replace(/'/g, "\\'")}', '${slot}')">
+                ${sr.hasRowspan ? escapeHtml(sr.grp.label || sr.grp.subject) : escapeHtml(sr.grp.label || sr.grp.subject)}
+              </div>
+            </td>`;
+          }).join('');
         }).join('')}
       </tr>`;
     }).join('');
@@ -2616,7 +2739,7 @@ function renderScheduleGrid() {
   container.innerHTML = `
     <div style="margin-top:20px;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #eee;flex-wrap:wrap;gap:8px;">
-        <span style="font-weight:700;font-size:14px;color:#333;">每日复习记录</span>
+        <span style="font-weight:700;font-size:14px;color:#333;">滚动复习记录</span>
         <div style="display:flex;gap:6px;align-items:center;">
           <button onclick="scheduleNav(-3)" style="font-size:11px;padding:4px 10px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;cursor:pointer;">◀ 前3天</button>
           <span style="font-size:11px;color:#888;">${scheduleDateRange.start} ~ ${scheduleDateRange.end}</span>
@@ -2643,78 +2766,121 @@ function renderScheduleGrid() {
     </div>`;
 }
 
-function addTimeSlot() {
+async function addTimeSlot() {
   const slot = prompt('输入时间段（如 8:00-9:00）', '');
   if (!slot || !slot.trim()) return;
   if (!slot.includes('-')) { showToast('格式：8:00-9:00'); return; }
-  scheduleTimeSlots.push(slot.trim());
-  scheduleTimeSlots.sort();
-  renderScheduleGrid();
+  const slotName = slot.trim();
+  try {
+    const res = await sb.from('schedule_time_slots').insert({ slot_name: slotName, sort_order: scheduleTimeSlots.length });
+    if (res.error) throw res.error;
+    await reloadTimeSlots();
+    renderScheduleGrid();
+    showToast('时段已添加');
+  } catch (err) { showToast('添加失败: ' + (err.message || '')); }
 }
 
-function deleteTimeSlot(slot) {
+async function deleteTimeSlot(slot) {
   if (!confirm('删除时间段 ' + slot + '？')) return;
-  scheduleTimeSlots = scheduleTimeSlots.filter(s => s !== slot);
-  renderScheduleGrid();
+  try {
+    const res = await sb.from('schedule_time_slots').delete().eq('slot_name', slot);
+    if (res.error) throw res.error;
+    await reloadTimeSlots();
+    renderScheduleGrid();
+  } catch (err) { showToast('删除失败: ' + (err.message || '')); }
+}
+
+function populateSlotCheckboxes(checkedSlots) {
+  const list = document.getElementById('schTimeSlotList');
+  list.innerHTML = scheduleTimeSlots.map(s =>
+    `<label style="font-size:12px;padding:4px 8px;border:1px solid #d0d0d0;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:4px;background:${checkedSlots&&checkedSlots.includes(s)?'#e8f0fe':'#fff'};">
+      <input type="checkbox" value="${s}" class="sch-slot-cb" ${checkedSlots&&checkedSlots.includes(s)?'checked':''} onchange="this.parentElement.style.background=this.checked?'#e8f0fe':'#fff'"> ${s}
+    </label>`
+  ).join('');
+}
+
+function getCheckedSlots() {
+  return [...document.querySelectorAll('.sch-slot-cb:checked')].map(cb => cb.value);
 }
 
 async function addTodayRecord() {
   if (scheduleTimeSlots.length === 0) { showToast('请先添加时段'); return; }
   const todayStr = formatDate(new Date());
-  const sel = document.getElementById('schTimeSlot');
-  sel.innerHTML = scheduleTimeSlots.map(s => `<option>${s}</option>`).join('');
   document.getElementById('schId').value = '';
   document.getElementById('schDate').value = todayStr;
   document.getElementById('schSubject').value = '数学';
   document.getElementById('schLabel').value = '';
+  document.getElementById('schOldLabel').value = '';
+  document.getElementById('schOldSubject').value = '';
   document.getElementById('schModalTitle').textContent = '添加今日记录';
   document.getElementById('schSaveBtn').textContent = '保存';
+  populateSlotCheckboxes(null);
   openModal('scheduleRecordModal');
 }
 
 function openScheduleModal(slot, date) {
   if (scheduleTimeSlots.length === 0) { showToast('请先添加时段'); return; }
-  const sel = document.getElementById('schTimeSlot');
-  sel.innerHTML = scheduleTimeSlots.map(s => `<option ${s===slot?'selected':''}>${s}</option>`).join('');
   document.getElementById('schId').value = '';
   document.getElementById('schDate').value = date;
   document.getElementById('schSubject').value = '数学';
   document.getElementById('schLabel').value = '';
+  document.getElementById('schOldLabel').value = '';
+  document.getElementById('schOldSubject').value = '';
   document.getElementById('schModalTitle').textContent = '添加记录';
   document.getElementById('schSaveBtn').textContent = '保存';
+  populateSlotCheckboxes(slot ? [slot] : null);
   openModal('scheduleRecordModal');
 }
 
 async function saveScheduleRecord() {
   const id = document.getElementById('schId').value;
-  const timeSlot = document.getElementById('schTimeSlot').value;
   const recordDate = document.getElementById('schDate').value;
   const subject = document.getElementById('schSubject').value;
   const label = document.getElementById('schLabel').value.trim();
+  const slots = getCheckedSlots();
   if (!label) { showToast('请输入任务名称'); return; }
+  if (slots.length === 0) { showToast('请选择时段'); return; }
   try {
     if (id) {
-      const res = await sb.from('daily_schedule').update({ time_slot: timeSlot, subject, label }).eq('id', id);
-      if (res.error) throw res.error;
-    } else {
-      const res = await sb.from('daily_schedule').insert({ time_slot: timeSlot, record_date: recordDate, subject, label });
+      // Delete all old rows for this group, then re-insert
+      const oldLabel = document.getElementById('schOldLabel').value;
+      const oldSubject = document.getElementById('schOldSubject').value;
+      const candidates = cachedSchedule.filter(r =>
+        r.record_date === recordDate && r.subject === oldSubject && r.label === oldLabel
+      );
+      for (const c of candidates) {
+        await sb.from('daily_schedule').delete().eq('id', c.id);
+      }
+    }
+    for (const slot of slots) {
+      const res = await sb.from('daily_schedule').insert({ time_slot: slot, record_date: recordDate, subject, label });
       if (res.error) throw res.error;
     }
     await reloadSchedule();
     closeModal('scheduleRecordModal');
     renderScheduleGrid();
-  } catch (err) { showToast(id ? '更新失败' : '添加失败' + ': ' + err.message); }
+  } catch (err) { showToast((id ? '更新' : '添加') + '失败: ' + err.message); }
 }
 
 function editScheduleRecordModal(id, subject, label, slot) {
   if (scheduleTimeSlots.length === 0) { showToast('请先添加时段'); return; }
-  const sel = document.getElementById('schTimeSlot');
-  sel.innerHTML = scheduleTimeSlots.map(s => `<option ${s===slot?'selected':''}>${s}</option>`).join('');
+  // Find the record and get its date + all its slots
+  const record = cachedSchedule.find(r => r.id == id);
+  const recordDate = record ? record.record_date : '';
+  // Find all slots for this same group (same date, subject, label)
+  const group = cachedSchedule.filter(r =>
+    r.record_date === recordDate && r.subject === subject && r.label === label
+  );
+  const groupSlots = group.map(r => r.time_slot);
   document.getElementById('schId').value = id;
+  document.getElementById('schDate').value = recordDate;
   document.getElementById('schSubject').value = subject;
   document.getElementById('schLabel').value = label;
+  document.getElementById('schOldLabel').value = label;
+  document.getElementById('schOldSubject').value = subject;
   document.getElementById('schModalTitle').textContent = '编辑记录';
   document.getElementById('schSaveBtn').textContent = '更新';
+  populateSlotCheckboxes(groupSlots);
   openModal('scheduleRecordModal');
 }
 
@@ -2750,6 +2916,13 @@ document.getElementById('imgPreview').addEventListener('click', (e) => {
 });
 
 // ==================== 启动 ====================
+document.addEventListener('dragend', () => {
+  document.querySelectorAll('.dragging, .drag-over-chapter, .drag-over-kp').forEach(el => {
+    el.classList.remove('dragging', 'drag-over-chapter', 'drag-over-kp');
+  });
+  dragData = null;
+});
+
 (async function init() {
   await loadAllData();
   await refreshSidebar();

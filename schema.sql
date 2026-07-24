@@ -52,6 +52,7 @@ create table if not exists core_questions (
   name text,
   image_data text not null,
   tag text default '',
+  sort_order int,
   correct_count int default 0,
   wrong_count int default 0,
   review_log jsonb default '[]',
@@ -60,9 +61,17 @@ create table if not exists core_questions (
 
 -- 如果 core_questions 表已存在，执行以下 alter 来升级：
 -- alter table core_questions alter column name drop not null;
+-- alter table core_questions add column if not exists sort_order int;
 -- alter table core_questions add column if not exists correct_count int default 0;
 -- alter table core_questions add column if not exists wrong_count int default 0;
 -- alter table core_questions add column if not exists review_log jsonb default '[]';
+
+create table if not exists schedule_time_slots (
+  id bigserial primary key,
+  slot_name text not null,
+  sort_order int,
+  created_at timestamptz default now()
+);
 
 create table if not exists daily_schedule (
   id bigserial primary key,
@@ -83,6 +92,7 @@ alter table questions enable row level security;
 alter table ebbinghaus_items enable row level security;
 alter table timeline_events enable row level security;
 alter table core_questions enable row level security;
+alter table schedule_time_slots enable row level security;
 alter table daily_schedule enable row level security;
 
 -- 允许 anon key 全权限操作（个人应用）
@@ -105,6 +115,9 @@ begin
   end if;
   if not exists (select 1 from pg_policies where policyname='Allow all on core_questions') then
     create policy "Allow all on core_questions" on core_questions for all using (true);
+  end if;
+  if not exists (select 1 from pg_policies where policyname='Allow all on schedule_time_slots') then
+    create policy "Allow all on schedule_time_slots" on schedule_time_slots for all using (true);
   end if;
   if not exists (select 1 from pg_policies where policyname='Allow all on daily_schedule') then
     create policy "Allow all on daily_schedule" on daily_schedule for all using (true);
