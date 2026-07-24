@@ -49,11 +49,20 @@ create table if not exists timeline_events (
 create table if not exists core_questions (
   id bigserial primary key,
   chapter_id bigint references chapters(id) on delete cascade,
-  name text not null,
+  name text,
   image_data text not null,
   tag text default '',
+  correct_count int default 0,
+  wrong_count int default 0,
+  review_log jsonb default '[]',
   created_at timestamptz default now()
 );
+
+-- 如果 core_questions 表已存在，执行以下 alter 来升级：
+-- alter table core_questions alter column name drop not null;
+-- alter table core_questions add column if not exists correct_count int default 0;
+-- alter table core_questions add column if not exists wrong_count int default 0;
+-- alter table core_questions add column if not exists review_log jsonb default '[]';
 
 create table if not exists daily_schedule (
   id bigserial primary key,

@@ -1017,10 +1017,6 @@ body {
   <div class="modal">
     <h3>添加母题</h3>
     <div class="form-group">
-      <label>母题名称</label>
-      <input type="text" id="coreNameInput" placeholder="例如：数列极限经典题" autocomplete="off">
-    </div>
-    <div class="form-group">
       <label>题型标签</label>
       <input type="text" id="coreTagInput" placeholder="例如：选择题、填空题、证明题" autocomplete="off">
     </div>
@@ -1139,6 +1135,7 @@ function toggleSidebar() {
 let currentTab = 'cuoti';
 let selectedChapterId = null;
 let selectedKpId = null;
+let selectedCoreChapterId = null;
 let selectedImageData = null;
 let cachedChapters = [];
 let cachedKps = [];
@@ -1169,9 +1166,16 @@ function switchTab(tab) {
     appLayout.classList.remove('not-cuoti');
     closeSidebar();
     addBtn.textContent = '+ 错题';
-    addBtn.disabled = !selectedKpId;
-    breadcrumb.innerHTML = selectedKpId ? getBreadcrumbHtml() : '<span>选择知识点查看错题</span>';
-    document.getElementById('mainContent').querySelector('#panelCuoti').innerHTML = document.getElementById('mainContent').querySelector('#panelCuoti').innerHTML || '';
+    addBtn.disabled = !selectedKpId && !selectedCoreChapterId;
+    if (selectedCoreChapterId) {
+      const ch = cachedChapters.find(c => c.id == selectedCoreChapterId);
+      breadcrumb.innerHTML = '★ 母题 <span>&gt;</span> ' + escapeHtml(ch?.name || '');
+      addBtn.textContent = '+ 母题';
+      addBtn.disabled = false;
+    } else {
+      breadcrumb.innerHTML = selectedKpId ? getBreadcrumbHtml() : '<span>选择知识点查看错题</span>';
+    }
+    refreshMainContent();
   } else if (tab === 'ebb') {
     appLayout.classList.add('not-cuoti');
     closeSidebar();
@@ -1673,9 +1677,17 @@ async function moveKp(id, chapterId, dir) {
 }
 
 // ==================== 母题库 ====================
+function selectCore(chapterId) {
+  selectedCoreChapterId = chapterId;
+  selectedKpId = null;
+  updateMainHeader();
+  openSidebar();
+  refreshMainContent();
+  refreshSidebar();
+}
+
 function showCoreQuestionModal(chapterId) {
   document.getElementById('coreChapterId').value = chapterId;
-  document.getElementById('coreNameInput').value = '';
   document.getElementById('coreTagInput').value = '';
   selectedImageData = null;
   document.getElementById('coreImageFileInput').value = '';
@@ -1684,21 +1696,19 @@ function showCoreQuestionModal(chapterId) {
   area.querySelector('img')?.remove();
   area.querySelector('.placeholder').style.display = '';
   openModal('coreQuestionModal');
-  setTimeout(() => document.getElementById('coreNameInput').focus(), 100);
 }
 
 async function saveCoreQuestion() {
   const chapterId = parseInt(document.getElementById('coreChapterId').value, 10);
-  const name = document.getElementById('coreNameInput').value.trim();
   const tag = document.getElementById('coreTagInput').value.trim();
-  if (!name) { showToast('请输入母题名称'); return; }
   if (!selectedImageData) { showToast('请上传题目图片'); return; }
   try {
-    const res = await sb.from('core_questions').insert({ chapter_id: chapterId, name, image_data: selectedImageData, tag });
+    const res = await sb.from('core_questions').insert({ chapter_id: chapterId, image_data: selectedImageData, tag, correct_count: 0, wrong_count: 0, review_log: [] });
     if (res.error) throw res.error;
     await reloadCoreQuestions();
     closeModal('coreQuestionModal');
     await refreshSidebar();
+    await refreshMainContent();
     showToast('母题已添加');
   } catch (err) { showToast('保存失败: ' + err.message); }
 }
@@ -1721,8 +1731,39 @@ async function deleteCoreQuestion(id) {
     await sb.from('core_questions').delete().eq('id', id);
     await reloadCoreQuestions();
     await refreshSidebar();
+    await refreshMainContent();
     showToast('已删除');
   } catch (err) { showToast('删除失败: ' + err.message); }
+}
+
+async function markCoreCorrect(id) {
+  const q = cachedCoreQuestions.find(q => q.id == id);
+  if (!q) return;
+  const newCorrect = (q.correct_count || 0) + 1;
+  const today = new Date().toISOString().slice(0, 10);
+  const newLog = [...(q.review_log || []), { date: today, result: 'correct' }];
+  try {
+    const res = await sb.from('core_questions').update({ correct_count: newCorrect, review_log: newLog }).eq('id', id);
+    if (res.error) throw res.error;
+    await reloadCoreQuestions();
+    await refreshMainContent();
+    showToast(newCorrect >= 5 ? '恭喜！已完成！' : '答对了（' + newCorrect + '/5）');
+  } catch (err) { showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err))); }
+}
+
+async function markCoreWrong(id) {
+  const q = cachedCoreQuestions.find(q => q.id == id);
+  if (!q) return;
+  const newWrong = (q.wrong_count || 0) + 1;
+  const today = new Date().toISOString().slice(0, 10);
+  const newLog = [...(q.review_log || []), { date: today, result: 'wrong' }];
+  try {
+    const res = await sb.from('core_questions').update({ wrong_count: newWrong, review_log: newLog }).eq('id', id);
+    if (res.error) throw res.error;
+    await reloadCoreQuestions();
+    await refreshMainContent();
+    showToast('已记录（答错 ' + newWrong + ' 次）');
+  } catch (err) { showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err))); }
 }
 
 // ==================== 渲染：侧边栏 ====================
@@ -1776,23 +1817,12 @@ async function refreshSidebar() {
           }).join('')}
           ${childKps.length === 0 ? '<div class="kp-item" style="color:#ccc;cursor:default;justify-content:center;">暂无知识点</div>' : ''}
           <div style="border-top:1px dashed #e0e0e0;margin:6px 0 2px;"></div>
-          <div class="kp-item" style="font-weight:600;color:#e67e22;">
+          <div class="kp-item ${selectedCoreChapterId == ch.id ? 'active' : ''}" 
+               style="font-weight:600;color:#e67e22;" 
+               onclick="event.stopPropagation();selectCore(${ch.id})">
             <span class="kp-dot" style="color:#e67e22;">★</span>
             <span style="font-size:12px;">母题</span>
             <span class="kp-count">${cachedCoreQuestions.filter(q => q.chapter_id == ch.id).length}</span>
-            <button style="font-size:11px;color:#4a90d9;background:none;border:none;cursor:pointer;padding:2px 6px;" onclick="event.stopPropagation();showCoreQuestionModal(${ch.id})">+</button>
-          </div>
-          ${cachedCoreQuestions.filter(q => q.chapter_id == ch.id).map(cq => `
-            <div class="kp-item" onclick="event.stopPropagation();previewImage('${cq.image_data.replace(/'/g, "\\'")}')">
-              <span class="kp-dot">●</span>
-              <span class="kp-name" style="font-size:11px;">${escapeHtml(cq.name)}</span>
-              ${cq.tag ? `<span style="font-size:9px;background:#fef3e2;color:#e67e22;padding:1px 5px;border-radius:3px;white-space:nowrap;flex-shrink:0;" onclick="event.stopPropagation();editCoreTag(${cq.id}, '${escapeHtml(cq.tag).replace(/'/g, "\\'")}')">${escapeHtml(cq.tag)}</span>` : ''}
-              <button class="kp-edit-btn edit-btn" style="font-size:10px;opacity:1;display:inline;" onclick="event.stopPropagation();editCoreTag(${cq.id}, '${escapeHtml(cq.tag || '').replace(/'/g, "\\'")}')">✎</button>
-              <button class="del-kp" onclick="event.stopPropagation();deleteCoreQuestion(${cq.id})">×</button>
-            </div>
-          `).join('')}
-          <div class="kp-item" style="color:#4a90d9;cursor:pointer;justify-content:center;" onclick="event.stopPropagation();showCoreQuestionModal(${ch.id})">
-            + 添加母题
           </div>
         </div>
       </div>`;
@@ -1808,6 +1838,7 @@ function escapeHtml(str) {
 function selectChapter(chapterId) {
   selectedChapterId = (selectedChapterId == chapterId) ? null : chapterId;
   selectedKpId = null;
+  selectedCoreChapterId = null;
   updateMainHeader();
   document.getElementById('panelCuoti').innerHTML =
     '<div class="empty-state"><div class="empty-icon">📂</div><p>请选择具体知识点查看错题</p></div>';
@@ -1816,6 +1847,7 @@ function selectChapter(chapterId) {
 
 async function selectKp(kpId) {
   selectedKpId = kpId;
+  selectedCoreChapterId = null;
   const kp = cachedKps.find(k => k.id === kpId);
   if (kp) selectedChapterId = kp.chapter_id;
   updateMainHeader();
@@ -1825,6 +1857,70 @@ async function selectKp(kpId) {
 
 async function refreshMainContent() {
   updateMainHeader();
+
+  // --- Core Questions View ---
+  if (selectedCoreChapterId) {
+    if (!coreLoaded) await reloadCoreQuestions();
+    const coreQList = cachedCoreQuestions
+      .filter(q => q.chapter_id == selectedCoreChapterId)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    const container = document.getElementById('panelCuoti');
+    if (coreQList.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="empty-icon">★</div><p>该章节下暂无母题<br><button onclick="showCoreQuestionModal(' + selectedCoreChapterId + ')" style="margin-top:12px;padding:8px 20px;background:#e67e22;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">+ 添加母题</button></p></div>';
+      return;
+    }
+
+    container.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;padding:0 0 12px;">
+      <span style="font-size:13px;color:#888;">母题集 · 共 ${coreQList.length} 题</span>
+      <button onclick="showCoreQuestionModal(${selectedCoreChapterId})" style="padding:6px 14px;background:#e67e22;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;">+ 添加母题</button>
+    </div><div class="question-grid">${coreQList.map(q => {
+      const correct = q.correct_count || 0;
+      const wrong = q.wrong_count || 0;
+      const total = correct + wrong;
+      const pct = Math.min((correct / 5) * 100, 100);
+      const isCompleted = correct >= 5;
+      const log = q.review_log || [];
+      return `
+      <div class="question-card" style="border-left:3px solid #e67e22;">
+        <div class="card-img-wrap" onclick="previewImage(this.querySelector('img').src)">
+          <img src="${q.image_data}" alt="母题" loading="lazy">
+        </div>
+        <div class="card-info">
+          <div class="card-date">
+            🏷 ${escapeHtml(q.tag || '未分类')}
+            <button class="edit-btn" style="opacity:1;margin-left:4px;font-size:10px;" onclick="event.stopPropagation();editCoreTag(${q.id}, '${escapeHtml(q.tag || '').replace(/'/g, "\\'")}')">✎</button>
+          </div>
+          <div class="progress-section">
+            ${isCompleted ? '<span class="card-badge">✓ 已完成</span>' : ''}
+            <div class="progress-header">
+              <span class="review-label">答对 ${correct} / 5${total > 0 ? '（共答 ' + total + ' 次）' : ''}</span>
+            </div>
+            <div class="progress-bar-wrap">
+              <div class="progress-bar-fill ${isCompleted ? 'full' : ''}"
+                   style="width:${pct}%"></div>
+            </div>
+            ${log.length > 0 ? `
+              <div class="review-dates">
+                ${log.slice(-8).reverse().map(entry => {
+                  const cls = entry.result === 'correct' ? 'tag-correct' : 'tag-wrong';
+                  const emoji = entry.result === 'correct' ? '✓' : '✗';
+                  return `<span class="review-date-tag ${cls}">${entry.date} ${emoji}</span>`;
+                }).join('')}
+              </div>` : '<div class="review-dates"></div>'}
+          </div>
+          <div class="card-actions">
+            <button class="btn-correct" onclick="markCoreCorrect(${q.id})">答对了</button>
+            <button class="btn-wrong" onclick="markCoreWrong(${q.id})">还不会</button>
+            <button class="btn-delete" onclick="deleteCoreQuestion(${q.id})">删除</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+    return;
+  }
+
+  // --- Regular Questions View ---
   if (!selectedKpId) return;
 
   const filtered = cachedQuestions
@@ -1885,12 +1981,22 @@ function updateMainHeader() {
   if (currentTab === 'cuoti') {
     const breadcrumb = document.getElementById('breadcrumb');
     const addBtn = document.getElementById('addBtn');
-    if (!selectedKpId) {
+    if (selectedCoreChapterId) {
+      const ch = cachedChapters.find(c => c.id == selectedCoreChapterId);
+      breadcrumb.innerHTML = '★ 母题 <span>&gt;</span> ' + escapeHtml(ch?.name || '');
+      addBtn.textContent = '+ 母题';
+      addBtn.disabled = false;
+      addBtn.onclick = () => showCoreQuestionModal(selectedCoreChapterId);
+    } else if (!selectedKpId) {
       breadcrumb.innerHTML = '<span>选择知识点查看错题</span>';
+      addBtn.textContent = '+ 错题';
       addBtn.disabled = true;
+      addBtn.onclick = () => showQuestionModal();
     } else {
       breadcrumb.innerHTML = getBreadcrumbHtml();
+      addBtn.textContent = '+ 错题';
       addBtn.disabled = false;
+      addBtn.onclick = () => showQuestionModal();
     }
   }
 }
