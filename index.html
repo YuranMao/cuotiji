@@ -1099,6 +1099,50 @@ body {
   </div>
 </div>
 
+<!-- 复习记录弹窗 -->
+<div class="modal-overlay" id="scheduleRecordModal">
+  <div class="modal">
+    <h3 id="schModalTitle">添加记录</h3>
+    <div class="form-group">
+      <label>时段</label>
+      <select id="schTimeSlot" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></select>
+    </div>
+    <div class="form-group">
+      <label>科目</label>
+      <select id="schSubject" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+        <option>数学</option><option>专业课</option><option>英语</option><option>政治</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>任务名称</label>
+      <input type="text" id="schLabel" placeholder="例如：做完一章习题" autocomplete="off">
+    </div>
+    <input type="hidden" id="schId">
+    <input type="hidden" id="schDate">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('scheduleRecordModal')">取消</button>
+      <button class="btn-confirm" id="schSaveBtn" onclick="saveScheduleRecord()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 遗忘表备注弹窗 -->
+<div class="modal-overlay" id="ebbNoteModal">
+  <div class="modal">
+    <h3>背诵备注</h3>
+    <div class="form-group">
+      <label>第 <span id="ebbNoteDay"></span> 天复习备注</label>
+      <textarea id="ebbNoteInput" rows="4" style="width:100%;resize:vertical;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;white-space:pre-wrap;" placeholder="输入备注（支持换行）..."></textarea>
+    </div>
+    <input type="hidden" id="ebbNoteItemId">
+    <input type="hidden" id="ebbNoteDayVal">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('ebbNoteModal')">取消</button>
+      <button class="btn-confirm" onclick="saveEbbNote()">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- 图片预览 -->
 <div class="img-preview-overlay" id="imgPreview" onclick="closeImgPreview()">
   <img id="imgPreviewSrc" src="">
@@ -2181,7 +2225,7 @@ function renderEbb() {
                   return `<td class="ebb-done">
                     <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
                       <span style="font-size:11px;color:#27ae60;">✓ ${reviewDate}</span>
-                      ${slot.reviewNote ? `<span style="font-size:9px;color:#666;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(slot.reviewNote)}">${escapeHtml(slot.reviewNote)}</span>` : ''}
+                      ${slot.reviewNote ? `<span style="font-size:9px;color:#666;max-width:80px;white-space:pre-wrap;word-break:break-all;line-height:1.3;text-align:left;">${escapeHtml(slot.reviewNote)}</span>` : ''}
                       <button onclick="event.stopPropagation();editEbbNote(${item.id}, ${slot.day})" style="font-size:9px;padding:1px 4px;border-radius:3px;border:1px solid #ccc;background:#fff;cursor:pointer;color:#888;">备注</button>
                     </div></td>`;
                 }
@@ -2229,18 +2273,35 @@ function editEbbNote(itemId, day) {
   let reviews = item.reviews || [];
   reviews = reviews.map(r => typeof r === 'string' ? { day: parseInt(r, 10) || 0, date: r } : r);
   const existing = reviews.find(r => r.day === day);
-  const currentNote = existing ? (existing.note || '') : '';
-  const note = prompt('输入备注（该轮背诵第' + day + '天）', currentNote);
-  if (note === null) return; // cancelled
+  document.getElementById('ebbNoteDay').textContent = day;
+  document.getElementById('ebbNoteDayVal').value = day;
+  document.getElementById('ebbNoteItemId').value = itemId;
+  document.getElementById('ebbNoteInput').value = existing ? (existing.note || '') : '';
+  openModal('ebbNoteModal');
+  setTimeout(() => document.getElementById('ebbNoteInput').focus(), 100);
+}
+
+async function saveEbbNote() {
+  const itemId = document.getElementById('ebbNoteItemId').value;
+  const day = parseInt(document.getElementById('ebbNoteDayVal').value, 10);
+  const note = document.getElementById('ebbNoteInput').value;
+  const item = cachedEbbItems.find(e => e.id == itemId);
+  if (!item) return;
+  let reviews = item.reviews || [];
+  reviews = reviews.map(r => typeof r === 'string' ? { day: parseInt(r, 10) || 0, date: r } : r);
+  const existing = reviews.find(r => r.day === day);
   if (!existing) {
-    reviews.push({ day, date: formatDate(new Date()), note: note.trim() });
+    reviews.push({ day, date: formatDate(new Date()), note });
   } else {
-    existing.note = note.trim();
+    existing.note = note;
   }
-  sb.from('ebbinghaus_items').update({ reviews }).eq('id', itemId).then(async () => {
+  try {
+    const res = await sb.from('ebbinghaus_items').update({ reviews }).eq('id', itemId);
+    if (res.error) throw res.error;
     await reloadEbb();
+    closeModal('ebbNoteModal');
     renderEbb();
-  }).catch(() => showToast('更新备注失败'));
+  } catch (err) { showToast('更新备注失败'); }
 }
 
 // ==================== 考研进度时间表 ====================
@@ -2542,9 +2603,9 @@ function renderScheduleGrid() {
         ${dates.map(d => {
           const records = cachedSchedule.filter(r => r.time_slot === slot && r.record_date === d.date);
           return `<td style="padding:2px;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:top;cursor:pointer;min-height:36px;" 
-            onclick="addScheduleRecord('${slot}', '${d.date}')" title="${slot} ${d.date}">
-            ${records.map(r => `<div style="margin:1px 0;padding:2px 4px;border-radius:3px;font-size:9px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:${SUBJECT_GRADIENTS[r.subject] || '#888'};cursor:pointer;"
-              onclick="event.stopPropagation();editScheduleRecord(${r.id}, '${r.subject}', '${escapeHtml(r.label || '').replace(/'/g, "\\'")}')" title="${r.subject}: ${escapeHtml(r.label || '')}">
+            onclick="openScheduleModal('${slot}', '${d.date}')" title="${slot} ${d.date}">
+            ${records.map(r => `<div style="margin:1px 0;padding:2px 4px;border-radius:3px;font-size:9px;color:#fff;white-space:normal;word-break:break-all;line-height:1.3;background:${SUBJECT_GRADIENTS[r.subject] || '#888'};cursor:pointer;"
+              onclick="event.stopPropagation();editScheduleRecordModal(${r.id}, '${r.subject}', '${escapeHtml(r.label || '').replace(/'/g, "\\'")}', '${slot}')" title="${r.subject}: ${escapeHtml(r.label || '')}">
               ${escapeHtml(r.label || r.subject)}
             </div>`).join('')}
           </td>`;
@@ -2570,8 +2631,8 @@ function renderScheduleGrid() {
         <table class="schedule-table" style="width:100%;border-collapse:collapse;font-size:11px;min-width:600px;">
           <thead>
             <tr>
-              <th style="padding:6px 8px;background:#f5f7fa;border-right:1px solid #e0e0e0;text-align:center;min-width:70px;">时段</th>
-              ${dates.map(d => `<th style="padding:6px 2px;background:#f5f7fa;border-right:1px solid #f0f0f0;text-align:center;min-width:36px;${d.date===today?'color:#e74c3c;font-weight:700;':''}${d.dow===0||d.dow===6?'color:#e74c3c;':''}">
+              <th style="padding:6px 8px;background:#f5f7fa;border-right:1px solid #e0e0e0;text-align:center;width:70px;min-width:70px;">时段</th>
+              ${dates.map(d => `<th style="padding:6px 2px;background:#f5f7fa;border-right:1px solid #f0f0f0;text-align:center;width:40px;${d.date===today?'color:#e74c3c;font-weight:700;':''}${d.dow===0||d.dow===6?'color:#e74c3c;':''}">
                 ${d.month}/${d.day}<br><small style="font-weight:normal;">${['日','一','二','三','四','五','六'][d.dow]}</small>
               </th>`).join('')}
             </tr>
@@ -2598,35 +2659,63 @@ function deleteTimeSlot(slot) {
 }
 
 async function addTodayRecord() {
+  if (scheduleTimeSlots.length === 0) { showToast('请先添加时段'); return; }
   const todayStr = formatDate(new Date());
-  let timeSlot;
-  if (scheduleTimeSlots.length > 0) {
-    // Let user pick existing slot or enter new one
-    const list = scheduleTimeSlots.join('\n');
-    timeSlot = prompt('选择时段（输入已有时段名称或输入新时段）:\n' + list, scheduleTimeSlots[0]);
-  } else {
-    timeSlot = prompt('输入时段（如 8:00-9:00）', '');
-    if (timeSlot && timeSlot.trim() && !scheduleTimeSlots.includes(timeSlot.trim())) {
-      scheduleTimeSlots.push(timeSlot.trim());
-      scheduleTimeSlots.sort();
-    }
-  }
-  if (!timeSlot || !timeSlot.trim()) return;
-  timeSlot = timeSlot.trim();
-  if (!scheduleTimeSlots.includes(timeSlot)) {
-    scheduleTimeSlots.push(timeSlot);
-    scheduleTimeSlots.sort();
-  }
-  const subject = prompt('科目（数学/专业课/英语/政治）', '数学');
-  if (!subject) return;
-  const label = prompt('任务名称', '');
-  if (label === null) return;
+  const sel = document.getElementById('schTimeSlot');
+  sel.innerHTML = scheduleTimeSlots.map(s => `<option>${s}</option>`).join('');
+  document.getElementById('schId').value = '';
+  document.getElementById('schDate').value = todayStr;
+  document.getElementById('schSubject').value = '数学';
+  document.getElementById('schLabel').value = '';
+  document.getElementById('schModalTitle').textContent = '添加今日记录';
+  document.getElementById('schSaveBtn').textContent = '保存';
+  openModal('scheduleRecordModal');
+}
+
+function openScheduleModal(slot, date) {
+  if (scheduleTimeSlots.length === 0) { showToast('请先添加时段'); return; }
+  const sel = document.getElementById('schTimeSlot');
+  sel.innerHTML = scheduleTimeSlots.map(s => `<option ${s===slot?'selected':''}>${s}</option>`).join('');
+  document.getElementById('schId').value = '';
+  document.getElementById('schDate').value = date;
+  document.getElementById('schSubject').value = '数学';
+  document.getElementById('schLabel').value = '';
+  document.getElementById('schModalTitle').textContent = '添加记录';
+  document.getElementById('schSaveBtn').textContent = '保存';
+  openModal('scheduleRecordModal');
+}
+
+async function saveScheduleRecord() {
+  const id = document.getElementById('schId').value;
+  const timeSlot = document.getElementById('schTimeSlot').value;
+  const recordDate = document.getElementById('schDate').value;
+  const subject = document.getElementById('schSubject').value;
+  const label = document.getElementById('schLabel').value.trim();
+  if (!label) { showToast('请输入任务名称'); return; }
   try {
-    const res = await sb.from('daily_schedule').insert({ time_slot: timeSlot, record_date: todayStr, subject, label: label.trim() });
-    if (res.error) throw res.error;
+    if (id) {
+      const res = await sb.from('daily_schedule').update({ time_slot: timeSlot, subject, label }).eq('id', id);
+      if (res.error) throw res.error;
+    } else {
+      const res = await sb.from('daily_schedule').insert({ time_slot: timeSlot, record_date: recordDate, subject, label });
+      if (res.error) throw res.error;
+    }
     await reloadSchedule();
+    closeModal('scheduleRecordModal');
     renderScheduleGrid();
-  } catch (err) { showToast('添加失败: ' + err.message); }
+  } catch (err) { showToast(id ? '更新失败' : '添加失败' + ': ' + err.message); }
+}
+
+function editScheduleRecordModal(id, subject, label, slot) {
+  if (scheduleTimeSlots.length === 0) { showToast('请先添加时段'); return; }
+  const sel = document.getElementById('schTimeSlot');
+  sel.innerHTML = scheduleTimeSlots.map(s => `<option ${s===slot?'selected':''}>${s}</option>`).join('');
+  document.getElementById('schId').value = id;
+  document.getElementById('schSubject').value = subject;
+  document.getElementById('schLabel').value = label;
+  document.getElementById('schModalTitle').textContent = '编辑记录';
+  document.getElementById('schSaveBtn').textContent = '更新';
+  openModal('scheduleRecordModal');
 }
 
 function scheduleNav(days) {
@@ -2637,35 +2726,6 @@ function scheduleNav(days) {
   end.setDate(end.getDate() + days);
   scheduleDateRange.end = formatDate(end);
   reloadSchedule().then(() => renderScheduleGrid());
-}
-
-async function addScheduleRecord(timeSlot, recordDate) {
-  const subject = prompt('科目（数学/专业课/英语/政治）', '数学');
-  if (!subject) return;
-  const label = prompt('任务名称', '');
-  if (label === null) return;
-  try {
-    const res = await sb.from('daily_schedule').insert({ time_slot: timeSlot, record_date: recordDate, subject, label: label.trim() });
-    if (res.error) throw res.error;
-    await reloadSchedule();
-    renderScheduleGrid();
-  } catch (err) { showToast('添加失败: ' + err.message); }
-}
-
-async function editScheduleRecord(id, subject, label) {
-  const newSubject = prompt('科目', subject);
-  if (!newSubject) return;
-  const newLabel = prompt('任务名称', label || '');
-  if (newLabel === null) return;
-  try {
-    const res = await sb.from('daily_schedule').update({ 
-      subject: newSubject, 
-      label: newLabel.trim() 
-    }).eq('id', id);
-    if (res.error) throw res.error;
-    await reloadSchedule();
-    renderScheduleGrid();
-  } catch (err) { showToast('更新失败: ' + err.message); }
 }
 
 async function deleteScheduleRecord(event, id) {
