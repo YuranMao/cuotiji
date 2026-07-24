@@ -303,7 +303,9 @@ body {
   box-shadow: 0 1px 3px rgba(0,0,0,.05);
   display: flex;
   flex-direction: column;
+  cursor: grab;
 }
+.question-card:active { cursor: grabbing; }
 .card-img-wrap {
   width: 100%;
   height: 200px;
@@ -901,10 +903,7 @@ body {
 <div class="body-row">
 
 <aside class="sidebar" id="sidebar">
-  <div class="sidebar-header">
-    <h1>错题集</h1>
-    <div class="subtitle">按知识点分类</div>
-  </div>
+  <div style="padding:20px 16px 12px;"></div>
   <div class="sidebar-actions">
     <button onclick="showChapterModal()">+ 章节</button>
     <button onclick="showKpModal()">+ 知识点</button>
@@ -1688,13 +1687,13 @@ async function markWrong(id) {
 }
 
 // ==================== 拖拽排序 ====================
-let dragData = null; // { type: 'chapter'|'kp', id, chapterId? }
+let dragData = null; // { type: 'chapter'|'kp'|'question'|'core', id, chapterId?, parentId? }
 
-function onDragStart(e, type, id, chapterId) {
-  dragData = { type, id, chapterId };
+function onDragStart(e, type, id, chapterId, parentId) {
+  dragData = { type, id, chapterId, parentId };
   e.target.classList.add('dragging');
   e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', ''); // Firefox 需要
+  e.dataTransfer.setData('text/plain', '');
 }
 
 function onDragOverChapter(e) {
@@ -1758,6 +1757,146 @@ async function swapKpOrder(id1, id2, chapterId) {
     await reloadKps();
     await refreshSidebar();
   } catch (err) { showToast('排序失败: ' + err.message); }
+}
+
+// ---- Card drag handlers (错题 + 重要例题) ----
+function onDragOverCard(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('drag-over-kp');
+}
+function onDragLeaveCard(e) {
+  e.currentTarget.classList.remove('drag-over-kp');
+}
+async function onDropCard(e, targetId, targetType, targetParentId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over-kp');
+  document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+  if (!dragData || dragData.type !== targetType) { dragData = null; return; }
+  if (dragData.id === targetId) { dragData = null; return; }
+  // Only reorder within same parent
+  if (dragData.parentId !== targetParentId) { dragData = null; return; }
+  if (targetType === 'question') {
+    await swapQuestionOrder(dragData.id, targetId, targetParentId);
+  } else if (targetType === 'core') {
+    await swapCoreQOrder(dragData.id, targetId, targetParentId);
+  }
+  dragData = null;
+}
+
+async function swapQuestionOrder(id1, id2, kpId) {
+  const list = cachedQuestions.filter(q => q.knowledge_point_id == kpId);
+  const a = list.find(q => q.id == id1);
+  const b = list.find(q => q.id == id2);
+  if (!a || !b) return;
+  try {
+    await sb.from('questions').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id);
+    await sb.from('questions').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
+    await reloadQuestions();
+    await refreshMainContent();
+  } catch (err) { showToast('排序失败: ' + err.message); }
+}
+
+async function swapCoreQOrder(id1, id2, chapterId) {
+  const list = cachedCoreQuestions.filter(q => q.chapter_id == chapterId);
+  const a = list.find(q => q.id == id1);
+  const b = list.find(q => q.id == id2);
+  if (!a || !b) return;
+  try {
+    await sb.from('core_questions').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id);
+    await sb.from('core_questions').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
+    await reloadCoreQuestions();
+    await refreshMainContent();
+  } catch (err) { showToast('排序失败: ' + err.message); }
+}
+
+// ---- 错题迁移到其他知识点 ----
+async function moveQuestionToKp(qId, fromKpId) {
+  const q = cachedQuestions.find(k => k.id == qId);
+  if (!q) return;
+  const allKps = cachedKps;
+  if (allKps.length <= 1) { showToast('只有这一个知识点，无法转移'); return; }
+
+  const html = allKps.map(kp => {
+    const ch = cachedChapters.find(c => c.id == kp.chapter_id);
+    return `<option value="${kp.id}" ${kp.id == fromKpId ? 'disabled' : ''}>
+      ${escapeHtml(ch ? ch.name + ' / ' : '')}${escapeHtml(kp.name)}${kp.id == fromKpId ? '（当前）' : ''}
+    </option>`;
+  }).join('');
+  const selId = 'qMoveKpSelect_' + qId;
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay show';
+  modal.innerHTML = `<div class="modal">
+    <h3>转移错题</h3>
+    <p style="margin-bottom:12px;font-size:13px;color:#666;">将这道错题转移到其他知识点：</p>
+    <div class="form-group">
+      <select id="${selId}" style="width:100%;padding:10px;border:1px solid #d9d9d9;border-radius:8px;font-size:14px;">${html}</select>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" id="qMoveCancel">取消</button>
+      <button class="btn-confirm" id="qMoveConfirm">转移</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+
+  modal.querySelector('#qMoveCancel').onclick = () => modal.remove();
+  modal.querySelector('#qMoveConfirm').onclick = async () => {
+    const targetKpId = parseInt(modal.querySelector('#' + selId).value, 10);
+    modal.remove();
+    try {
+      const res = await sb.from('questions').update({ knowledge_point_id: targetKpId }).eq('id', qId);
+      if (res.error) throw res.error;
+      await reloadQuestions();
+      await refreshMainContent();
+      await refreshSidebar();
+      const targetKp = cachedKps.find(k => k.id == targetKpId);
+      showToast('已转移到「' + escapeHtml(targetKp?.name || '') + '」');
+    } catch (err) { showToast('转移失败: ' + err.message); }
+  };
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+}
+
+// ---- 重要例题迁移到其他章节 ----
+async function moveCoreQToChapter(qId, fromChapterId) {
+  const otherChapters = cachedChapters.filter(c => c.id != fromChapterId);
+  if (otherChapters.length === 0) { showToast('没有其他章节可转移'); return; }
+
+  const html = otherChapters.map(c =>
+    `<option value="${c.id}">${escapeHtml(c.name)}</option>`
+  ).join('');
+  const selId = 'cqMoveChSelect_' + qId;
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay show';
+  modal.innerHTML = `<div class="modal">
+    <h3>转移重要例题</h3>
+    <p style="margin-bottom:12px;font-size:13px;color:#666;">将这道重要例题转移到其他章节：</p>
+    <div class="form-group">
+      <select id="${selId}" style="width:100%;padding:10px;border:1px solid #d9d9d9;border-radius:8px;font-size:14px;">${html}</select>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" id="cqMoveCancel">取消</button>
+      <button class="btn-confirm" id="cqMoveConfirm">转移</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+
+  modal.querySelector('#cqMoveCancel').onclick = () => modal.remove();
+  modal.querySelector('#cqMoveConfirm').onclick = async () => {
+    const targetChapterId = parseInt(modal.querySelector('#' + selId).value, 10);
+    modal.remove();
+    try {
+      const res = await sb.from('core_questions').update({ chapter_id: targetChapterId }).eq('id', qId);
+      if (res.error) throw res.error;
+      await reloadCoreQuestions();
+      await refreshMainContent();
+      await refreshSidebar();
+      const targetCh = cachedChapters.find(c => c.id == targetChapterId);
+      showToast('已转移到「' + escapeHtml(targetCh?.name || '') + '」');
+    } catch (err) { showToast('转移失败: ' + err.message); }
+  };
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
 }
 
 // ==================== 知识点转移 ====================
@@ -1866,20 +2005,6 @@ async function deleteCoreQuestion(id) {
     await refreshMainContent();
     showToast('已删除');
   } catch (err) { showToast('删除失败: ' + err.message); }
-}
-
-async function moveCoreQuestion(id, dir) {
-  const list = cachedCoreQuestions.filter(q => q.chapter_id == selectedCoreChapterId);
-  list.sort((a, b) => (a.sort_order || a.id) - (b.sort_order || b.id));
-  const idx = list.findIndex(q => q.id == id);
-  if (idx < 0 || (dir < 0 && idx === 0) || (dir > 0 && idx === list.length - 1)) return;
-  const a = list[idx], b = list[idx + dir];
-  try {
-    await sb.from('core_questions').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id);
-    await sb.from('core_questions').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
-    await reloadCoreQuestions();
-    await refreshMainContent();
-  } catch (err) { showToast('排序失败: ' + err.message); }
 }
 
 async function markCoreCorrect(id) {
@@ -2008,7 +2133,7 @@ async function refreshMainContent() {
     if (!coreLoaded) await reloadCoreQuestions();
     const coreQList = cachedCoreQuestions
       .filter(q => q.chapter_id == selectedCoreChapterId)
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      .sort((a, b) => (a.sort_order || a.id) - (b.sort_order || b.id));
 
     const container = document.getElementById('panelCuoti');
     if (coreQList.length === 0) {
@@ -2027,9 +2152,15 @@ async function refreshMainContent() {
       const isCompleted = correct >= 5;
       const log = q.review_log || [];
       return `
-      <div class="question-card" style="border-left:3px solid #e67e22;">
-        <div class="card-img-wrap" onclick="previewImage(this.querySelector('img').src)">
+      <div class="question-card" style="border-left:3px solid #e67e22;"
+           draggable="true"
+           ondragstart="onDragStart(event, 'core', ${q.id}, ${selectedCoreChapterId})"
+           ondragover="onDragOverCard(event)"
+           ondragleave="onDragLeaveCard(event)"
+           ondrop="onDropCard(event, ${q.id}, 'core', ${selectedCoreChapterId})">
+        <div class="card-img-wrap" onclick="previewImage(this.querySelector('img').src)" style="position:relative;">
           <img src="${q.image_data}" alt="重要例题" loading="lazy">
+          <span class="drag-handle" style="position:absolute;top:4px;left:4px;background:rgba(255,255,255,0.85);border-radius:4px;padding:2px 4px;" title="拖动排序">⠿</span>
         </div>
         <div class="card-info">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
@@ -2037,10 +2168,7 @@ async function refreshMainContent() {
               ${escapeHtml(q.tag || '未分类')}
               <button class="edit-btn" style="opacity:1;margin-left:4px;font-size:11px;color:#e67e22;" onclick="event.stopPropagation();editCoreTag(${q.id}, '${escapeHtml(q.tag || '').replace(/'/g, "\\'")}')">✎</button>
             </span>
-            <div style="display:flex;flex-direction:column;gap:0;flex-shrink:0;line-height:1;">
-              <button style="display:inline;font-size:11px;color:#bbb;cursor:pointer;padding:1px 3px;border:none;background:none;line-height:1;" onclick="event.stopPropagation();moveCoreQuestion(${q.id}, -1)">▲</button>
-              <button style="display:inline;font-size:11px;color:#bbb;cursor:pointer;padding:1px 3px;border:none;background:none;line-height:1;" onclick="event.stopPropagation();moveCoreQuestion(${q.id}, 1)">▼</button>
-            </div>
+            <button style="font-size:12px;color:#e67e22;cursor:pointer;padding:2px 6px;border:1px solid #f0c78e;background:#fff;border-radius:4px;" onclick="event.stopPropagation();moveCoreQToChapter(${q.id}, ${selectedCoreChapterId})" title="转移到其他章节">↗</button>
           </div>
           <div class="progress-section">
             ${isCompleted ? '<span class="card-badge">✓ 已完成</span>' : ''}
@@ -2061,9 +2189,9 @@ async function refreshMainContent() {
               </div>` : '<div class="review-dates"></div>'}
           </div>
           <div class="card-actions">
-            <button class="btn-correct" onclick="markCoreCorrect(${q.id})">答对了</button>
-            <button class="btn-wrong" onclick="markCoreWrong(${q.id})">还不会</button>
-            <button class="btn-delete" onclick="deleteCoreQuestion(${q.id})">删除</button>
+            <button class="btn-correct" onclick="event.stopPropagation();markCoreCorrect(${q.id})">答对了</button>
+            <button class="btn-wrong" onclick="event.stopPropagation();markCoreWrong(${q.id})">还不会</button>
+            <button class="btn-delete" onclick="event.stopPropagation();deleteCoreQuestion(${q.id})">删除</button>
           </div>
         </div>
       </div>`;
@@ -2076,7 +2204,7 @@ async function refreshMainContent() {
 
   const filtered = cachedQuestions
     .filter(q => q.knowledge_point_id == selectedKpId)
-    .sort((a, b) => b.first_upload_date.localeCompare(a.first_upload_date));
+    .sort((a, b) => (a.sort_order || a.id) - (b.sort_order || b.id));
 
   const container = document.getElementById('panelCuoti');
 
@@ -2085,7 +2213,7 @@ async function refreshMainContent() {
     return;
   }
 
-  container.innerHTML = `<div class="question-grid">${filtered.map(q => {
+  container.innerHTML = `<div class="question-grid">${filtered.map((q, qIdx) => {
     const correct = q.correct_count || 0;
     const wrong = q.wrong_count || 0;
     const total = correct + wrong;
@@ -2093,9 +2221,15 @@ async function refreshMainContent() {
     const isCompleted = correct >= 5;
     const log = q.review_log || [];
     return `
-      <div class="question-card">
-        <div class="card-img-wrap" onclick="previewImage(this.querySelector('img').src)">
+      <div class="question-card"
+           draggable="true"
+           ondragstart="onDragStart(event, 'question', ${q.id}, null, ${selectedKpId})"
+           ondragover="onDragOverCard(event)"
+           ondragleave="onDragLeaveCard(event)"
+           ondrop="onDropCard(event, ${q.id}, 'question', ${selectedKpId})">
+        <div class="card-img-wrap" onclick="previewImage(this.querySelector('img').src)" style="position:relative;">
           <img src="${q.image_data}" alt="错题" loading="lazy">
+          <span class="drag-handle" style="position:absolute;top:4px;left:4px;background:rgba(255,255,255,0.85);border-radius:4px;padding:2px 4px;" title="拖动排序">⠿</span>
         </div>
         <div class="card-info">
           <div class="card-date">📅 首次上传：${q.first_upload_date}</div>
@@ -2119,9 +2253,10 @@ async function refreshMainContent() {
               </div>` : '<div class="review-dates"></div>'}
           </div>
           <div class="card-actions">
-            <button class="btn-correct" onclick="markCorrect(${q.id})">答对了</button>
-            <button class="btn-wrong" onclick="markWrong(${q.id})">还不会</button>
-            <button class="btn-delete" onclick="deleteQuestion(${q.id})">删除</button>
+            <button class="btn-correct" onclick="event.stopPropagation();markCorrect(${q.id})">答对了</button>
+            <button class="btn-wrong" onclick="event.stopPropagation();markWrong(${q.id})">还不会</button>
+            <button class="btn-delete" onclick="event.stopPropagation();deleteQuestion(${q.id})">删除</button>
+            <button class="btn-delete" style="color:#e67e22;border-color:#f0c78e;" onclick="event.stopPropagation();moveQuestionToKp(${q.id}, ${selectedKpId})" title="转移到其他知识点">↗</button>
           </div>
         </div>
       </div>`;
@@ -2329,13 +2464,13 @@ function renderEbb() {
               if (slot.done) {
                 const reviewDate = slot.reviewDate ? slot.reviewDate.slice(5) : slot.scheduled.slice(5);
                 if (ebbSubject === '专业课') {
-                  return `<td class="ebb-done" style="padding:2px;vertical-align:top;">
+                  return `<td class="ebb-done" style="padding:2px;vertical-align:middle;">
                     <div style="display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;">
                       <span style="font-size:11px;color:#27ae60;font-weight:600;">✓ ${reviewDate}</span>
                       <textarea id="ebbNote_${item.id}_${slot.day}"
                         onblur="saveEbbNoteInline(${item.id}, ${slot.day}, this.value)"
                         oninput="autoResizeTextarea(this)"
-                        style="width:96%;min-height:32px;font-size:9px;padding:4px 6px;border:1px solid #c8c8c8;border-radius:8px;resize:none;overflow:hidden;background:#fdfcf0;white-space:pre-wrap;word-break:break-all;line-height:1.5;text-align:left;"
+                        style="width:96%;min-height:28px;font-size:9px;padding:4px 6px;border:1px solid #c8c8c8;border-radius:8px;resize:none;overflow:hidden;background:#fdfcf0;white-space:pre-wrap;word-break:break-all;line-height:1.3;text-align:center;font-family:inherit;"
                         placeholder="备注...">${slot.reviewNote ? escapeHtml(slot.reviewNote) : ''}</textarea>
                     </div></td>`;
                 }
@@ -2362,6 +2497,19 @@ function renderEbb() {
         </tbody>
       </table>
     </div>`;
+  // Auto-resize existing note textareas and equalize per row
+  requestAnimationFrame(() => {
+    const tbody = document.querySelector('#panelEbb tbody');
+    if (!tbody) return;
+    const rows = tbody.querySelectorAll('tr');
+    rows.forEach(row => {
+      const textareas = row.querySelectorAll('textarea[id^="ebbNote_"]');
+      if (textareas.length === 0) return;
+      let maxH = 0;
+      textareas.forEach(el => { autoResizeTextarea(el); maxH = Math.max(maxH, el.scrollHeight); });
+      textareas.forEach(el => { el.style.height = maxH + 'px'; });
+    });
+  });
 }
 
 function editEbbInline(id) {
@@ -2695,23 +2843,41 @@ function renderScheduleGrid() {
   // For each time_slot row, determine cell content and rowspan
   const sortedSlots = [...scheduleTimeSlots].sort();
 
+  // Pre-compute which columns are covered by rowspans from previous rows
+  // spanTracker[slotIdx][dateKey] = true means this cell is already covered by a rowspan above
+  const spanTracker = {};
+  sortedSlots.forEach((slot, slotIdx) => {
+    spanTracker[slotIdx] = {};
+    Object.entries(groups).forEach(([key, grp]) => {
+      if (!grp.slots.includes(slot)) return;
+      const prevSlot = sortedSlots[slotIdx - 1];
+      if (prevSlot && grp.slots.includes(prevSlot)) return; // not the first in run
+      let rowspan = 1;
+      for (let n = slotIdx + 1; n < sortedSlots.length; n++) {
+        if (grp.slots.includes(sortedSlots[n])) rowspan++;
+        else break;
+      }
+      if (rowspan > 1) {
+        for (let r = 1; r < rowspan; r++) {
+          spanTracker[slotIdx + r][grp.date] = true;
+        }
+      }
+    });
+  });
+
   const tbodyHTML = scheduleTimeSlots.length === 0 ? `
     <tr>
       <td colspan="${dates.length + 1}" style="padding:24px;text-align:center;color:#bbb;">
         暂无时段，点击 <button onclick="addTimeSlot()" style="font-size:12px;padding:4px 12px;background:#4a90d9;color:#fff;border:none;border-radius:4px;cursor:pointer;">+ 添加时段</button> 开始记录
       </td>
     </tr>` : sortedSlots.map((slot, slotIdx) => {
-      // Calculate which records should be rendered in this row (and their rowspans)
-      const slotRecords = []; // { groupKey, rowspan }
+      const slotRecords = [];
       Object.entries(groups).forEach(([key, grp]) => {
         if (!grp.slots.includes(slot)) return;
-        // Check if this is the first slot in a consecutive run
-        const slotIdxInGroup = sortedSlots.indexOf(slot);
-        const prevSlot = sortedSlots[slotIdxInGroup - 1];
-        if (prevSlot && grp.slots.includes(prevSlot)) return; // skip: covered by rowspan of previous row
-        // Calculate rowspan: how many consecutive slots does this group occupy starting from here?
+        const prevSlot = sortedSlots[slotIdx - 1];
+        if (prevSlot && grp.slots.includes(prevSlot)) return;
         let rowspan = 1;
-        for (let n = slotIdxInGroup + 1; n < sortedSlots.length; n++) {
+        for (let n = slotIdx + 1; n < sortedSlots.length; n++) {
           if (grp.slots.includes(sortedSlots[n])) rowspan++;
           else break;
         }
@@ -2724,18 +2890,20 @@ function renderScheduleGrid() {
           <button onclick="deleteTimeSlot('${slot}')" class="slot-del" style="position:absolute;right:2px;top:50%;transform:translateY(-50%);font-size:14px;color:#ccc;background:none;border:none;cursor:pointer;display:none;">×</button>
         </td>
         ${dates.map(d => {
+          // Skip if this column is covered by a rowspan from above
+          if (spanTracker[slotIdx][d.date]) return '';
           const dateRecords = slotRecords.filter(sr => sr.grp.date === d.date);
           if (dateRecords.length === 0) {
             return `<td style="padding:2px;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:top;cursor:pointer;"
               onclick="openScheduleModal('${slot}', '${d.date}')"></td>`;
           }
           return dateRecords.map(sr => {
-            const mergeStyle = sr.hasRowspan ? 'border:2px solid rgba(0,0,0,0.08);' : '';
-            const recordId = cachedSchedule.find(r => r.record_date===d.date && r.subject===sr.grp.subject && r.label===sr.grp.label && r.time_slot===slot)?.id || '';
-            return `<td style="padding:2px;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:top;cursor:pointer;${mergeStyle}"
+            // For rowspan cells, find any record in the group (not just current slot)
+            const recordId = cachedSchedule.find(r => r.record_date===d.date && r.subject===sr.grp.subject && r.label===sr.grp.label)?.id || '';
+            return `<td style="padding:0;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:middle;cursor:pointer;"
               ${sr.hasRowspan ? `rowspan="${sr.rowspan}"` : ''}
               onclick="openScheduleModal('${slot}', '${d.date}')">
-              <div style="margin:1px 0;padding:${sr.hasRowspan?'4px':'2px'} 4px;border-radius:3px;font-size:9px;color:#fff;white-space:normal;word-break:break-all;line-height:1.3;${sr.hasRowspan?'min-height:'+(28*sr.rowspan-4)+'px;display:flex;align-items:center;justify-content:center;':''}background:${SUBJECT_GRADIENTS[sr.grp.subject] || '#888'};cursor:pointer;"
+              <div style="margin:0;padding:${sr.hasRowspan?'6px':'2px'} 4px;border-radius:2px;font-size:9px;color:#fff;white-space:normal;word-break:break-all;line-height:1.3;${sr.hasRowspan?'height:100%;display:flex;align-items:center;justify-content:center;':''}background:${SUBJECT_GRADIENTS[sr.grp.subject] || '#888'};cursor:pointer;"
                 onclick="event.stopPropagation();editScheduleRecordModal(${recordId}, '${sr.grp.subject.replace(/'/g, "\\'")}', '${sr.grp.label.replace(/'/g, "\\'")}', '${slot}')">
                 ${sr.hasRowspan ? escapeHtml(sr.grp.label || sr.grp.subject) : escapeHtml(sr.grp.label || sr.grp.subject)}
               </div>

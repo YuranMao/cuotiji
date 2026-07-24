@@ -5,7 +5,7 @@ create table if not exists chapters (
   id bigserial primary key,
   name text not null,
   created_at timestamptz default now(),
-  sort_order int
+  sort_order int default 0
 );
 
 create table if not exists knowledge_points (
@@ -13,7 +13,7 @@ create table if not exists knowledge_points (
   chapter_id bigint references chapters(id) on delete cascade,
   name text not null,
   created_at timestamptz default now(),
-  sort_order int
+  sort_order int default 0
 );
 
 create table if not exists questions (
@@ -21,6 +21,8 @@ create table if not exists questions (
   knowledge_point_id bigint references knowledge_points(id) on delete cascade,
   image_data text not null,
   first_upload_date date not null,
+  file_name text,
+  sort_order int default 0,
   correct_count int default 0,
   wrong_count int default 0,
   review_log jsonb default '[]'::jsonb,
@@ -52,7 +54,7 @@ create table if not exists core_questions (
   name text,
   image_data text not null,
   tag text default '',
-  sort_order int,
+  sort_order int default 0,
   correct_count int default 0,
   wrong_count int default 0,
   review_log jsonb default '[]',
@@ -81,9 +83,6 @@ create table if not exists daily_schedule (
   label text,
   created_at timestamptz default now()
 );
-
--- 如果 ebbinghaus_items 还没有 note 列，请执行：
--- ALTER TABLE ebbinghaus_items ADD COLUMN IF NOT EXISTS note text;
 
 -- 启用 RLS
 alter table chapters enable row level security;
