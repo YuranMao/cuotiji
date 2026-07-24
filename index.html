@@ -1151,7 +1151,7 @@ let ebbSubject = '专业课';
 let cachedCoreQuestions = [];
 let coreLoaded = false;
 let cachedSchedule = [];
-let scheduleTimeSlots = ['6:00-7:00','7:00-8:00','8:00-9:00','9:00-10:00','10:00-11:00','11:00-12:00','14:00-15:00','15:00-16:00','16:00-17:00','17:00-18:00','19:00-20:00','20:00-21:00','21:00-22:00'];
+let scheduleTimeSlots = [];
 let scheduleLoaded = false;
 let scheduleDateRange = { start: '', end: '' };
 
@@ -2420,16 +2420,44 @@ function renderScheduleGrid() {
     d.setDate(d.getDate() + i);
     dates.push({ date: formatDate(d), day: d.getDate(), month: d.getMonth() + 1, dow: d.getDay() });
   }
-  
+
+  // Table body: if no slots, show empty hint row with add button
+  const tbodyHTML = scheduleTimeSlots.length === 0 ? `
+    <tr>
+      <td colspan="${dates.length + 1}" style="padding:24px;text-align:center;color:#bbb;">
+        暂无时段，点击 <button onclick="addTimeSlot()" style="font-size:12px;padding:4px 12px;background:#4a90d9;color:#fff;border:none;border-radius:4px;cursor:pointer;">+ 添加时段</button> 开始记录
+      </td>
+    </tr>` : scheduleTimeSlots.map(slot => {
+      return `<tr>
+        <td style="padding:6px 8px;border-right:1px solid #e0e0e0;border-bottom:1px solid #f0f0f0;text-align:center;font-weight:600;color:#555;position:relative;">
+          ${slot}
+          <button onclick="deleteTimeSlot('${slot}')" style="position:absolute;right:2px;top:50%;transform:translateY(-50%);font-size:14px;color:#ccc;background:none;border:none;cursor:pointer;display:none;" class="slot-del">×</button>
+        </td>
+        ${dates.map(d => {
+          const records = cachedSchedule.filter(r => r.time_slot === slot && r.record_date === d.date);
+          return `<td style="padding:2px;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:top;cursor:pointer;min-height:36px;" 
+            onclick="addScheduleRecord('${slot}', '${d.date}')" title="${slot} ${d.date}">
+            ${records.map(r => `<div style="margin:1px 0;padding:2px 4px;border-radius:3px;font-size:9px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:${SUBJECT_GRADIENTS[r.subject] || '#888'};cursor:pointer;"
+              onclick="event.stopPropagation();editScheduleRecord(${r.id}, '${r.subject}', '${escapeHtml(r.label || '').replace(/'/g, "\\'")}')" title="${r.subject}: ${escapeHtml(r.label || '')}">
+              ${escapeHtml(r.label || r.subject)}
+            </div>`).join('')}
+          </td>`;
+        }).join('')}
+      </tr>`;
+    }).join('');
+
   container.innerHTML = `
     <div style="margin-top:20px;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #eee;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #eee;flex-wrap:wrap;gap:8px;">
         <span style="font-weight:700;font-size:14px;color:#333;">每日复习记录</span>
         <div style="display:flex;gap:6px;align-items:center;">
           <button onclick="scheduleNav(-3)" style="font-size:11px;padding:4px 10px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;cursor:pointer;">◀ 前3天</button>
           <span style="font-size:11px;color:#888;">${scheduleDateRange.start} ~ ${scheduleDateRange.end}</span>
           <button onclick="scheduleNav(3)" style="font-size:11px;padding:4px 10px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;cursor:pointer;">后3天 ▶</button>
-          <button onclick="addTimeSlot()" style="font-size:11px;padding:4px 10px;border:1px solid #4a90d9;border-radius:4px;background:#4a90d9;color:#fff;cursor:pointer;">+ 时段</button>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="addTimeSlot()" style="font-size:11px;padding:5px 12px;border:1px solid #4a90d9;border-radius:4px;background:#fff;color:#4a90d9;cursor:pointer;white-space:nowrap;">+ 时段</button>
+          <button onclick="addTodayRecord()" style="font-size:11px;padding:5px 12px;border:none;border-radius:4px;background:#4a90d9;color:#fff;cursor:pointer;white-space:nowrap;">+ 今日记录</button>
         </div>
       </div>
       <div style="overflow-x:auto;">
@@ -2442,26 +2470,7 @@ function renderScheduleGrid() {
               </th>`).join('')}
             </tr>
           </thead>
-          <tbody>
-            ${scheduleTimeSlots.map(slot => {
-              return `<tr>
-                <td style="padding:6px 8px;border-right:1px solid #e0e0e0;border-bottom:1px solid #f0f0f0;text-align:center;font-weight:600;color:#555;position:relative;">
-                  ${slot}
-                  <button onclick="deleteTimeSlot('${slot}')" style="position:absolute;right:2px;top:50%;transform:translateY(-50%);font-size:14px;color:#ccc;background:none;border:none;cursor:pointer;display:none;" class="slot-del">×</button>
-                </td>
-                ${dates.map(d => {
-                  const records = cachedSchedule.filter(r => r.time_slot === slot && r.record_date === d.date);
-                  return `<td style="padding:2px;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:top;cursor:pointer;min-height:36px;" 
-                    onclick="addScheduleRecord('${slot}', '${d.date}')" title="${slot} ${d.date}">
-                    ${records.map(r => `<div style="margin:1px 0;padding:2px 4px;border-radius:3px;font-size:9px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:${SUBJECT_GRADIENTS[r.subject] || '#888'};cursor:pointer;"
-                      onclick="event.stopPropagation();editScheduleRecord(${r.id}, '${r.subject}', '${escapeHtml(r.label || '').replace(/'/g, "\\'")}')" title="${r.subject}: ${escapeHtml(r.label || '')}">
-                      ${escapeHtml(r.label || r.subject)}
-                    </div>`).join('')}
-                  </td>`;
-                }).join('')}
-              </tr>`;
-            }).join('')}
-          </tbody>
+          <tbody>${tbodyHTML}</tbody>
         </table>
       </div>
     </div>`;
@@ -2480,6 +2489,38 @@ function deleteTimeSlot(slot) {
   if (!confirm('删除时间段 ' + slot + '？')) return;
   scheduleTimeSlots = scheduleTimeSlots.filter(s => s !== slot);
   renderScheduleGrid();
+}
+
+async function addTodayRecord() {
+  const todayStr = formatDate(new Date());
+  let timeSlot;
+  if (scheduleTimeSlots.length > 0) {
+    // Let user pick existing slot or enter new one
+    const list = scheduleTimeSlots.join('\n');
+    timeSlot = prompt('选择时段（输入已有时段名称或输入新时段）:\n' + list, scheduleTimeSlots[0]);
+  } else {
+    timeSlot = prompt('输入时段（如 8:00-9:00）', '');
+    if (timeSlot && timeSlot.trim() && !scheduleTimeSlots.includes(timeSlot.trim())) {
+      scheduleTimeSlots.push(timeSlot.trim());
+      scheduleTimeSlots.sort();
+    }
+  }
+  if (!timeSlot || !timeSlot.trim()) return;
+  timeSlot = timeSlot.trim();
+  if (!scheduleTimeSlots.includes(timeSlot)) {
+    scheduleTimeSlots.push(timeSlot);
+    scheduleTimeSlots.sort();
+  }
+  const subject = prompt('科目（数学/专业课/英语/政治）', '数学');
+  if (!subject) return;
+  const label = prompt('任务名称', '');
+  if (label === null) return;
+  try {
+    const res = await sb.from('daily_schedule').insert({ time_slot: timeSlot, record_date: todayStr, subject, label: label.trim() });
+    if (res.error) throw res.error;
+    await reloadSchedule();
+    renderScheduleGrid();
+  } catch (err) { showToast('添加失败: ' + err.message); }
 }
 
 function scheduleNav(days) {
