@@ -594,6 +594,7 @@ body {
   border-radius: 3px;
 }
 .tl-event:hover .tl-del { opacity: 1; }
+.schedule-table td:hover .slot-del { display: block !important; }
 .tl-today-line {
   position: absolute;
   top: 0;
@@ -1011,6 +1012,36 @@ body {
   </div>
 </div>
 
+<!-- 母题弹窗 -->
+<div class="modal-overlay" id="coreQuestionModal">
+  <div class="modal">
+    <h3>添加母题</h3>
+    <div class="form-group">
+      <label>母题名称</label>
+      <input type="text" id="coreNameInput" placeholder="例如：数列极限经典题" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>题型标签</label>
+      <input type="text" id="coreTagInput" placeholder="例如：选择题、填空题、证明题" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>上传题目图片</label>
+      <div class="image-upload-area" id="coreImageUploadArea">
+        <input type="file" id="coreImageFileInput" accept="image/*" capture="environment" onchange="handleCoreImageSelect(event)">
+        <div class="placeholder">
+          <span class="upload-icon">🖼️</span>
+          点击上传或拍照
+        </div>
+      </div>
+    </div>
+    <input type="hidden" id="coreChapterId">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('coreQuestionModal')">取消</button>
+      <button class="btn-confirm" onclick="saveCoreQuestion()">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- 艾宾浩斯弹窗 -->
 <div class="modal-overlay" id="ebbModal">
   <div class="modal">
@@ -1117,6 +1148,12 @@ let cachedTimeline = [];
 let ebbLoaded = false;
 let tlLoaded = false;
 let ebbSubject = '专业课';
+let cachedCoreQuestions = [];
+let coreLoaded = false;
+let cachedSchedule = [];
+let scheduleTimeSlots = ['6:00-7:00','7:00-8:00','8:00-9:00','9:00-10:00','10:00-11:00','11:00-12:00','14:00-15:00','15:00-16:00','16:00-17:00','17:00-18:00','19:00-20:00','20:00-21:00','21:00-22:00'];
+let scheduleLoaded = false;
+let scheduleDateRange = { start: '', end: '' };
 
 // ==================== Tab 切换 ====================
 function switchTab(tab) {
@@ -1204,6 +1241,14 @@ function closeModal(id) {
   if (id === 'tlModal') {
     document.getElementById('tlLabelInput').value = '';
     document.getElementById('editTlId').value = '';
+  }
+  if (id === 'coreQuestionModal') {
+    selectedImageData = null;
+    document.getElementById('coreImageFileInput').value = '';
+    const area = document.getElementById('coreImageUploadArea');
+    area.classList.remove('has-image');
+    area.querySelector('img')?.remove();
+    area.querySelector('.placeholder').style.display = '';
   }
 }
 
@@ -1295,6 +1340,37 @@ function closeImgPreview() { document.getElementById('imgPreview').classList.rem
 function previewImage(src) {
   document.getElementById('imgPreviewSrc').src = src;
   document.getElementById('imgPreview').classList.add('show');
+}
+
+function handleCoreImageSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 1200, maxH = 1200;
+      let w = img.width, h = img.height;
+      if (w > maxW || h > maxH) {
+        const ratio = Math.min(maxW / w, maxH / h);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      selectedImageData = canvas.toDataURL('image/jpeg', 0.85);
+      const area = document.getElementById('coreImageUploadArea');
+      area.classList.add('has-image');
+      area.querySelector('.placeholder').style.display = 'none';
+      let preview = area.querySelector('img');
+      if (!preview) { preview = document.createElement('img'); area.appendChild(preview); }
+      preview.src = selectedImageData;
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 // ==================== IndexedDB 缓存 ====================
@@ -1406,6 +1482,25 @@ async function reloadTimelineData() {
   const r = await sb.from('timeline_events').select('*').order('start_date');
   if (!r.error) cachedTimeline = r.data || [];
   tlLoaded = true;
+}
+async function reloadCoreQuestions() {
+  const r = await sb.from('core_questions').select('*').order('created_at', { ascending: false });
+  if (!r.error) cachedCoreQuestions = r.data || [];
+  coreLoaded = true;
+}
+async function reloadSchedule() {
+  if (!scheduleDateRange.start) {
+    const s = new Date(); s.setDate(s.getDate() - 7);
+    scheduleDateRange.start = formatDate(s);
+    const e = new Date(); e.setDate(e.getDate() + 14);
+    scheduleDateRange.end = formatDate(e);
+  }
+  const r = await sb.from('daily_schedule').select('*')
+    .gte('record_date', scheduleDateRange.start)
+    .lte('record_date', scheduleDateRange.end)
+    .order('record_date');
+  if (!r.error) cachedSchedule = r.data || [];
+  scheduleLoaded = true;
 }
 
 // ==================== 章节 / 知识点操作 ====================
@@ -1577,9 +1672,63 @@ async function moveKp(id, chapterId, dir) {
   } catch (err) { showToast('排序失败: ' + err.message); }
 }
 
+// ==================== 母题库 ====================
+function showCoreQuestionModal(chapterId) {
+  document.getElementById('coreChapterId').value = chapterId;
+  document.getElementById('coreNameInput').value = '';
+  document.getElementById('coreTagInput').value = '';
+  selectedImageData = null;
+  document.getElementById('coreImageFileInput').value = '';
+  const area = document.getElementById('coreImageUploadArea');
+  area.classList.remove('has-image');
+  area.querySelector('img')?.remove();
+  area.querySelector('.placeholder').style.display = '';
+  openModal('coreQuestionModal');
+  setTimeout(() => document.getElementById('coreNameInput').focus(), 100);
+}
+
+async function saveCoreQuestion() {
+  const chapterId = parseInt(document.getElementById('coreChapterId').value, 10);
+  const name = document.getElementById('coreNameInput').value.trim();
+  const tag = document.getElementById('coreTagInput').value.trim();
+  if (!name) { showToast('请输入母题名称'); return; }
+  if (!selectedImageData) { showToast('请上传题目图片'); return; }
+  try {
+    const res = await sb.from('core_questions').insert({ chapter_id: chapterId, name, image_data: selectedImageData, tag });
+    if (res.error) throw res.error;
+    await reloadCoreQuestions();
+    closeModal('coreQuestionModal');
+    await refreshSidebar();
+    showToast('母题已添加');
+  } catch (err) { showToast('保存失败: ' + err.message); }
+}
+
+async function editCoreTag(id, currentTag) {
+  const newTag = prompt('修改题型标签', currentTag || '');
+  if (newTag === null) return;
+  try {
+    const res = await sb.from('core_questions').update({ tag: newTag.trim() }).eq('id', id);
+    if (res.error) throw res.error;
+    await reloadCoreQuestions();
+    await refreshSidebar();
+    showToast('标签已更新');
+  } catch (err) { showToast('更新失败: ' + err.message); }
+}
+
+async function deleteCoreQuestion(id) {
+  if (!confirm('确定删除该母题？')) return;
+  try {
+    await sb.from('core_questions').delete().eq('id', id);
+    await reloadCoreQuestions();
+    await refreshSidebar();
+    showToast('已删除');
+  } catch (err) { showToast('删除失败: ' + err.message); }
+}
+
 // ==================== 渲染：侧边栏 ====================
 async function refreshSidebar() {
   const container = document.getElementById('sidebarTree');
+  if (!coreLoaded) { await reloadCoreQuestions(); }
 
   container.innerHTML = cachedChapters.map((ch, idx) => {
     const childKps = cachedKps.filter(kp => kp.chapter_id === ch.id);
@@ -1626,6 +1775,25 @@ async function refreshSidebar() {
               </div>`;
           }).join('')}
           ${childKps.length === 0 ? '<div class="kp-item" style="color:#ccc;cursor:default;justify-content:center;">暂无知识点</div>' : ''}
+          <div style="border-top:1px dashed #e0e0e0;margin:6px 0 2px;"></div>
+          <div class="kp-item" style="font-weight:600;color:#e67e22;">
+            <span class="kp-dot" style="color:#e67e22;">★</span>
+            <span style="font-size:12px;">母题</span>
+            <span class="kp-count">${cachedCoreQuestions.filter(q => q.chapter_id == ch.id).length}</span>
+            <button style="font-size:11px;color:#4a90d9;background:none;border:none;cursor:pointer;padding:2px 6px;" onclick="event.stopPropagation();showCoreQuestionModal(${ch.id})">+</button>
+          </div>
+          ${cachedCoreQuestions.filter(q => q.chapter_id == ch.id).map(cq => `
+            <div class="kp-item" onclick="event.stopPropagation();previewImage('${cq.image_data.replace(/'/g, "\\'")}')">
+              <span class="kp-dot">●</span>
+              <span class="kp-name" style="font-size:11px;">${escapeHtml(cq.name)}</span>
+              ${cq.tag ? `<span style="font-size:9px;background:#fef3e2;color:#e67e22;padding:1px 5px;border-radius:3px;white-space:nowrap;flex-shrink:0;" onclick="event.stopPropagation();editCoreTag(${cq.id}, '${escapeHtml(cq.tag).replace(/'/g, "\\'")}')">${escapeHtml(cq.tag)}</span>` : ''}
+              <button class="kp-edit-btn edit-btn" style="font-size:10px;opacity:1;display:inline;" onclick="event.stopPropagation();editCoreTag(${cq.id}, '${escapeHtml(cq.tag || '').replace(/'/g, "\\'")}')">✎</button>
+              <button class="del-kp" onclick="event.stopPropagation();deleteCoreQuestion(${cq.id})">×</button>
+            </div>
+          `).join('')}
+          <div class="kp-item" style="color:#4a90d9;cursor:pointer;justify-content:center;" onclick="event.stopPropagation();showCoreQuestionModal(${ch.id})">
+            + 添加母题
+          </div>
         </div>
       </div>`;
   }).join('') || '<div style="padding:24px;text-align:center;color:#bbb;font-size:13px;">暂无章节，点击上方添加</div>';
@@ -1754,7 +1922,12 @@ async function saveEbbItem() {
   if (!name) { showToast('请输入背诵内容'); return; }
   try {
     let res;
-    const payload = { name, first_date: firstDate, subject, reviews: [] };
+    let existingReviews = [];
+    if (editId) {
+      const existing = cachedEbbItems.find(e => e.id == editId);
+      existingReviews = (existing && existing.reviews) ? existing.reviews : [];
+    }
+    const payload = { name, first_date: firstDate, subject, reviews: editId ? existingReviews : [] };
     if (editId) {
       // Try with subject first, fallback without
       res = await sb.from('ebbinghaus_items').update(payload).eq('id', editId);
@@ -1845,10 +2018,13 @@ function getEbbDynamicSchedule(item) {
     // 逾期自动后延到今日
     if (scheduled < today) scheduled = today;
 
+    const review = reviews.find(r => r.day === interval);
     result.push({
       day: interval,
       scheduled,
-      done: !!reviews.find(r => r.day === interval)
+      done: !!review,
+      reviewDate: review ? review.date : null,
+      reviewNote: review ? (review.note || '') : ''
     });
   }
   return result;
@@ -1894,7 +2070,16 @@ function renderEbb() {
             <td class="eb-date">${item.first_date}</td>
             ${schedule.map(slot => {
               if (slot.done) {
-                return `<td class="ebb-done"><div style="font-size:11px;color:#27ae60;">✓ ${slot.scheduled.slice(5)}</div></td>`;
+                const reviewDate = slot.reviewDate ? slot.reviewDate.slice(5) : slot.scheduled.slice(5);
+                if (ebbSubject === '专业课') {
+                  return `<td class="ebb-done">
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+                      <span style="font-size:11px;color:#27ae60;">✓ ${reviewDate}</span>
+                      ${slot.reviewNote ? `<span style="font-size:9px;color:#666;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(slot.reviewNote)}">${escapeHtml(slot.reviewNote)}</span>` : ''}
+                      <button onclick="event.stopPropagation();editEbbNote(${item.id}, ${slot.day})" style="font-size:9px;padding:1px 4px;border-radius:3px;border:1px solid #ccc;background:#fff;cursor:pointer;color:#888;">备注</button>
+                    </div></td>`;
+                }
+                return `<td class="ebb-done"><div style="font-size:11px;color:#27ae60;">✓ ${reviewDate}</div></td>`;
               }
               const isFuture = slot.scheduled > today;
               if (isFuture) {
@@ -1930,6 +2115,26 @@ function editEbbInline(id) {
       showToast('已更新');
     }).catch(() => showToast('更新失败'));
   }
+}
+
+function editEbbNote(itemId, day) {
+  const item = cachedEbbItems.find(e => e.id == itemId);
+  if (!item) return;
+  let reviews = item.reviews || [];
+  reviews = reviews.map(r => typeof r === 'string' ? { day: parseInt(r, 10) || 0, date: r } : r);
+  const existing = reviews.find(r => r.day === day);
+  const currentNote = existing ? (existing.note || '') : '';
+  const note = prompt('输入备注（该轮背诵第' + day + '天）', currentNote);
+  if (note === null) return; // cancelled
+  if (!existing) {
+    reviews.push({ day, date: formatDate(new Date()), note: note.trim() });
+  } else {
+    existing.note = note.trim();
+  }
+  sb.from('ebbinghaus_items').update({ reviews }).eq('id', itemId).then(async () => {
+    await reloadEbb();
+    renderEbb();
+  }).catch(() => showToast('更新备注失败'));
 }
 
 // ==================== 考研进度时间表 ====================
@@ -2038,7 +2243,9 @@ function renderTimeline() {
     </div>`;
 
   if (tlViewMode === 'calendar') {
-    container.innerHTML = viewToggle + renderCalendar();
+    container.innerHTML = viewToggle + renderCalendar() + '<div id="scheduleSection"></div>';
+    if (!scheduleLoaded) { reloadSchedule().then(() => renderScheduleGrid()); }
+    else renderScheduleGrid();
     return;
   }
 
@@ -2130,7 +2337,9 @@ function renderTimeline() {
           </div>`;
         }).join('')}
       </div>
-    </div>`;
+    </div>` + '<div id="scheduleSection"></div>';
+  if (!scheduleLoaded) { reloadSchedule().then(() => renderScheduleGrid()); }
+  else renderScheduleGrid();
 }
 
 function renderCalendar() {
@@ -2193,6 +2402,134 @@ function renderCalendar() {
       <span>重要节点：</span>
       ${IMPORTANT_DATES.map(d => `<span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:${d.color};display:inline-block;"></span>${d.date} ${d.icon} ${d.label}</span>`).join('')}
     </div>`;
+}
+
+// ==================== 每日复习记录时间表 ====================
+function renderScheduleGrid() {
+  const container = document.getElementById('scheduleSection');
+  if (!container) return;
+  
+  const startD = new Date(scheduleDateRange.start);
+  const endD = new Date(scheduleDateRange.end);
+  const dayCount = Math.round((endD - startD) / 86400000) + 1;
+  const today = formatDate(new Date());
+  
+  const dates = [];
+  for (let i = 0; i < dayCount; i++) {
+    const d = new Date(startD);
+    d.setDate(d.getDate() + i);
+    dates.push({ date: formatDate(d), day: d.getDate(), month: d.getMonth() + 1, dow: d.getDay() });
+  }
+  
+  container.innerHTML = `
+    <div style="margin-top:20px;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #eee;">
+        <span style="font-weight:700;font-size:14px;color:#333;">每日复习记录</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button onclick="scheduleNav(-3)" style="font-size:11px;padding:4px 10px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;cursor:pointer;">◀ 前3天</button>
+          <span style="font-size:11px;color:#888;">${scheduleDateRange.start} ~ ${scheduleDateRange.end}</span>
+          <button onclick="scheduleNav(3)" style="font-size:11px;padding:4px 10px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;cursor:pointer;">后3天 ▶</button>
+          <button onclick="addTimeSlot()" style="font-size:11px;padding:4px 10px;border:1px solid #4a90d9;border-radius:4px;background:#4a90d9;color:#fff;cursor:pointer;">+ 时段</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="schedule-table" style="width:100%;border-collapse:collapse;font-size:11px;min-width:600px;">
+          <thead>
+            <tr>
+              <th style="padding:6px 8px;background:#f5f7fa;border-right:1px solid #e0e0e0;text-align:center;min-width:70px;">时段</th>
+              ${dates.map(d => `<th style="padding:6px 2px;background:#f5f7fa;border-right:1px solid #f0f0f0;text-align:center;min-width:36px;${d.date===today?'color:#e74c3c;font-weight:700;':''}${d.dow===0||d.dow===6?'color:#e74c3c;':''}">
+                ${d.month}/${d.day}<br><small style="font-weight:normal;">${['日','一','二','三','四','五','六'][d.dow]}</small>
+              </th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${scheduleTimeSlots.map(slot => {
+              return `<tr>
+                <td style="padding:6px 8px;border-right:1px solid #e0e0e0;border-bottom:1px solid #f0f0f0;text-align:center;font-weight:600;color:#555;position:relative;">
+                  ${slot}
+                  <button onclick="deleteTimeSlot('${slot}')" style="position:absolute;right:2px;top:50%;transform:translateY(-50%);font-size:14px;color:#ccc;background:none;border:none;cursor:pointer;display:none;" class="slot-del">×</button>
+                </td>
+                ${dates.map(d => {
+                  const records = cachedSchedule.filter(r => r.time_slot === slot && r.record_date === d.date);
+                  return `<td style="padding:2px;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:top;cursor:pointer;min-height:36px;" 
+                    onclick="addScheduleRecord('${slot}', '${d.date}')" title="${slot} ${d.date}">
+                    ${records.map(r => `<div style="margin:1px 0;padding:2px 4px;border-radius:3px;font-size:9px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:${SUBJECT_GRADIENTS[r.subject] || '#888'};cursor:pointer;"
+                      onclick="event.stopPropagation();editScheduleRecord(${r.id}, '${r.subject}', '${escapeHtml(r.label || '').replace(/'/g, "\\'")}')" title="${r.subject}: ${escapeHtml(r.label || '')}">
+                      ${escapeHtml(r.label || r.subject)}
+                    </div>`).join('')}
+                  </td>`;
+                }).join('')}
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function addTimeSlot() {
+  const slot = prompt('输入时间段（如 8:00-9:00）', '');
+  if (!slot || !slot.trim()) return;
+  if (!slot.includes('-')) { showToast('格式：8:00-9:00'); return; }
+  scheduleTimeSlots.push(slot.trim());
+  scheduleTimeSlots.sort();
+  renderScheduleGrid();
+}
+
+function deleteTimeSlot(slot) {
+  if (!confirm('删除时间段 ' + slot + '？')) return;
+  scheduleTimeSlots = scheduleTimeSlots.filter(s => s !== slot);
+  renderScheduleGrid();
+}
+
+function scheduleNav(days) {
+  const start = new Date(scheduleDateRange.start);
+  start.setDate(start.getDate() + days);
+  scheduleDateRange.start = formatDate(start);
+  const end = new Date(scheduleDateRange.end);
+  end.setDate(end.getDate() + days);
+  scheduleDateRange.end = formatDate(end);
+  reloadSchedule().then(() => renderScheduleGrid());
+}
+
+async function addScheduleRecord(timeSlot, recordDate) {
+  const subject = prompt('科目（数学/专业课/英语/政治）', '数学');
+  if (!subject) return;
+  const label = prompt('任务名称', '');
+  if (label === null) return;
+  try {
+    const res = await sb.from('daily_schedule').insert({ time_slot: timeSlot, record_date: recordDate, subject, label: label.trim() });
+    if (res.error) throw res.error;
+    await reloadSchedule();
+    renderScheduleGrid();
+  } catch (err) { showToast('添加失败: ' + err.message); }
+}
+
+async function editScheduleRecord(id, subject, label) {
+  const newSubject = prompt('科目', subject);
+  if (!newSubject) return;
+  const newLabel = prompt('任务名称', label || '');
+  if (newLabel === null) return;
+  try {
+    const res = await sb.from('daily_schedule').update({ 
+      subject: newSubject, 
+      label: newLabel.trim() 
+    }).eq('id', id);
+    if (res.error) throw res.error;
+    await reloadSchedule();
+    renderScheduleGrid();
+  } catch (err) { showToast('更新失败: ' + err.message); }
+}
+
+async function deleteScheduleRecord(event, id) {
+  event.stopPropagation();
+  if (!confirm('删除该记录？')) return;
+  try {
+    await sb.from('daily_schedule').delete().eq('id', id);
+    await reloadSchedule();
+    renderScheduleGrid();
+    showToast('已删除');
+  } catch (err) { showToast('删除失败: ' + err.message); }
 }
 
 // ==================== 弹窗遮罩点击关闭 ====================

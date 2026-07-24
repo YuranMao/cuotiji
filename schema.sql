@@ -46,12 +46,35 @@ create table if not exists timeline_events (
   created_at timestamptz default now()
 );
 
+create table if not exists core_questions (
+  id bigserial primary key,
+  chapter_id bigint references chapters(id) on delete cascade,
+  name text not null,
+  image_data text not null,
+  tag text default '',
+  created_at timestamptz default now()
+);
+
+create table if not exists daily_schedule (
+  id bigserial primary key,
+  time_slot text not null,
+  record_date date not null,
+  subject text,
+  label text,
+  created_at timestamptz default now()
+);
+
+-- 如果 ebbinghaus_items 还没有 note 列，请执行：
+-- ALTER TABLE ebbinghaus_items ADD COLUMN IF NOT EXISTS note text;
+
 -- 启用 RLS
 alter table chapters enable row level security;
 alter table knowledge_points enable row level security;
 alter table questions enable row level security;
 alter table ebbinghaus_items enable row level security;
 alter table timeline_events enable row level security;
+alter table core_questions enable row level security;
+alter table daily_schedule enable row level security;
 
 -- 允许 anon key 全权限操作（个人应用）
 do $$
@@ -70,5 +93,11 @@ begin
   end if;
   if not exists (select 1 from pg_policies where policyname='Allow all on timeline_events') then
     create policy "Allow all on timeline_events" on timeline_events for all using (true);
+  end if;
+  if not exists (select 1 from pg_policies where policyname='Allow all on core_questions') then
+    create policy "Allow all on core_questions" on core_questions for all using (true);
+  end if;
+  if not exists (select 1 from pg_policies where policyname='Allow all on daily_schedule') then
+    create policy "Allow all on daily_schedule" on daily_schedule for all using (true);
   end if;
 end $$;
