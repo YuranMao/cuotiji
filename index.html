@@ -304,6 +304,8 @@ body {
   display: flex;
   flex-direction: column;
   cursor: grab;
+  user-select: auto;
+  -webkit-user-select: auto;
 }
 .question-card:active { cursor: grabbing; }
 .card-img-wrap {
@@ -1696,7 +1698,7 @@ let dragData = null; // { type: 'chapter'|'kp'|'question'|'core', id, chapterId?
 
 function onDragStart(e, type, id, chapterId, parentId) {
   dragData = { type, id, chapterId, parentId };
-  e.target.classList.add('dragging');
+  e.currentTarget.classList.add('dragging');
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('text/plain', '');
 }
@@ -2837,90 +2839,33 @@ function renderScheduleGrid() {
     dates.push({ date: formatDate(d), day: d.getDate(), month: d.getMonth() + 1, dow: d.getDay() });
   }
 
-  // Build groups: key = "date|subject|label"
-  const groups = {};
-  cachedSchedule.forEach(r => {
-    const key = r.record_date + '|' + r.subject + '|' + r.label;
-    if (!groups[key]) groups[key] = { date: r.record_date, subject: r.subject, label: r.label, slots: [] };
-    groups[key].slots.push(r.time_slot);
-  });
-
-  // For each time_slot row, determine cell content and rowspan
   const sortedSlots = [...scheduleTimeSlots].sort();
-
-  // Pre-compute which columns are covered by rowspans from previous rows
-  // spanTracker[slotIdx][dateKey] = true means this cell is already covered by a rowspan above
-  // effectiveRowspan[key][slotIdx] = the conflict-aware rowspan for a group starting at a slot
-  const spanTracker = {};
-  const effectiveRowspan = {};
-  sortedSlots.forEach((slot, slotIdx) => {
-    spanTracker[slotIdx] = {};
-    Object.entries(groups).forEach(([key, grp]) => {
-      if (!grp.slots.includes(slot)) return;
-      const prevSlot = sortedSlots[slotIdx - 1];
-      if (prevSlot && grp.slots.includes(prevSlot)) return; // not the first in run
-      let rowspan = 1;
-      for (let n = slotIdx + 1; n < sortedSlots.length; n++) {
-        if (!grp.slots.includes(sortedSlots[n])) break;
-        // 检查后续时段是否有其他组的记录占用了同一日期，如有则停止合并
-        const hasConflict = Object.entries(groups).some(([k, g]) => {
-          if (k === key) return false;
-          return g.date === grp.date && g.slots.includes(sortedSlots[n]);
-        });
-        if (hasConflict) break;
-        rowspan++;
-      }
-      effectiveRowspan[key] = effectiveRowspan[key] || {};
-      effectiveRowspan[key][slotIdx] = rowspan;
-      if (rowspan > 1) {
-        for (let r = 1; r < rowspan; r++) {
-          if (!spanTracker[slotIdx + r]) spanTracker[slotIdx + r] = {};
-          spanTracker[slotIdx + r][grp.date] = true;
-        }
-      }
-    });
-  });
 
   const tbodyHTML = scheduleTimeSlots.length === 0 ? `
     <tr>
       <td colspan="${dates.length + 1}" style="padding:24px;text-align:center;color:#bbb;">
         暂无时段，点击 <button onclick="addTimeSlot()" style="font-size:12px;padding:4px 12px;background:#4a90d9;color:#fff;border:none;border-radius:4px;cursor:pointer;">+ 添加时段</button> 开始记录
       </td>
-    </tr>` : sortedSlots.map((slot, slotIdx) => {
-      const slotRecords = [];
-      Object.entries(groups).forEach(([key, grp]) => {
-        if (!grp.slots.includes(slot)) return;
-        const prevSlot = sortedSlots[slotIdx - 1];
-        if (prevSlot && grp.slots.includes(prevSlot)) return;
-        const rowspan = (effectiveRowspan[key] && effectiveRowspan[key][slotIdx]) || 1;
-        slotRecords.push({ key, grp, rowspan, hasRowspan: rowspan > 1 });
-      });
-      
+    </tr>` : sortedSlots.map((slot) => {
       return `<tr>
-        <td style="padding:6px 8px;border-right:1px solid #e0e0e0;border-bottom:1px solid #f0f0f0;text-align:center;font-weight:600;color:#555;position:relative;${slotRecords.length>1?'background:#fafafa;':''}">
+        <td style="padding:6px 8px;border-right:1px solid #e0e0e0;border-bottom:1px solid #f0f0f0;text-align:center;font-weight:600;color:#555;position:relative;">
           ${slot}
           <button onclick="deleteTimeSlot('${slot}')" class="slot-del" style="position:absolute;right:2px;top:50%;transform:translateY(-50%);font-size:14px;color:#ccc;background:none;border:none;cursor:pointer;display:none;">×</button>
         </td>
         ${dates.map(d => {
-          const dateRecords = slotRecords.filter(sr => sr.grp.date === d.date);
-          // Skip if this column is covered by a rowspan from above AND no records start at this slot
-          if (spanTracker[slotIdx][d.date] && dateRecords.length === 0) return '';
-          if (dateRecords.length === 0) {
+          const cellRecords = cachedSchedule.filter(r => r.record_date === d.date && r.time_slot === slot);
+          if (cellRecords.length === 0) {
             return `<td style="padding:2px;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:top;cursor:pointer;"
               onclick="openScheduleModal('${slot}', '${d.date}')"></td>`;
           }
-          // Multiple records on same date -> stack in one cell
-          const maxRowspan = Math.max(...dateRecords.map(sr => sr.rowspan));
-          const mergedRowspan = maxRowspan > 1 ? maxRowspan : 0;
           return `<td style="padding:0;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:middle;cursor:pointer;"
-            ${mergedRowspan ? `rowspan="${mergedRowspan}"` : ''}
             onclick="openScheduleModal('${slot}', '${d.date}')">
-            <div style="display:flex;flex-direction:column;${mergedRowspan?'height:100%;justify-content:center;':''}">
-            ${dateRecords.map(sr => {
-              const recordId = cachedSchedule.find(r => r.record_date===d.date && r.subject===sr.grp.subject && r.label===sr.grp.label)?.id || '';
-              return `<div style="margin:1px 0;padding:2px 4px;border-radius:2px;font-size:9px;color:#fff;white-space:normal;word-break:break-all;line-height:1.3;background:${SUBJECT_GRADIENTS[sr.grp.subject] || '#888'};cursor:pointer;"
-                onclick="event.stopPropagation();editScheduleRecordModal(${recordId}, '${sr.grp.subject.replace(/'/g, "\\'")}', '${sr.grp.label.replace(/'/g, "\\'")}', '${slot}', '${d.date}')">
-                ${escapeHtml(sr.grp.label || sr.grp.subject)}
+            <div style="display:flex;flex-direction:column;">
+            ${cellRecords.map(r => {
+              return `<div style="margin:1px 0;padding:2px 4px;border-radius:2px;font-size:9px;color:#fff;white-space:normal;word-break:break-all;line-height:1.3;background:${SUBJECT_GRADIENTS[r.subject] || '#888'};cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:2px;"
+                onclick="event.stopPropagation();editScheduleRecordModal(${r.id}, '${(r.subject||'').replace(/'/g, "\\'")}', '${(r.label||'').replace(/'/g, "\\'")}', '${slot}', '${d.date}')">
+                <span style="flex:1;">${escapeHtml(r.label || r.subject)}</span>
+                <span onclick="event.stopPropagation();deleteScheduleRecord(event, ${r.id})" style="font-size:11px;color:rgba(255,255,255,0.7);cursor:pointer;padding:0 2px;" title="删除">×</span>
               </div>`;
             }).join('')}
             </div>
@@ -3037,20 +2982,22 @@ async function saveScheduleRecord() {
   if (slots.length === 0) { showToast('请选择时段'); return; }
   try {
     if (id) {
-      // Delete all old rows for this group, then re-insert
-      const oldLabel = document.getElementById('schOldLabel').value;
-      const oldSubject = document.getElementById('schOldSubject').value;
-      const oldDate = document.getElementById('schOldDate').value || recordDate;
-      const candidates = cachedSchedule.filter(r =>
-        r.record_date === oldDate && r.subject === oldSubject && r.label === oldLabel
-      );
-      for (const c of candidates) {
-        await sb.from('daily_schedule').delete().eq('id', c.id);
-      }
-    }
-    for (const slot of slots) {
-      const res = await sb.from('daily_schedule').insert({ time_slot: slot, record_date: recordDate, subject, label });
+      // 编辑模式：直接更新这一条记录
+      const res = await sb.from('daily_schedule').update({
+        time_slot: slots[0], record_date: recordDate, subject, label
+      }).eq('id', id);
       if (res.error) throw res.error;
+      // 如果选了多个时段，其余时段作为新记录插入
+      for (let i = 1; i < slots.length; i++) {
+        const res2 = await sb.from('daily_schedule').insert({ time_slot: slots[i], record_date: recordDate, subject, label });
+        if (res2.error) throw res2.error;
+      }
+    } else {
+      // 添加模式：每个时段创建一条记录
+      for (const slot of slots) {
+        const res = await sb.from('daily_schedule').insert({ time_slot: slot, record_date: recordDate, subject, label });
+        if (res.error) throw res.error;
+      }
     }
     await reloadSchedule();
     closeModal('scheduleRecordModal');
@@ -3060,13 +3007,7 @@ async function saveScheduleRecord() {
 
 function editScheduleRecordModal(id, subject, label, slot, explicitDate) {
   if (scheduleTimeSlots.length === 0) { showToast('请先添加时段'); return; }
-  // 使用传入的日期，避免因缓存问题导致查找失败
   const recordDate = explicitDate || '';
-  // Find all slots for this same group (same date, subject, label)
-  const group = cachedSchedule.filter(r =>
-    r.record_date === recordDate && r.subject === subject && r.label === label
-  );
-  const groupSlots = group.map(r => r.time_slot);
   document.getElementById('schId').value = id;
   document.getElementById('schDate').value = recordDate;
   document.getElementById('schSubject').value = subject;
@@ -3076,7 +3017,7 @@ function editScheduleRecordModal(id, subject, label, slot, explicitDate) {
   document.getElementById('schOldDate').value = recordDate;
   document.getElementById('schModalTitle').textContent = '编辑记录';
   document.getElementById('schSaveBtn').textContent = '更新';
-  populateSlotCheckboxes(groupSlots);
+  populateSlotCheckboxes(slot ? [slot] : null);
   openModal('scheduleRecordModal');
 }
 
