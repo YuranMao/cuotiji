@@ -1134,6 +1134,9 @@ body {
       <button class="btn-cancel" onclick="closeModal('scheduleRecordModal')">取消</button>
       <button class="btn-confirm" id="schSaveBtn" onclick="saveScheduleRecord()">保存</button>
     </div>
+    <div style="text-align:right;margin-top:8px;">
+      <button id="schDeleteBtn" onclick="deleteScheduleFromModal()" style="display:none;font-size:12px;padding:6px 14px;background:none;color:#e74c3c;border:1px solid #e74c3c;border-radius:6px;cursor:pointer;">删除记录</button>
+    </div>
   </div>
 </div>
 
@@ -2566,6 +2569,16 @@ const SUBJECT_GRADIENTS = {
   '英语': 'linear-gradient(90deg, #f0a04b, #d35400)',
   '政治': 'linear-gradient(90deg, #c39bd3, #8e44ad)'
 };
+const MATH_SUB_COLORS = {
+  '36讲': '#60a5fa',
+  '660': '#3b82f6',
+  '880': '#2563eb',
+  '1000b': '#1d4ed8'
+};
+function getScheduleCellColor(subject, label) {
+  if (subject === '数学' && MATH_SUB_COLORS[label]) return MATH_SUB_COLORS[label];
+  return SUBJECT_GRADIENTS[subject] || '#888';
+}
 let tlRangeStart = null;
 let tlRangeEnd = null;
 let tlViewMode = 'gantt'; // 'gantt' | 'calendar'
@@ -2865,10 +2878,10 @@ function renderScheduleGrid() {
             onclick="openScheduleModal('${slot}', '${d.date}')">
             <div style="display:flex;flex-direction:column;">
             ${cellRecords.map(r => {
-              return `<div style="margin:1px 0;padding:2px 4px;border-radius:2px;font-size:9px;color:#fff;white-space:normal;word-break:break-all;line-height:1.3;background:${SUBJECT_GRADIENTS[r.subject] || '#888'};cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:2px;"
+              const cellBg = getScheduleCellColor(r.subject, r.label);
+              return `<div style="margin:1px 0;padding:2px 4px;border-radius:2px;font-size:9px;color:#fff;white-space:normal;word-break:break-all;line-height:1.3;background:${cellBg};cursor:pointer;"
                 onclick="event.stopPropagation();editScheduleRecordModal(${r.id}, '${(r.subject||'').replace(/'/g, "\\'")}', '${(r.label||'').replace(/'/g, "\\'")}', '${slot}', '${d.date}')">
-                <span style="flex:1;">${escapeHtml(r.label || r.subject)}</span>
-                <span onclick="event.stopPropagation();deleteScheduleRecord(event, ${r.id})" style="font-size:11px;color:rgba(255,255,255,0.7);cursor:pointer;padding:0 2px;" title="删除">×</span>
+                ${escapeHtml(r.label || r.subject)}
               </div>`;
             }).join('')}
             </div>
@@ -2956,6 +2969,7 @@ async function addTodayRecord() {
   document.getElementById('schOldDate').value = '';
   document.getElementById('schModalTitle').textContent = '添加今日记录';
   document.getElementById('schSaveBtn').textContent = '保存';
+  document.getElementById('schDeleteBtn').style.display = 'none';
   populateSlotCheckboxes(null);
   openModal('scheduleRecordModal');
 }
@@ -2971,6 +2985,7 @@ function openScheduleModal(slot, date) {
   document.getElementById('schOldDate').value = '';
   document.getElementById('schModalTitle').textContent = '添加记录';
   document.getElementById('schSaveBtn').textContent = '保存';
+  document.getElementById('schDeleteBtn').style.display = 'none';
   populateSlotCheckboxes(slot ? [slot] : null);
   openModal('scheduleRecordModal');
 }
@@ -3020,6 +3035,7 @@ function editScheduleRecordModal(id, subject, label, slot, explicitDate) {
   document.getElementById('schOldDate').value = recordDate;
   document.getElementById('schModalTitle').textContent = '编辑记录';
   document.getElementById('schSaveBtn').textContent = '更新';
+  document.getElementById('schDeleteBtn').style.display = 'inline-block';
   populateSlotCheckboxes(slot ? [slot] : null);
   openModal('scheduleRecordModal');
 }
@@ -3034,12 +3050,14 @@ function scheduleNav(days) {
   reloadSchedule().then(() => renderScheduleGrid());
 }
 
-async function deleteScheduleRecord(event, id) {
-  event.stopPropagation();
-  if (!confirm('删除该记录？')) return;
+async function deleteScheduleFromModal() {
+  const id = document.getElementById('schId').value;
+  if (!id) return;
+  if (!confirm('确定删除这条记录？')) return;
   try {
     await sb.from('daily_schedule').delete().eq('id', id);
     await reloadSchedule();
+    closeModal('scheduleRecordModal');
     renderScheduleGrid();
     showToast('已删除');
   } catch (err) { showToast('删除失败: ' + err.message); }
