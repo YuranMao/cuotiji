@@ -2046,8 +2046,9 @@ async function refreshSidebar() {
 
   container.innerHTML = cachedChapters.map((ch, idx) => {
     const childKps = cachedKps.filter(kp => kp.chapter_id === ch.id);
+    const coreQCount = cachedCoreQuestions.filter(q => q.chapter_id == ch.id).length;
     const totalQuestions = childKps.reduce((sum, kp) =>
-      sum + cachedQuestions.filter(q => q.knowledge_point_id === kp.id).length, 0);
+      sum + cachedQuestions.filter(q => q.knowledge_point_id === kp.id).length, 0) + coreQCount;
     const isExpanded = selectedChapterId == ch.id;
 
     return `
