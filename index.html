@@ -1139,6 +1139,12 @@ body {
       <input type="text" id="schLabel" placeholder="例如：做完一章习题" autocomplete="off"
         style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
     </div>
+    <div class="form-group" id="schErrorBookGroup" style="display:none;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#555;">
+        <input type="checkbox" id="schInErrorBook" style="width:16px;height:16px;accent-color:#4a90d9;">
+        错题已入错题库
+      </label>
+    </div>
     <input type="hidden" id="schId">
     <input type="hidden" id="schOldLabel" value="">
     <input type="hidden" id="schOldSubject" value="">
@@ -2938,9 +2944,10 @@ function renderScheduleGrid() {
             <div style="display:flex;flex-direction:column;">
             ${cellRecords.map(r => {
               const cellBg = getScheduleCellColor(r.subject, r.label);
+              const errorBookIcon = r.in_error_book ? ' 📖' : '';
               return `<div style="margin:1px 0;padding:2px 4px;border-radius:2px;font-size:9px;color:#fff;white-space:normal;word-break:break-all;line-height:1.3;background:${cellBg};cursor:pointer;"
-                onclick="event.stopPropagation();editScheduleRecordModal(${r.id}, '${(r.subject||'').replace(/'/g, "\\'")}', '${(r.label||'').replace(/'/g, "\\'")}', '${slot}', '${d.date}')">
-                ${escapeHtml(r.label || r.subject)}
+                onclick="event.stopPropagation();editScheduleRecordModal(${r.id}, '${(r.subject||'').replace(/'/g, "\\'")}', '${(r.label||'').replace(/'/g, "\\'")}', '${slot}', '${d.date}', ${r.in_error_book||false})">
+                ${escapeHtml(r.label || r.subject)}${errorBookIcon}
               </div>`;
             }).join('')}
             </div>
@@ -3004,8 +3011,9 @@ async function deleteTimeSlot(slot) {
 }
 
 function onSchSubjectChange() {
-  document.getElementById('schSubTagGroup').style.display =
-    document.getElementById('schSubject').value === '数学' ? '' : 'none';
+  const isMath = document.getElementById('schSubject').value === '数学';
+  document.getElementById('schSubTagGroup').style.display = isMath ? '' : 'none';
+  document.getElementById('schErrorBookGroup').style.display = isMath ? '' : 'none';
 }
 function setSchSubTag(val) {
   const cur = document.getElementById('schSubTag').value;
@@ -3040,6 +3048,7 @@ async function addTodayRecord() {
   document.getElementById('schOldDate').value = '';
   document.getElementById('schSubTag').value = '';
   document.querySelectorAll('.sch-subtag-btn').forEach(btn => btn.style.opacity = '0.5');
+  document.getElementById('schInErrorBook').checked = false;
   document.getElementById('schModalTitle').textContent = '添加今日记录';
   document.getElementById('schSaveBtn').textContent = '保存';
   document.getElementById('schDeleteBtn').style.display = 'none';
@@ -3059,6 +3068,7 @@ function openScheduleModal(slot, date) {
   document.getElementById('schOldDate').value = '';
   document.getElementById('schSubTag').value = '';
   document.querySelectorAll('.sch-subtag-btn').forEach(btn => btn.style.opacity = '0.5');
+  document.getElementById('schInErrorBook').checked = false;
   document.getElementById('schModalTitle').textContent = '添加记录';
   document.getElementById('schSaveBtn').textContent = '保存';
   document.getElementById('schDeleteBtn').style.display = 'none';
@@ -3075,24 +3085,25 @@ async function saveScheduleRecord() {
   const subTag = document.getElementById('schSubTag').value;
   const label = subTag ? subTag + '：' + rawLabel : rawLabel;
   const slots = getCheckedSlots();
+  const inErrorBook = document.getElementById('schInErrorBook').checked;
   if (!rawLabel) { showToast('请输入任务名称'); return; }
   if (slots.length === 0) { showToast('请选择时段'); return; }
   try {
     if (id) {
       // 编辑模式：直接更新这一条记录
       const res = await sb.from('daily_schedule').update({
-        time_slot: slots[0], record_date: recordDate, subject, label
+        time_slot: slots[0], record_date: recordDate, subject, label, in_error_book: inErrorBook
       }).eq('id', id);
       if (res.error) throw res.error;
       // 如果选了多个时段，其余时段作为新记录插入
       for (let i = 1; i < slots.length; i++) {
-        const res2 = await sb.from('daily_schedule').insert({ time_slot: slots[i], record_date: recordDate, subject, label });
+        const res2 = await sb.from('daily_schedule').insert({ time_slot: slots[i], record_date: recordDate, subject, label, in_error_book: inErrorBook });
         if (res2.error) throw res2.error;
       }
     } else {
       // 添加模式：每个时段创建一条记录
       for (const slot of slots) {
-        const res = await sb.from('daily_schedule').insert({ time_slot: slot, record_date: recordDate, subject, label });
+        const res = await sb.from('daily_schedule').insert({ time_slot: slot, record_date: recordDate, subject, label, in_error_book: inErrorBook });
         if (res.error) throw res.error;
       }
     }
@@ -3102,7 +3113,7 @@ async function saveScheduleRecord() {
   } catch (err) { showToast((id ? '更新' : '添加') + '失败: ' + err.message); }
 }
 
-function editScheduleRecordModal(id, subject, label, slot, explicitDate) {
+function editScheduleRecordModal(id, subject, label, slot, explicitDate, inErrorBook) {
   if (scheduleTimeSlots.length === 0) { showToast('请先添加时段'); return; }
   const recordDate = explicitDate || '';
   // 解析 label：子标签：任务名称
@@ -3115,6 +3126,7 @@ function editScheduleRecordModal(id, subject, label, slot, explicitDate) {
   document.getElementById('schSubject').value = subject;
   document.getElementById('schLabel').value = taskLabel;
   document.getElementById('schSubTag').value = subTagVal;
+  document.getElementById('schInErrorBook').checked = !!inErrorBook;
   document.getElementById('schOldLabel').value = label;
   document.getElementById('schOldSubject').value = subject;
   document.getElementById('schOldDate').value = recordDate;
