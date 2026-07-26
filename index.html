@@ -1126,9 +1126,11 @@ body {
       <label>子标签</label>
       <div id="schMathSubTags" style="display:flex;gap:6px;flex-wrap:wrap;">
         <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('36讲')" style="padding:4px 12px;font-size:12px;background:#60a5fa;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">36讲</button>
+        <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('没咋了强化')" style="padding:4px 12px;font-size:12px;background:#60a5fa;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">没咋了强化</button>
+        <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('线代三轮复习')" style="padding:4px 12px;font-size:12px;background:#4e94f8;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">线代三轮复习</button>
         <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('660')" style="padding:4px 12px;font-size:12px;background:#3b82f6;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">660</button>
-        <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('880')" style="padding:4px 12px;font-size:12px;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">880</button>
         <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('1000b')" style="padding:4px 12px;font-size:12px;background:#1d4ed8;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">1000b</button>
+        <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('880')" style="padding:4px 12px;font-size:12px;background:#1e3a8a;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">880</button>
       </div>
       <input type="hidden" id="schSubTag" value="">
     </div>
@@ -2622,9 +2624,11 @@ const SUBJECT_GRADIENTS = {
 };
 const MATH_SUB_COLORS = {
   '36讲': '#60a5fa',
+  '没咋了强化': '#60a5fa',
+  '线代三轮复习': '#4e94f8',
   '660': '#3b82f6',
-  '880': '#2563eb',
-  '1000b': '#1d4ed8'
+  '1000b': '#1d4ed8',
+  '880': '#1e3a8a'
 };
 function getScheduleCellColor(subject, label) {
   if (subject === '数学' && label) {
