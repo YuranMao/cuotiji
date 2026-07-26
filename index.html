@@ -1122,16 +1122,20 @@ body {
         <option>数学</option><option>专业课</option><option>英语</option><option>政治</option>
       </select>
     </div>
+    <div class="form-group" id="schSubTagGroup">
+      <label>子标签</label>
+      <div id="schMathSubTags" style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('36讲')" style="padding:4px 12px;font-size:12px;background:#60a5fa;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">36讲</button>
+        <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('660')" style="padding:4px 12px;font-size:12px;background:#3b82f6;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">660</button>
+        <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('880')" style="padding:4px 12px;font-size:12px;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">880</button>
+        <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('1000b')" style="padding:4px 12px;font-size:12px;background:#1d4ed8;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">1000b</button>
+      </div>
+      <input type="hidden" id="schSubTag" value="">
+    </div>
     <div class="form-group">
       <label>任务名称</label>
       <input type="text" id="schLabel" placeholder="例如：做完一章习题" autocomplete="off"
         style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
-      <div id="schMathSubTags" style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
-        <button type="button" onclick="setSchLabel('36讲')" style="padding:4px 12px;font-size:12px;background:#60a5fa;color:#fff;border:none;border-radius:4px;cursor:pointer;">36讲</button>
-        <button type="button" onclick="setSchLabel('660')" style="padding:4px 12px;font-size:12px;background:#3b82f6;color:#fff;border:none;border-radius:4px;cursor:pointer;">660</button>
-        <button type="button" onclick="setSchLabel('880')" style="padding:4px 12px;font-size:12px;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer;">880</button>
-        <button type="button" onclick="setSchLabel('1000b')" style="padding:4px 12px;font-size:12px;background:#1d4ed8;color:#fff;border:none;border-radius:4px;cursor:pointer;">1000b</button>
-      </div>
     </div>
     <input type="hidden" id="schId">
     <input type="hidden" id="schOldLabel" value="">
@@ -2583,7 +2587,11 @@ const MATH_SUB_COLORS = {
   '1000b': '#1d4ed8'
 };
 function getScheduleCellColor(subject, label) {
-  if (subject === '数学' && MATH_SUB_COLORS[label]) return MATH_SUB_COLORS[label];
+  if (subject === '数学' && label) {
+    for (const [tag, color] of Object.entries(MATH_SUB_COLORS)) {
+      if (label === tag || label.startsWith(tag + '：')) return color;
+    }
+  }
   return SUBJECT_GRADIENTS[subject] || '#888';
 }
 let tlRangeStart = null;
@@ -2952,11 +2960,16 @@ async function deleteTimeSlot(slot) {
 }
 
 function onSchSubjectChange() {
-  document.getElementById('schMathSubTags').style.display =
-    document.getElementById('schSubject').value === '数学' ? 'flex' : 'none';
+  document.getElementById('schSubTagGroup').style.display =
+    document.getElementById('schSubject').value === '数学' ? '' : 'none';
 }
-function setSchLabel(val) {
-  document.getElementById('schLabel').value = val;
+function setSchSubTag(val) {
+  const cur = document.getElementById('schSubTag').value;
+  // Toggle: click again to unselect
+  document.getElementById('schSubTag').value = (cur === val) ? '' : val;
+  document.querySelectorAll('.sch-subtag-btn').forEach(btn => {
+    btn.style.opacity = btn.textContent === val && cur !== val ? '1' : '0.5';
+  });
 }
 function populateSlotCheckboxes(checkedSlots) {
   const list = document.getElementById('schTimeSlotList');
@@ -2981,6 +2994,8 @@ async function addTodayRecord() {
   document.getElementById('schOldLabel').value = '';
   document.getElementById('schOldSubject').value = '';
   document.getElementById('schOldDate').value = '';
+  document.getElementById('schSubTag').value = '';
+  document.querySelectorAll('.sch-subtag-btn').forEach(btn => btn.style.opacity = '0.5');
   document.getElementById('schModalTitle').textContent = '添加今日记录';
   document.getElementById('schSaveBtn').textContent = '保存';
   document.getElementById('schDeleteBtn').style.display = 'none';
@@ -2998,6 +3013,8 @@ function openScheduleModal(slot, date) {
   document.getElementById('schOldLabel').value = '';
   document.getElementById('schOldSubject').value = '';
   document.getElementById('schOldDate').value = '';
+  document.getElementById('schSubTag').value = '';
+  document.querySelectorAll('.sch-subtag-btn').forEach(btn => btn.style.opacity = '0.5');
   document.getElementById('schModalTitle').textContent = '添加记录';
   document.getElementById('schSaveBtn').textContent = '保存';
   document.getElementById('schDeleteBtn').style.display = 'none';
@@ -3010,9 +3027,11 @@ async function saveScheduleRecord() {
   const id = document.getElementById('schId').value;
   const recordDate = document.getElementById('schDate').value;
   const subject = document.getElementById('schSubject').value;
-  const label = document.getElementById('schLabel').value.trim();
+  const rawLabel = document.getElementById('schLabel').value.trim();
+  const subTag = document.getElementById('schSubTag').value;
+  const label = subTag ? subTag + '：' + rawLabel : rawLabel;
   const slots = getCheckedSlots();
-  if (!label) { showToast('请输入任务名称'); return; }
+  if (!rawLabel) { showToast('请输入任务名称'); return; }
   if (slots.length === 0) { showToast('请选择时段'); return; }
   try {
     if (id) {
@@ -3042,10 +3061,16 @@ async function saveScheduleRecord() {
 function editScheduleRecordModal(id, subject, label, slot, explicitDate) {
   if (scheduleTimeSlots.length === 0) { showToast('请先添加时段'); return; }
   const recordDate = explicitDate || '';
+  // 解析 label：子标签：任务名称
+  const [parsedTag, ...taskParts] = label.split('：');
+  const hasSubTag = parsedTag && MATH_SUB_COLORS[parsedTag];
+  const subTagVal = hasSubTag ? parsedTag : '';
+  const taskLabel = hasSubTag ? taskParts.join('：') : label;
   document.getElementById('schId').value = id;
   document.getElementById('schDate').value = recordDate;
   document.getElementById('schSubject').value = subject;
-  document.getElementById('schLabel').value = label;
+  document.getElementById('schLabel').value = taskLabel;
+  document.getElementById('schSubTag').value = subTagVal;
   document.getElementById('schOldLabel').value = label;
   document.getElementById('schOldSubject').value = subject;
   document.getElementById('schOldDate').value = recordDate;
@@ -3054,6 +3079,10 @@ function editScheduleRecordModal(id, subject, label, slot, explicitDate) {
   document.getElementById('schDeleteBtn').style.display = 'inline-block';
   populateSlotCheckboxes(slot ? [slot] : null);
   onSchSubjectChange();
+  // 高亮当前子标签
+  document.querySelectorAll('.sch-subtag-btn').forEach(btn => {
+    btn.style.opacity = btn.textContent === subTagVal ? '1' : '0.5';
+  });
   openModal('scheduleRecordModal');
 }
 
