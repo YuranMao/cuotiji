@@ -1125,6 +1125,7 @@ body {
     <input type="hidden" id="schId">
     <input type="hidden" id="schOldLabel" value="">
     <input type="hidden" id="schOldSubject" value="">
+    <input type="hidden" id="schOldDate" value="">
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal('scheduleRecordModal')">取消</button>
       <button class="btn-confirm" id="schSaveBtn" onclick="saveScheduleRecord()">保存</button>
@@ -2157,7 +2158,7 @@ async function refreshMainContent() {
       return `
       <div class="question-card" style="border-left:3px solid #e67e22;"
            draggable="true"
-           ondragstart="onDragStart(event, 'core', ${q.id}, ${selectedCoreChapterId})"
+           ondragstart="onDragStart(event, 'core', ${q.id}, ${selectedCoreChapterId}, ${selectedCoreChapterId})"
            ondragover="onDragOverCard(event)"
            ondragleave="onDragLeaveCard(event)"
            ondrop="onDropCard(event, ${q.id}, 'core', ${selectedCoreChapterId})">
@@ -2997,6 +2998,7 @@ async function addTodayRecord() {
   document.getElementById('schLabel').value = '';
   document.getElementById('schOldLabel').value = '';
   document.getElementById('schOldSubject').value = '';
+  document.getElementById('schOldDate').value = '';
   document.getElementById('schModalTitle').textContent = '添加今日记录';
   document.getElementById('schSaveBtn').textContent = '保存';
   populateSlotCheckboxes(null);
@@ -3011,6 +3013,7 @@ function openScheduleModal(slot, date) {
   document.getElementById('schLabel').value = '';
   document.getElementById('schOldLabel').value = '';
   document.getElementById('schOldSubject').value = '';
+  document.getElementById('schOldDate').value = '';
   document.getElementById('schModalTitle').textContent = '添加记录';
   document.getElementById('schSaveBtn').textContent = '保存';
   populateSlotCheckboxes(slot ? [slot] : null);
@@ -3030,8 +3033,9 @@ async function saveScheduleRecord() {
       // Delete all old rows for this group, then re-insert
       const oldLabel = document.getElementById('schOldLabel').value;
       const oldSubject = document.getElementById('schOldSubject').value;
+      const oldDate = document.getElementById('schOldDate').value || recordDate;
       const candidates = cachedSchedule.filter(r =>
-        r.record_date === recordDate && r.subject === oldSubject && r.label === oldLabel
+        r.record_date === oldDate && r.subject === oldSubject && r.label === oldLabel
       );
       for (const c of candidates) {
         await sb.from('daily_schedule').delete().eq('id', c.id);
@@ -3063,6 +3067,7 @@ function editScheduleRecordModal(id, subject, label, slot) {
   document.getElementById('schLabel').value = label;
   document.getElementById('schOldLabel').value = label;
   document.getElementById('schOldSubject').value = subject;
+  document.getElementById('schOldDate').value = recordDate;
   document.getElementById('schModalTitle').textContent = '编辑记录';
   document.getElementById('schSaveBtn').textContent = '更新';
   populateSlotCheckboxes(groupSlots);
