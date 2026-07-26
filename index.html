@@ -1118,13 +1118,20 @@ body {
     </div>
     <div class="form-group">
       <label>科目</label>
-      <select id="schSubject" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+      <select id="schSubject" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;" onchange="onSchSubjectChange()">
         <option>数学</option><option>专业课</option><option>英语</option><option>政治</option>
       </select>
     </div>
     <div class="form-group">
       <label>任务名称</label>
-      <input type="text" id="schLabel" placeholder="例如：做完一章习题" autocomplete="off">
+      <input type="text" id="schLabel" placeholder="例如：做完一章习题" autocomplete="off"
+        style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+      <div id="schMathSubTags" style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+        <button type="button" onclick="setSchLabel('36讲')" style="padding:4px 12px;font-size:12px;background:#60a5fa;color:#fff;border:none;border-radius:4px;cursor:pointer;">36讲</button>
+        <button type="button" onclick="setSchLabel('660')" style="padding:4px 12px;font-size:12px;background:#3b82f6;color:#fff;border:none;border-radius:4px;cursor:pointer;">660</button>
+        <button type="button" onclick="setSchLabel('880')" style="padding:4px 12px;font-size:12px;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer;">880</button>
+        <button type="button" onclick="setSchLabel('1000b')" style="padding:4px 12px;font-size:12px;background:#1d4ed8;color:#fff;border:none;border-radius:4px;cursor:pointer;">1000b</button>
+      </div>
     </div>
     <input type="hidden" id="schId">
     <input type="hidden" id="schOldLabel" value="">
@@ -2944,6 +2951,13 @@ async function deleteTimeSlot(slot) {
   } catch (err) { showToast('删除失败: ' + (err.message || '')); }
 }
 
+function onSchSubjectChange() {
+  document.getElementById('schMathSubTags').style.display =
+    document.getElementById('schSubject').value === '数学' ? 'flex' : 'none';
+}
+function setSchLabel(val) {
+  document.getElementById('schLabel').value = val;
+}
 function populateSlotCheckboxes(checkedSlots) {
   const list = document.getElementById('schTimeSlotList');
   list.innerHTML = scheduleTimeSlots.map(s =>
@@ -2971,6 +2985,7 @@ async function addTodayRecord() {
   document.getElementById('schSaveBtn').textContent = '保存';
   document.getElementById('schDeleteBtn').style.display = 'none';
   populateSlotCheckboxes(null);
+  onSchSubjectChange();
   openModal('scheduleRecordModal');
 }
 
@@ -2987,6 +3002,7 @@ function openScheduleModal(slot, date) {
   document.getElementById('schSaveBtn').textContent = '保存';
   document.getElementById('schDeleteBtn').style.display = 'none';
   populateSlotCheckboxes(slot ? [slot] : null);
+  onSchSubjectChange();
   openModal('scheduleRecordModal');
 }
 
@@ -3037,6 +3053,7 @@ function editScheduleRecordModal(id, subject, label, slot, explicitDate) {
   document.getElementById('schSaveBtn').textContent = '更新';
   document.getElementById('schDeleteBtn').style.display = 'inline-block';
   populateSlotCheckboxes(slot ? [slot] : null);
+  onSchSubjectChange();
   openModal('scheduleRecordModal');
 }
 
