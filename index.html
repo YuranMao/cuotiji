@@ -2976,8 +2976,16 @@ function renderCalendar() {
         // Get the day key for today
         const todayKey = today;
 
+        // Find monthly goals for this month
+        const monthGoals = MONTHLY_GOALS.find(g => g.month === m.name);
+        const goalSubjects = monthGoals ? Object.entries(monthGoals.subjects).filter(([, v]) => v.goal) : [];
+        const goalDots = goalSubjects.length > 0 ? `<div style="display:flex;justify-content:center;gap:4px;margin-bottom:6px;">
+          ${goalSubjects.map(([s, v]) => `<span title="${s}：${v.goal}" style="width:8px;height:8px;border-radius:50%;background:${SUBJECT_COLORS[s]};display:inline-block;cursor:default;"></span>`).join('')}
+        </div>` : '';
+
         return `<div style="background:#fff;border-radius:10px;padding:8px;box-shadow:0 1px 3px rgba(0,0,0,.05);">
-          <div style="font-weight:700;font-size:14px;text-align:center;padding:4px 0 8px;color:#333;">${m.name}</div>
+          <div style="font-weight:700;font-size:14px;text-align:center;padding:4px 0 4px;color:#333;">${m.name}</div>
+          ${goalDots}
           <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:10px;text-align:center;color:#999;margin-bottom:2px;">
             ${['日','一','二','三','四','五','六'].map(d => `<div>${d}</div>`).join('')}
           </div>
