@@ -1759,12 +1759,22 @@ async function swapChapterOrder(id1, id2) {
   const a = cachedChapters.find(c => c.id == id1);
   const b = cachedChapters.find(c => c.id == id2);
   if (!a || !b) return;
-  try {
-    await sb.from('chapters').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id);
-    await sb.from('chapters').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
-    await reloadChapters();
-    await refreshSidebar();
-  } catch (err) { showToast('排序失败: ' + err.message); }
+  // Optimistic: swap sort_order in cache
+  const tmp = a.sort_order;
+  a.sort_order = b.sort_order;
+  b.sort_order = tmp;
+  // Swap in DOM (sidebar tree)
+  const elA = document.querySelector(`.tree-chapter[data-id="${id1}"]`);
+  const elB = document.querySelector(`.tree-chapter[data-id="${id2}"]`);
+  if (elA && elB && elA.parentNode === elB.parentNode) {
+    const nextA = elA.nextSibling === elB ? elA : elA.nextSibling;
+    elB.parentNode.insertBefore(elA, elB);
+    elB.parentNode.insertBefore(elB, nextA);
+  }
+  // Fire API in background
+  sb.from('chapters').update({ sort_order: b.sort_order }).eq('id', a.id).then(() => {
+    return sb.from('chapters').update({ sort_order: a.sort_order }).eq('id', b.id);
+  }).catch(err => showToast('排序保存失败: ' + err.message));
 }
 
 async function swapKpOrder(id1, id2, chapterId) {
@@ -1772,12 +1782,22 @@ async function swapKpOrder(id1, id2, chapterId) {
   const a = childKps.find(kp => kp.id == id1);
   const b = childKps.find(kp => kp.id == id2);
   if (!a || !b) return;
-  try {
-    await sb.from('knowledge_points').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id);
-    await sb.from('knowledge_points').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
-    await reloadKps();
-    await refreshSidebar();
-  } catch (err) { showToast('排序失败: ' + err.message); }
+  // Optimistic: swap sort_order in cache
+  const tmp = a.sort_order;
+  a.sort_order = b.sort_order;
+  b.sort_order = tmp;
+  // Swap in DOM
+  const elA = document.querySelector(`.kp-item[data-id="${id1}"]`);
+  const elB = document.querySelector(`.kp-item[data-id="${id2}"]`);
+  if (elA && elB && elA.parentNode === elB.parentNode) {
+    const nextA = elA.nextSibling === elB ? elA : elA.nextSibling;
+    elB.parentNode.insertBefore(elA, elB);
+    elB.parentNode.insertBefore(elB, nextA);
+  }
+  // Fire API in background
+  sb.from('knowledge_points').update({ sort_order: b.sort_order }).eq('id', a.id).then(() => {
+    return sb.from('knowledge_points').update({ sort_order: a.sort_order }).eq('id', b.id);
+  }).catch(err => showToast('排序保存失败: ' + err.message));
 }
 
 // ---- Card drag handlers (错题 + 重要例题) ----
@@ -1805,33 +1825,53 @@ async function onDropCard(e, targetId, targetType, targetParentId) {
   dragData = null;
 }
 
+function swapDomCards(id1, id2) {
+  const elA = document.querySelector(`.question-card[data-id="${id1}"]`);
+  const elB = document.querySelector(`.question-card[data-id="${id2}"]`);
+  if (!elA || !elB || elA.parentNode !== elB.parentNode) return;
+  const nextA = elA.nextSibling === elB ? elA : elA.nextSibling;
+  elB.parentNode.insertBefore(elA, elB);
+  elB.parentNode.insertBefore(elB, nextA);
+}
+
+function swapSortOrderInList(list, id1, id2) {
+  const a = list.find(it => it.id == id1);
+  const b = list.find(it => it.id == id2);
+  if (!a || !b) return;
+  const tmp = a.sort_order;
+  a.sort_order = b.sort_order;
+  b.sort_order = tmp;
+}
+
 async function swapQuestionOrder(id1, id2, kpId) {
   const list = cachedQuestions.filter(q => q.knowledge_point_id == kpId);
+  if (!list.find(q => q.id == id1) || !list.find(q => q.id == id2)) return;
+  // Optimistic: instant DOM swap
+  swapDomCards(id1, id2);
+  swapSortOrderInList(list, id1, id2);
   const a = list.find(q => q.id == id1);
   const b = list.find(q => q.id == id2);
-  if (!a || !b) return;
-  try {
-    await sb.from('questions').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id);
-    await sb.from('questions').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
-    await reloadQuestions();
-    await refreshMainContent();
-  } catch (err) { showToast('排序失败: ' + err.message); }
+  // Fire API in background
+  sb.from('questions').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id).then(() => {
+    return sb.from('questions').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
+  }).catch(err => showToast('排序保存失败: ' + err.message));
 }
 
 async function swapCoreQOrder(id1, id2, chapterId) {
   const list = cachedCoreQuestions.filter(q => q.chapter_id == chapterId);
-  const a = list.find(q => q.id == id1);
-  const b = list.find(q => q.id == id2);
-  if (!a || !b) {
+  if (!list.find(q => q.id == id1) || !list.find(q => q.id == id2)) {
     showToast('排序失败：未找到对应例题记录，请刷新后重试');
     return;
   }
-  try {
-    await sb.from('core_questions').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id);
-    await sb.from('core_questions').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
-    await reloadCoreQuestions();
-    await refreshMainContent();
-  } catch (err) { showToast('排序失败: ' + err.message); }
+  // Optimistic: instant DOM swap
+  swapDomCards(id1, id2);
+  swapSortOrderInList(list, id1, id2);
+  const a = list.find(q => q.id == id1);
+  const b = list.find(q => q.id == id2);
+  // Fire API in background
+  sb.from('core_questions').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id).then(() => {
+    return sb.from('core_questions').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
+  }).catch(err => showToast('排序保存失败: ' + err.message));
 }
 
 // ---- 错题迁移到其他知识点 ----
@@ -2074,7 +2114,7 @@ async function refreshSidebar() {
     const isExpanded = selectedChapterId == ch.id;
 
     return `
-      <div class="tree-chapter">
+      <div class="tree-chapter" data-id="${ch.id}">
         <div class="chapter-header ${selectedChapterId == ch.id ? 'active' : ''}"
              draggable="true"
              ondragstart="onDragStart(event, 'chapter', ${ch.id})"
@@ -2094,7 +2134,7 @@ async function refreshSidebar() {
           ${childKps.map((kp, kpIdx) => {
             const kpCount = cachedQuestions.filter(q => q.knowledge_point_id === kp.id).length;
             return `
-              <div class="kp-item ${selectedKpId == kp.id ? 'active' : ''}"
+              <div class="kp-item ${selectedKpId == kp.id ? 'active' : ''}" data-id="${kp.id}"
                    draggable="true"
                    ondragstart="onDragStart(event, 'kp', ${kp.id}, ${ch.id})"
                    ondragover="onDragOverKp(event)"
@@ -2177,7 +2217,7 @@ async function refreshMainContent() {
       const isCompleted = correct >= 5;
       const log = q.review_log || [];
       return `
-      <div class="question-card" style="border-left:3px solid #e67e22;"
+      <div class="question-card" style="border-left:3px solid #e67e22;" data-id="${q.id}"
            draggable="true"
            ondragstart="onDragStart(event, 'core', ${q.id}, ${selectedCoreChapterId}, ${selectedCoreChapterId})"
            ondragover="onDragOverCard(event)"
@@ -2246,7 +2286,7 @@ async function refreshMainContent() {
     const isCompleted = correct >= 5;
     const log = q.review_log || [];
     return `
-      <div class="question-card"
+      <div class="question-card" data-id="${q.id}"
            draggable="true"
            ondragstart="onDragStart(event, 'question', ${q.id}, null, ${selectedKpId})"
            ondragover="onDragOverCard(event)"
