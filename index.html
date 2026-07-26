@@ -310,7 +310,7 @@ body {
 .question-card:active { cursor: grabbing; }
 .card-img-wrap {
   width: 100%;
-  height: 200px;
+  height: 100px;
   background: #fafafa;
   display: flex;
   align-items: center;
@@ -1808,7 +1808,10 @@ async function swapCoreQOrder(id1, id2, chapterId) {
   const list = cachedCoreQuestions.filter(q => q.chapter_id == chapterId);
   const a = list.find(q => q.id == id1);
   const b = list.find(q => q.id == id2);
-  if (!a || !b) return;
+  if (!a || !b) {
+    showToast('排序失败：未找到对应例题记录，请刷新后重试');
+    return;
+  }
   try {
     await sb.from('core_questions').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id);
     await sb.from('core_questions').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
