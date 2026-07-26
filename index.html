@@ -2892,24 +2892,29 @@ function renderScheduleGrid() {
           <button onclick="deleteTimeSlot('${slot}')" class="slot-del" style="position:absolute;right:2px;top:50%;transform:translateY(-50%);font-size:14px;color:#ccc;background:none;border:none;cursor:pointer;display:none;">×</button>
         </td>
         ${dates.map(d => {
-          // Skip if this column is covered by a rowspan from above
-          if (spanTracker[slotIdx][d.date]) return '';
           const dateRecords = slotRecords.filter(sr => sr.grp.date === d.date);
+          // Skip if this column is covered by a rowspan from above AND no records start at this slot
+          if (spanTracker[slotIdx][d.date] && dateRecords.length === 0) return '';
           if (dateRecords.length === 0) {
             return `<td style="padding:2px;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:top;cursor:pointer;"
               onclick="openScheduleModal('${slot}', '${d.date}')"></td>`;
           }
-          return dateRecords.map(sr => {
-            // For rowspan cells, find any record in the group (not just current slot)
-            const recordId = cachedSchedule.find(r => r.record_date===d.date && r.subject===sr.grp.subject && r.label===sr.grp.label)?.id || '';
-            return `<td style="padding:0;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:middle;cursor:pointer;"
-              ${sr.hasRowspan ? `rowspan="${sr.rowspan}"` : ''}
-              onclick="openScheduleModal('${slot}', '${d.date}')">
-              <div style="margin:0;padding:${sr.hasRowspan?'6px':'2px'} 4px;border-radius:2px;font-size:9px;color:#fff;white-space:normal;word-break:break-all;line-height:1.3;${sr.hasRowspan?'height:100%;display:flex;align-items:center;justify-content:center;':''}background:${SUBJECT_GRADIENTS[sr.grp.subject] || '#888'};cursor:pointer;"
+          // Multiple records on same date -> stack in one cell
+          const maxRowspan = Math.max(...dateRecords.map(sr => sr.rowspan));
+          const mergedRowspan = maxRowspan > 1 ? maxRowspan : 0;
+          return `<td style="padding:0;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:middle;cursor:pointer;"
+            ${mergedRowspan ? `rowspan="${mergedRowspan}"` : ''}
+            onclick="openScheduleModal('${slot}', '${d.date}')">
+            <div style="display:flex;flex-direction:column;${mergedRowspan?'height:100%;justify-content:center;':''}">
+            ${dateRecords.map(sr => {
+              const recordId = cachedSchedule.find(r => r.record_date===d.date && r.subject===sr.grp.subject && r.label===sr.grp.label)?.id || '';
+              return `<div style="margin:1px 0;padding:2px 4px;border-radius:2px;font-size:9px;color:#fff;white-space:normal;word-break:break-all;line-height:1.3;background:${SUBJECT_GRADIENTS[sr.grp.subject] || '#888'};cursor:pointer;"
                 onclick="event.stopPropagation();editScheduleRecordModal(${recordId}, '${sr.grp.subject.replace(/'/g, "\\'")}', '${sr.grp.label.replace(/'/g, "\\'")}', '${slot}')">
-                ${sr.hasRowspan ? escapeHtml(sr.grp.label || sr.grp.subject) : escapeHtml(sr.grp.label || sr.grp.subject)}
-              </div>
-            </td>`;
+                ${escapeHtml(sr.grp.label || sr.grp.subject)}
+              </div>`;
+            }).join('')}
+            </div>
+          </td>`;
           }).join('');
         }).join('')}
       </tr>`;
