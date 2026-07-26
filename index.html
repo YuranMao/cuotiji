@@ -1177,6 +1177,9 @@ const sb = supabase.createClient(supabaseUrl, supabaseKey);
 
 // ==================== 艾宾浩斯间隔 ====================
 const EBB_INTERVALS = [1, 2, 4, 7, 15, 30];
+const EBB_INTERVALS_EN = [1, 2, 4, 7]; // 英语仅4轮
+const EBB_LABELS_EN = { 1: '拼写', 2: '用法', 4: '综合缩词', 7: '缩词' };
+const EBB_MERGE_START = { '专业课': 4, '单词': 7 }; // 从该天起可合并后续复习
 
 // ==================== 侧边栏 ====================
 function openSidebar() {
@@ -2458,12 +2461,14 @@ function getEbbDynamicSchedule(item) {
   reviews = reviews.map(r => typeof r === 'string' ? { day: parseInt(r, 10) || 0, date: r } : r);
   const firstDate = item.first_date;
   const today = formatDate(new Date());
+  const subj = item.subject || '专业课';
+  const intervals = subj === '单词' ? EBB_INTERVALS_EN : EBB_INTERVALS;
   const result = [];
 
-  for (let i = 0; i < EBB_INTERVALS.length; i++) {
-    const interval = EBB_INTERVALS[i];
-    const prevInterval = i > 0 ? EBB_INTERVALS[i - 1] : 0;
-    const prevReview = i > 0 ? reviews.find(r => r.day === EBB_INTERVALS[i - 1]) : null;
+  for (let i = 0; i < intervals.length; i++) {
+    const interval = intervals[i];
+    const prevInterval = i > 0 ? intervals[i - 1] : 0;
+    const prevReview = i > 0 ? reviews.find(r => r.day === intervals[i - 1]) : null;
 
     let scheduled;
     if (i === 0) {
@@ -2521,7 +2526,14 @@ function renderEbb() {
   }
 
   const today = formatDate(new Date());
-  const headerCols = EBB_INTERVALS.map((d, i) => `<th title="第${d}天">${i+1}<br><small>d${d}</small></th>`).join('');
+  const isEnglish = ebbSubject === '单词';
+  const intervals = isEnglish ? EBB_INTERVALS_EN : EBB_INTERVALS;
+  const mergeDay = EBB_MERGE_START[ebbSubject] || 999;
+  const headerCols = intervals.map((d, i) => {
+    const label = isEnglish ? EBB_LABELS_EN[d] : `d${d}`;
+    const mergeNote = d >= mergeDay ? '<br><small style="color:#e67e22;">可合并</small>' : '';
+    return `<th title="${label}${d >= mergeDay ? '（可提前合并）' : ''}">${i+1}<br><small>${label}</small>${mergeNote}</th>`;
+  }).join('');
 
   container.innerHTML = subTabs + `
     <div class="ebb-wrap" style="max-height:calc(100vh - 240px);overflow:auto;">
@@ -2534,9 +2546,11 @@ function renderEbb() {
             <td class="eb-name" title="${escapeHtml(item.name)}" ondblclick="editEbbInline(${item.id})">${escapeHtml(item.name)}</td>
             <td class="eb-date">${item.first_date}</td>
             ${schedule.map(slot => {
+              const isMergeZone = slot.day >= mergeDay;
               if (slot.done) {
                 const reviewDate = slot.reviewDate ? slot.reviewDate.slice(5) : slot.scheduled.slice(5);
-                if (ebbSubject === '专业课') {
+                // Show notes textarea for 专业课 and 英语
+                if (ebbSubject === '专业课' || isEnglish) {
                   return `<td class="ebb-done" style="padding:2px;vertical-align:middle;">
                     <div style="display:flex;flex-direction:column;align-items:stretch;gap:2px;width:100%;">
                     <span style="font-size:11px;color:#27ae60;font-weight:600;text-align:center;">✓ ${reviewDate}</span>
@@ -2550,13 +2564,23 @@ function renderEbb() {
               }
               const isFuture = slot.scheduled > today;
               if (isFuture) {
-                return `<td><div style="font-size:11px;color:#bbb;">${slot.scheduled.slice(5)}</div></td>`;
+                const mergeHint = isMergeZone ? ' style="border-color:#e67e22;color:#e67e22;"' : ' style="opacity:0.5;"';
+                return `<td><div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+                  <span style="font-size:11px;color:#bbb;">${slot.scheduled.slice(5)}</span>
+                  <button onclick="toggleEbbReview(${item.id}, ${slot.day})"
+                    ${mergeHint}
+                    style="font-size:10px;padding:2px 8px;border-radius:4px;cursor:pointer;white-space:nowrap;background:#fff;border:1px solid #d9d9d9;">
+                    提前
+                  </button>
+                </div></td>`;
               }
               const isToday = slot.scheduled === today;
+              const btnStyle = isMergeZone ? 'style="border-color:#e67e22;color:#e67e22;background:#fff8f0;font-weight:600;"' : '';
               return `<td class="${isToday ? 'ebb-due' : ''}">
                 <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
                   <span style="font-size:11px;color:#e74c3c;font-weight:600;">${slot.scheduled.slice(5)}</span>
                   <button onclick="toggleEbbReview(${item.id}, ${slot.day})"
+                    ${btnStyle}
                     style="font-size:11px;padding:3px 10px;border-radius:4px;cursor:pointer;white-space:nowrap;
                     background:#fdeaea;color:#e74c3c;border:1px solid #e74c3c;">
                     已背
@@ -2713,6 +2737,51 @@ const MONTHLY_GOALS = [
     }
   }
 ];
+// 目标数据：优先从 localStorage 加载，否则用默认值
+const DEFAULT_GOALS = JSON.parse(JSON.stringify(MONTHLY_GOALS));
+function getGoalsData() {
+  try {
+    const saved = localStorage.getItem('monthly_goals');
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  return DEFAULT_GOALS;
+}
+function saveGoalsData(data) {
+  localStorage.setItem('monthly_goals', JSON.stringify(data));
+}
+let goalEditMode = false;
+
+function toggleGoalEdit() {
+  if (goalEditMode) {
+    // Save
+    const form = document.getElementById('goalsEditForm');
+    if (form) {
+      const data = JSON.parse(decodeURIComponent(form.getAttribute('data-original')));
+      const inputs = form.querySelectorAll('input');
+      inputs.forEach(inp => {
+        const [monthIdx, subj, field, ...rest] = inp.name.split('|');
+        const mi = parseInt(monthIdx);
+        if (field === 'goal' || field === 'completed' || field === 'issues') {
+          data[mi].subjects[subj][field] = inp.value;
+        } else if (field === 'week') {
+          const wk = rest[0];
+          if (!data[mi].subjects[subj].weeks) data[mi].subjects[subj].weeks = {};
+          data[mi].subjects[subj].weeks[wk] = inp.value;
+        }
+      });
+      saveGoalsData(data);
+      showToast('目标已保存');
+    }
+    goalEditMode = false;
+  } else {
+    goalEditMode = true;
+  }
+  refreshCalendarView();
+}
+
+function refreshCalendarView() {
+  if (tlViewMode === 'calendar') renderTimeline();
+}
 
 function showTlModal(id, subject, label, startDate, endDate) {
   if (id) {
@@ -2786,12 +2855,13 @@ function moveTimeline(dir) {
 function renderMonthlyGoals() {
   const subjects = ['专业课', '数学', '英语', '政治'];
   const subjIcons = { '专业课': '📘', '数学': '📐', '英语': '📝', '政治': '🏛' };
+  const goalsData = getGoalsData();
+  const WK_LABELS = ['第1周','第2周','第3周','第4周','第5周'];
 
-  return MONTHLY_GOALS.map(m => {
+  const content = goalsData.map((m, mi) => {
     const monthDateStart = `2026-${String(m.monthNum).padStart(2,'0')}-01`;
     const monthDateEnd = `2026-${String(m.monthNum).padStart(2,'0')}-${String(m.days).padStart(2,'0')}`;
     const impDatesThisMonth = IMPORTANT_DATES.filter(d => d.date >= monthDateStart && d.date <= monthDateEnd);
-
     const hasAnyGoal = subjects.some(s => m.subjects[s] && (m.subjects[s].goal || Object.values(m.subjects[s].weeks).some(w => w)));
 
     return `<div style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);margin-bottom:8px;">
@@ -2808,10 +2878,32 @@ function renderMonthlyGoals() {
       </div>
       <div style="padding:6px 0;">
         ${subjects.map(s => {
-          const sd = m.subjects[s];
-          if (!sd || (!sd.goal && !Object.values(sd.weeks).some(w => w))) return '';
-          const weekKeys = Object.keys(sd.weeks).sort((a,b)=>+a-+b);
+          const sd = m.subjects[s] || { goal: '', weeks: {}, completed: '', issues: '' };
+          if (!goalEditMode && (!sd || (!sd.goal && !Object.values(sd.weeks||{}).some(w => w)))) return '';
+          const weekKeys = Object.keys(sd.weeks||{}).sort((a,b)=>+a-+b);
           const hasWeeks = weekKeys.some(k => sd.weeks[k]);
+          const hasDone = sd.completed && sd.completed !== '/';
+          const hasIssues = sd.issues && sd.issues !== '/';
+          if (goalEditMode) {
+            return `<div style="padding:5px 14px;border-bottom:1px solid #f5f5f5;display:flex;gap:4px;align-items:flex-start;">
+              <span style="font-size:13px;flex-shrink:0;padding-top:1px;">${subjIcons[s]}</span>
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;">
+                <span style="font-weight:600;font-size:12px;color:${SUBJECT_COLORS[s]};">${s}</span>
+                <input name="${mi}|${s}|goal" value="${escapeHtml(sd.goal||'')}" placeholder="月目标" style="width:100%;padding:4px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
+                <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                  ${Array.from({length:m.days>28?5:4}, (_,k) => {
+                    const wk = String(k+1);
+                    const val = sd.weeks?.[wk] || '';
+                    return `<input name="${mi}|${s}|week|${wk}" value="${escapeHtml(val)}" placeholder="${WK_LABELS[k]}" style="flex:1;min-width:60px;padding:3px 6px;border:1px solid #ddd;border-radius:3px;font-size:11px;">`;
+                  }).join('')}
+                </div>
+                <div style="display:flex;gap:4px;">
+                  <input name="${mi}|${s}|completed" value="${escapeHtml(sd.completed||'')}" placeholder="已完成" style="flex:1;padding:3px 6px;border:1px solid #d5f0dd;border-radius:3px;font-size:11px;color:#27ae60;">
+                  <input name="${mi}|${s}|issues" value="${escapeHtml(sd.issues||'')}" placeholder="遗留问题" style="flex:1;padding:3px 6px;border:1px solid #f5d0d0;border-radius:3px;font-size:11px;color:#e74c3c;">
+                </div>
+              </div>
+            </div>`;
+          }
           return `<div style="padding:5px 14px;border-bottom:1px solid #f5f5f5;display:flex;gap:8px;align-items:flex-start;">
             <span style="font-size:13px;flex-shrink:0;padding-top:1px;">${subjIcons[s]}</span>
             <div style="flex:1;min-width:0;">
@@ -2822,14 +2914,19 @@ function renderMonthlyGoals() {
               ${hasWeeks ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;">
                 ${weekKeys.filter(k => sd.weeks[k]).map(k => `<span style="font-size:10px;padding:1px 8px;border-radius:10px;background:#f0f6ff;color:#4a90d9;">第${k}周：${sd.weeks[k]}</span>`).join('')}
               </div>` : ''}
-              ${sd.completed && sd.completed !== '/' ? `<div style="font-size:10px;color:#27ae60;margin-top:2px;">✓ ${sd.completed}</div>` : ''}
-              ${sd.issues && sd.issues !== '/' ? `<div style="font-size:10px;color:#e74c3c;margin-top:1px;">⚠ ${sd.issues}</div>` : ''}
+              ${hasDone ? `<div style="font-size:10px;color:#27ae60;margin-top:2px;">✓ ${sd.completed}</div>` : ''}
+              ${hasIssues ? `<div style="font-size:10px;color:#e74c3c;margin-top:1px;">⚠ ${sd.issues}</div>` : ''}
             </div>
           </div>`;
         }).join('')}
       </div>
     </div>`;
   }).join('');
+
+  if (goalEditMode) {
+    return `<form id="goalsEditForm" data-original="${encodeURIComponent(JSON.stringify(goalsData))}">${content}</form>`;
+  }
+  return content;
 }
 
 function renderTimeline() {
@@ -2843,9 +2940,12 @@ function renderTimeline() {
         <button onclick="setTlView('gantt')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${tlViewMode==='gantt'?'background:#4a90d9;color:#fff;border-color:#4a90d9':'background:#fff;color:#333'}">甘特图 + 复习</button>
         <button onclick="setTlView('calendar')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${tlViewMode==='calendar'?'background:#4a90d9;color:#fff;border-color:#4a90d9':'background:#fff;color:#333'}">月历 + 目标</button>
       </div>
-      ${tlViewMode === 'gantt' ? `<div><button class="tl-nav" onclick="moveTimeline(-1)">◀ 前两周</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        ${tlViewMode === 'calendar' ? `<button onclick="toggleGoalEdit()" style="padding:6px 12px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${goalEditMode?'background:#e67e22;color:#fff;':'background:#fff;color:#333'}">${goalEditMode?'保存目标':'编辑目标'}</button>` : ''}
+        ${tlViewMode === 'gantt' ? `<div><button class="tl-nav" onclick="moveTimeline(-1)">◀ 前两周</button>
         <span style="font-size:12px;color:#888;margin:0 8px;">${tlRangeStart} ~ ${tlRangeEnd}</span>
         <button class="tl-nav" onclick="moveTimeline(1)">后两周 ▶</button></div>` : ''}
+      </div>
     </div>`;
 
   if (tlViewMode === 'calendar') {
@@ -2956,7 +3056,16 @@ function renderCalendar() {
     { name: '12月', start: new Date(2026, 11, 1), days: 31 },
   ];
   const today = formatDate(new Date());
+  const WEEK1 = new Date(2026, 5, 22); // 第1周从6月22日开始
+  function getGlobalWeek(dateStr) {
+    return Math.floor((new Date(dateStr + 'T00:00:00').getTime() - WEEK1.getTime()) / 604800000) + 1;
+  }
   const subjects = ['数学', '专业课', '英语', '政治'];
+
+  // 把每月内的周编号映射为全局周编号
+  function buildGlobalWeekMap(monthStart) {
+    return getGlobalWeek(formatDate(new Date(2026, monthStart, 1)));
+  }
 
   return `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
@@ -2965,17 +3074,19 @@ function renderCalendar() {
         const todayMonth = 2026 + '-' + String(m.start.getMonth() + 1).padStart(2, '0');
 
         // Find monthly goals for this month
-        const monthGoals = MONTHLY_GOALS.find(g => g.month === m.name);
+        const monthGoals = getGoalsData().find(g => g.month === m.name);
         const goalSubjects = monthGoals ? Object.entries(monthGoals.subjects).filter(([, v]) => v.goal) : [];
 
-        // Build week goal map: weekNum -> { subject -> text }
-        const weekGoals = {}; // { 1: { '数学': 'xxx', ... }, 2: {...} }
+        // Build week goal map with global week numbers
+        const monthWeekBase = getGlobalWeek(formatDate(m.start)); // 该月1号的全局周号
+        const weekGoals = {}; // { globalWeek: { '数学': 'xxx', ... } }
         if (monthGoals) {
           for (const [s, sd] of Object.entries(monthGoals.subjects)) {
             for (const [wk, txt] of Object.entries(sd.weeks)) {
               if (txt && txt.trim()) {
-                if (!weekGoals[wk]) weekGoals[wk] = {};
-                weekGoals[wk][s] = txt;
+                const gwk = monthWeekBase + parseInt(wk) - 1;
+                if (!weekGoals[gwk]) weekGoals[gwk] = {};
+                weekGoals[gwk][s] = txt;
               }
             }
           }
@@ -2987,19 +3098,19 @@ function renderCalendar() {
           const ds = todayMonth + '-' + String(d).padStart(2, '0');
           const events = cachedTimeline.filter(ev => ev.end_date === ds);
           const impDate = IMPORTANT_DATES.find(id => id.date === ds);
-          // Check if this day is a week-start and has goals
-          const weekNum = Math.ceil(d / 7);
-          const dayWeekGoals = weekGoals[weekNum] || {};
+          // Check if this day matches a week that has goals
+          const globalWeek = getGlobalWeek(ds);
+          const dayWeekGoals = weekGoals[globalWeek] || {};
           monthDates.push({ day: d, date: ds, events, impDate, weekGoals: dayWeekGoals });
         }
 
         // Get the day key for today
         const todayKey = today;
 
-        // Build goal text summary
+        // Build goal text summary with global week numbers
         const goalSummary = goalSubjects.length > 0 ? goalSubjects.map(([s, v]) => {
           const subjWeeks = Object.entries(v.weeks).filter(([, t]) => t && t.trim());
-          const weekStr = subjWeeks.length > 0 ? ' · ' + subjWeeks.map(([wk]) => 'W' + wk).join(',') : '';
+          const weekStr = subjWeeks.length > 0 ? ' · W' + subjWeeks.map(([wk]) => monthWeekBase + parseInt(wk) - 1).join(',W') : '';
           const goalText = v.goal.length > 18 ? v.goal.slice(0, 16) + '…' : v.goal;
           return `<div style="display:flex;align-items:flex-start;gap:3px;font-size:9px;line-height:1.4;padding:1px 0;">
             <span style="width:6px;height:6px;border-radius:50%;background:${SUBJECT_COLORS[s]};flex-shrink:0;margin-top:3px;"></span>
