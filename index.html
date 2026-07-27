@@ -1178,9 +1178,7 @@ const sb = supabase.createClient(supabaseUrl, supabaseKey);
 
 // ==================== 艾宾浩斯间隔 ====================
 const EBB_INTERVALS = [1, 2, 4, 7, 15, 30];
-const EBB_INTERVALS_EN = [1, 2, 4, 7]; // 英语仅4轮
 const EBB_LABELS_EN = { 1: '拼写', 2: '用法', 4: '综合缩词', 7: '缩词' };
-const EBB_MERGE_START = { '专业课': 4, '单词': 7 }; // 从该天起可合并后续复习
 
 // ==================== 侧边栏 ====================
 function openSidebar() {
@@ -2463,7 +2461,7 @@ function getEbbDynamicSchedule(item) {
   const firstDate = item.first_date;
   const today = formatDate(new Date());
   const subj = item.subject || '专业课';
-  const intervals = subj === '单词' ? EBB_INTERVALS_EN : EBB_INTERVALS;
+  const intervals = EBB_INTERVALS;
   const result = [];
 
   for (let i = 0; i < intervals.length; i++) {
@@ -2528,12 +2526,10 @@ function renderEbb() {
 
   const today = formatDate(new Date());
   const isEnglish = ebbSubject === '单词';
-  const intervals = isEnglish ? EBB_INTERVALS_EN : EBB_INTERVALS;
-  const mergeDay = EBB_MERGE_START[ebbSubject] || 999;
+  const intervals = EBB_INTERVALS;
   const headerCols = intervals.map((d, i) => {
-    const label = isEnglish ? EBB_LABELS_EN[d] : `d${d}`;
-    const mergeNote = d >= mergeDay ? '<br><small style="color:#e67e22;">可合并</small>' : '';
-    return `<th title="${label}${d >= mergeDay ? '（可提前合并）' : ''}">${i+1}<br><small>${label}</small>${mergeNote}</th>`;
+    const label = (isEnglish && EBB_LABELS_EN[d]) ? EBB_LABELS_EN[d] : `d${d}`;
+    return `<th title="${label}">${i+1}<br><small>${label}</small></th>`;
   }).join('');
 
   container.innerHTML = subTabs + `
@@ -2547,11 +2543,12 @@ function renderEbb() {
             <td class="eb-name" title="${escapeHtml(item.name)}" ondblclick="editEbbInline(${item.id})">${escapeHtml(item.name)}</td>
             <td class="eb-date">${item.first_date}</td>
             ${schedule.map(slot => {
-              const isMergeZone = slot.day >= mergeDay;
+              const isFuture = slot.scheduled > today;
               const btnBaseStyle = 'font-size:11px;padding:3px 10px;border-radius:4px;cursor:pointer;white-space:nowrap;';
+              // 专业课前2天(d1,d2)不可提前；英语完全不可提前
+              const canPreComplete = !isEnglish && !(ebbSubject === '专业课' && (slot.day === 1 || slot.day === 2));
               if (slot.done) {
                 const reviewDate = slot.reviewDate ? slot.reviewDate.slice(5) : slot.scheduled.slice(5);
-                // Show notes textarea for 专业课 and 英语
                 if (ebbSubject === '专业课' || isEnglish) {
                   return `<td class="ebb-done" style="padding:2px;vertical-align:middle;">
                     <div style="display:flex;flex-direction:column;align-items:stretch;gap:2px;width:100%;">
@@ -2564,23 +2561,25 @@ function renderEbb() {
                 }
                 return `<td class="ebb-done"><div style="font-size:11px;color:#27ae60;">✓ ${reviewDate}</div></td>`;
               }
-              const isFuture = slot.scheduled > today;
-              const todayOrPast = slot.scheduled <= today;
-              const btnColor = isMergeZone
-                ? 'background:#fff8f0;color:#e67e22;border:1px solid #e67e22;'
-                : (isFuture
-                  ? 'background:#f0f4ff;color:#4a90d9;border:1px solid #b8cfe8;'
-                  : 'background:#fdeaea;color:#e74c3c;border:1px solid #e74c3c;');
-              const btnLabel = isFuture ? '提前' : '已背';
-              const dateColor = isFuture ? '#bbb' : '#e74c3c';
-              const dateWeight = isFuture ? '' : 'font-weight:600;';
-              const cellClass = (todayOrPast && slot.scheduled === today) ? 'ebb-due' : '';
+              if (isFuture) {
+                if (!canPreComplete) {
+                  return `<td><div style="font-size:11px;color:#bbb;">${slot.scheduled.slice(5)}</div></td>`;
+                }
+                return `<td><div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+                  <span style="font-size:11px;color:#bbb;">${slot.scheduled.slice(5)}</span>
+                  <button onclick="toggleEbbReview(${item.id}, ${slot.day})"
+                    style="${btnBaseStyle}background:#f0f4ff;color:#4a90d9;border:1px solid #b8cfe8;">
+                    提前
+                  </button>
+                </div></td>`;
+              }
+              const cellClass = (slot.scheduled === today) ? 'ebb-due' : '';
               return `<td class="${cellClass}">
                 <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
-                  <span style="font-size:11px;color:${dateColor};${dateWeight}">${slot.scheduled.slice(5)}</span>
+                  <span style="font-size:11px;color:#e74c3c;font-weight:600;">${slot.scheduled.slice(5)}</span>
                   <button onclick="toggleEbbReview(${item.id}, ${slot.day})"
-                    style="${btnBaseStyle}${btnColor}">
-                    ${btnLabel}
+                    style="${btnBaseStyle}background:#fdeaea;color:#e74c3c;border:1px solid #e74c3c;">
+                    已背
                   </button>
                 </div></td>`;
             }).join('')}
