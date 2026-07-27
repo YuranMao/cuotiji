@@ -3272,9 +3272,9 @@ function renderScheduleGrid() {
             return `<td style="padding:2px;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:top;cursor:pointer;"
               onclick="openScheduleModal('${slot}', '${d.date}')"></td>`;
           }
-          return `<td style="padding:0;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:middle;cursor:pointer;"
+          return `<td style="padding:0;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:top;cursor:pointer;"
             onclick="openScheduleModal('${slot}', '${d.date}')">
-            <div style="display:flex;flex-direction:column;">
+            <div style="display:flex;flex-direction:column;height:100%;">
             ${cellRecords.map(r => {
               const cellBg = getScheduleCellColor(r.subject, r.label);
               const errorBookIcon = r.in_error_book ? ' 📖' : '';
