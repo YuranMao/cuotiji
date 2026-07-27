@@ -2760,6 +2760,7 @@ function saveMonthGoals(monthName) {
   if (!form) return;
   const data = JSON.parse(decodeURIComponent(form.getAttribute('data-original')));
   const mi = parseInt(form.getAttribute('data-idx'));
+  if (!data[mi] || !data[mi].subjects) return;
   const inputs = form.querySelectorAll('input');
   inputs.forEach(inp => {
     const [subj, field, ...rest] = inp.name.split('|');
