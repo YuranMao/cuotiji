@@ -3101,7 +3101,7 @@ function renderCalendar() {
                 </div>`;
               }).join('')}
             </form>`
-            : (goalSummary ? `<div style="margin-bottom:2px;padding:0 2px;max-height:60px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;">${goalSummary}</div>` : '')
+            : (goalSummary ? `<div style="margin-bottom:2px;padding:0 2px;display:flex;flex-direction:column;gap:2px;">${goalSummary}</div>` : '')
           }
           <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:10px;text-align:center;color:#999;margin-bottom:2px;">
             ${['日','一','二','三','四','五','六'].map(d => `<div>${d}</div>`).join('')}
