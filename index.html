@@ -3018,10 +3018,9 @@ function renderCalendar() {
           const subjWeeks = Object.entries(v.weeks).filter(([, t]) => t && t.trim());
           const weekStr = subjWeeks.length > 0 ? ' · W' + subjWeeks.map(([wk]) => monthWeekBase + parseInt(wk) - 1).join(',W') : '';
           const goalText = v.goal.length > 18 ? v.goal.slice(0, 16) + '…' : v.goal;
-          return `<div style="display:flex;align-items:flex-start;gap:3px;font-size:9px;line-height:1.4;padding:1px 0;">
-            <span style="width:6px;height:6px;border-radius:50%;background:${subjColors[s]};flex-shrink:0;margin-top:3px;"></span>
-            <span><b style="color:${subjColors[s]};margin-right:2px;">${s}</b>${goalText}<span style="color:#aaa;">${weekStr}</span></span>
-          </div>`;
+          return `<span style="display:inline-flex;align-items:center;gap:2px;font-size:9px;line-height:1.4;border:1px dashed ${subjColors[s]};background:${subjColors[s]}18;border-radius:4px;padding:1px 6px;">
+            <b style="color:${subjColors[s]};">${s}</b>${goalText}<span style="color:#aaa;">${weekStr}</span>
+          </span>`;
         }).join('') : '';
 
         // Day cell renderer
@@ -3047,9 +3046,8 @@ function renderCalendar() {
 
         for (let row = 0; row < numRows; row++) {
           const cells = [];
-          // Collect all unique global weeks in this calendar row
-          const gwsInRow = [];
-          const seenGW = new Set();
+          // Count global weeks in this calendar row to determine the primary week
+          const gwsCount = {};
           for (let col = 0; col < 7; col++) {
             const pos = row * 7 + col;
             if (pos < startDow || pos >= totalCells) {
@@ -3057,24 +3055,25 @@ function renderCalendar() {
             } else {
               const md = monthDates[pos - startDow];
               cells.push(cell(md));
-              if (!seenGW.has(md.globalWeek)) { seenGW.add(md.globalWeek); gwsInRow.push(md.globalWeek); }
+              gwsCount[md.globalWeek] = (gwsCount[md.globalWeek] || 0) + 1;
             }
           }
           gridRows.push(`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;">${cells.join('')}</div>`);
 
-          // Week goal bar(s) under this week's day row — check ALL global weeks in the row
-          const allEntries = [];
-          for (const gw of gwsInRow) {
-            const goals = weekGoals[gw] || {};
-            for (const [s, txt] of Object.entries(goals)) {
-              allEntries.push({ gw, s, txt });
-            }
+          // Week goal bar — use primary (most common) global week in this row
+          let primaryGW = null, maxCount = 0;
+          for (const [gw, cnt] of Object.entries(gwsCount)) {
+            if (cnt > maxCount) { maxCount = cnt; primaryGW = parseInt(gw); }
           }
-          if (allEntries.length > 0) {
-            gridRows.push(`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;">
-              <div style="grid-column:1/-1;padding:2px 6px;font-size:9px;line-height:1.4;background:#fafbfc;border-top:1px solid #eee;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
-                ${allEntries.map(e => `<span style="display:flex;align-items:center;gap:2px;"><span style="color:#aaa;font-weight:600;font-size:8px;">W${e.gw}</span><span style="width:5px;height:5px;border-radius:50%;background:${subjColors[e.s]};flex-shrink:0;"></span><b style="color:${subjColors[e.s]};font-size:9px;">${e.s}</b><span style="color:#666;">${e.txt}</span></span>`).join('')}
-              </div></div>`);
+          if (primaryGW) {
+            const goals = weekGoals[primaryGW] || {};
+            const entries = Object.entries(goals).filter(([, t]) => t && t.trim());
+            if (entries.length > 0) {
+              gridRows.push(`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;">
+                <div style="grid-column:1/-1;padding:2px 6px;font-size:9px;line-height:1.4;background:#fafbfc;border-top:1px solid #eee;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+                  ${entries.map(([s, txt]) => `<span style="display:flex;align-items:center;gap:2px;"><span style="color:#aaa;font-weight:600;font-size:8px;">W${primaryGW}</span><span style="width:5px;height:5px;border-radius:50%;background:${subjColors[s]};flex-shrink:0;"></span><b style="color:${subjColors[s]};font-size:9px;">${s}</b><span style="color:#666;">${txt}</span></span>`).join('')}
+                </div></div>`);
+            }
           }
         }
 
@@ -3102,7 +3101,7 @@ function renderCalendar() {
                 </div>`;
               }).join('')}
             </form>`
-            : (goalSummary ? `<div style="margin-bottom:2px;padding:0 2px;max-height:60px;overflow-y:auto;">${goalSummary}</div>` : '')
+            : (goalSummary ? `<div style="margin-bottom:2px;padding:0 2px;max-height:60px;overflow-y:auto;display:flex;flex-wrap:wrap;gap:3px;">${goalSummary}</div>` : '')
           }
           <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:10px;text-align:center;color:#999;margin-bottom:2px;">
             ${['日','一','二','三','四','五','六'].map(d => `<div>${d}</div>`).join('')}
@@ -3153,9 +3152,9 @@ function renderScheduleGrid() {
             return `<td style="padding:2px;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:top;cursor:pointer;"
               onclick="openScheduleModal('${slot}', '${d.date}')"></td>`;
           }
-          return `<td style="padding:0;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:top;cursor:pointer;"
+          return `<td style="padding:0;border-right:1px solid #f8f8f8;border-bottom:1px solid #f0f0f0;text-align:center;cursor:pointer;position:relative;"
             onclick="openScheduleModal('${slot}', '${d.date}')">
-            <div style="display:flex;flex-direction:column;height:100%;">
+            <div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;overflow:hidden;">
             ${cellRecords.map(r => {
               const cellBg = getScheduleCellColor(r.subject, r.label);
               const errorBookIcon = r.in_error_book ? ' 📖' : '';
