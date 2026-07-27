@@ -2747,6 +2747,10 @@ function saveGoalsData(data) {
   localStorage.setItem('monthly_goals', JSON.stringify(data));
 }
 let goalEditMode = false;
+const WEEK1 = new Date(2026, 5, 22); // 第1周从6月22日开始
+function getGlobalWeek(dateStr) {
+  return Math.floor((new Date(dateStr + 'T00:00:00').getTime() - WEEK1.getTime()) / 604800000) + 1;
+}
 
 function toggleGoalEdit() {
   if (goalEditMode) {
@@ -2849,6 +2853,73 @@ function moveTimeline(dir) {
   renderTimeline();
 }
 
+function renderWeeklyGoals() {
+  const END_DATE = new Date(2026, 11, 19); // Dec 19
+  const goalsData = getGoalsData();
+  const subjects = ['专业课', '数学', '英语', '政治'];
+  const subjIcons = { '专业课': '📘', '数学': '📐', '英语': '📝', '政治': '🏛' };
+
+  // Build map: globalWeek -> { '专业课': text, ... }
+  const weekMap = {};
+  goalsData.forEach(m => {
+    const monthWeekBase = getGlobalWeek(formatDate(new Date(2026, m.monthNum - 1, 1)));
+    for (const s of subjects) {
+      const sd = m.subjects[s];
+      if (!sd || !sd.weeks) continue;
+      for (const [wk, txt] of Object.entries(sd.weeks)) {
+        if (txt && txt.trim()) {
+          const gwk = monthWeekBase + parseInt(wk) - 1;
+          if (!weekMap[gwk]) weekMap[gwk] = {};
+          weekMap[gwk][s] = txt;
+        }
+      }
+    }
+  });
+
+  // Generate all weeks from WEEK1 to END_DATE
+  const weeks = [];
+  let cursor = new Date(WEEK1);
+  let wkNum = 1;
+  while (cursor <= END_DATE) {
+    const weekEnd = new Date(cursor);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    if (weekEnd > END_DATE) weekEnd.setTime(END_DATE.getTime());
+    weeks.push({
+      num: wkNum,
+      start: formatDate(cursor),
+      end: formatDate(weekEnd),
+      tasks: weekMap[wkNum] || {}
+    });
+    wkNum++;
+    cursor.setDate(cursor.getDate() + 7);
+  }
+
+  const activeWeeks = weeks.filter(w => Object.keys(w.tasks).length > 0);
+  if (activeWeeks.length === 0) return '<div style="text-align:center;padding:20px;color:#bbb;font-size:13px;">暂无周目标，点击右上角"编辑目标"添加</div>';
+
+  return `<div style="margin-top:14px;">
+    <div style="font-weight:700;font-size:14px;color:#333;margin-bottom:8px;">周目标 (第1周起 6.22)</div>
+    <div style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr style="background:#f8f9fb;">
+            <th style="padding:7px 4px;text-align:center;border-bottom:1px solid #eee;font-weight:600;color:#888;white-space:nowrap;width:32px;">周</th>
+            <th style="padding:7px 4px;text-align:center;border-bottom:1px solid #eee;font-weight:600;color:#888;white-space:nowrap;width:90px;">日期</th>
+            ${subjects.map(s => `<th style="padding:7px 6px;text-align:left;border-bottom:1px solid #eee;font-weight:600;color:${SUBJECT_COLORS[s]};white-space:nowrap;">${subjIcons[s]} ${s}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${activeWeeks.map(w => `<tr>
+            <td style="padding:5px 4px;text-align:center;border-bottom:1px solid #f0f0f0;font-weight:600;color:#666;font-size:11px;">W${w.num}</td>
+            <td style="padding:5px 4px;text-align:center;border-bottom:1px solid #f0f0f0;font-size:10px;color:#aaa;white-space:nowrap;">${w.start.slice(5)}-${w.end.slice(5)}</td>
+            ${subjects.map(s => `<td style="padding:5px 6px;border-bottom:1px solid #f0f0f0;font-size:11px;color:${w.tasks[s] ? SUBJECT_COLORS[s] : '#ddd'};text-align:left;line-height:1.4;">${w.tasks[s] || '—'}</td>`).join('')}
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
 function renderMonthlyGoals() {
   const subjects = ['专业课', '数学', '英语', '政治'];
   const subjIcons = { '专业课': '📘', '数学': '📐', '英语': '📝', '政治': '🏛' };
@@ -2946,7 +3017,7 @@ function renderTimeline() {
     </div>`;
 
   if (tlViewMode === 'calendar') {
-    container.innerHTML = viewToggle + renderCalendar() + `<div style="margin-top:14px;">${renderMonthlyGoals()}</div>`;
+    container.innerHTML = viewToggle + renderCalendar() + renderWeeklyGoals() + (goalEditMode ? `<div style="margin-top:14px;">${renderMonthlyGoals()}</div>` : '');
     return;
   }
 
@@ -3053,16 +3124,7 @@ function renderCalendar() {
     { name: '12月', start: new Date(2026, 11, 1), days: 31 },
   ];
   const today = formatDate(new Date());
-  const WEEK1 = new Date(2026, 5, 22); // 第1周从6月22日开始
-  function getGlobalWeek(dateStr) {
-    return Math.floor((new Date(dateStr + 'T00:00:00').getTime() - WEEK1.getTime()) / 604800000) + 1;
-  }
   const subjects = ['数学', '专业课', '英语', '政治'];
-
-  // 把每月内的周编号映射为全局周编号
-  function buildGlobalWeekMap(monthStart) {
-    return getGlobalWeek(formatDate(new Date(2026, monthStart, 1)));
-  }
 
   return `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
