@@ -2745,8 +2745,9 @@ async function getGoalsData() {
 }
 async function saveGoalsData(data) {
   try {
-    await sb.from('month_goals').upsert({ id: 1, data: data, updated_at: new Date().toISOString() });
-  } catch(e) {}
+    const { error } = await sb.from('month_goals').upsert({ id: 1, data: data, updated_at: new Date().toISOString() });
+    return !error;
+  } catch(e) { return false; }
 }
 let goalEditMonth = null; // null = none, or '7月'/'8月'/...
 const WEEK1 = new Date(2026, 5, 22); // 第1周从6月22日开始
@@ -2773,10 +2774,14 @@ function saveMonthGoals(monthName) {
     }
   });
   (async () => {
-    await saveGoalsData(data);
+    const ok = await saveGoalsData(data);
     goalEditMonth = null;
-    showToast('目标已保存');
-    refreshCalendarView();
+    if (ok) {
+      showToast('目标已保存');
+      refreshCalendarView();
+    } else {
+      showToast('保存失败：请检查Supabase RLS是否已关闭');
+    }
   })();
 }
 
