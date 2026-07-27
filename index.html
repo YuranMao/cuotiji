@@ -3070,7 +3070,7 @@ function renderCalendar() {
             const entries = Object.entries(goals).filter(([, t]) => t && t.trim());
             if (entries.length > 0) {
               gridRows.push(`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;">
-                <div style="grid-column:1/-1;padding:2px 6px;font-size:9px;line-height:1.4;background:#fafbfc;border-top:1px solid #eee;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+                <div style="grid-column:1/-1;padding:2px 6px;font-size:9px;line-height:1.4;background:#fafbfc;border-top:1px solid #eee;display:flex;flex-direction:column;gap:1px;">
                   ${entries.map(([s, txt]) => `<span style="display:flex;align-items:center;gap:2px;"><span style="color:#aaa;font-weight:600;font-size:8px;">W${primaryGW}</span><span style="width:5px;height:5px;border-radius:50%;background:${subjColors[s]};flex-shrink:0;"></span><b style="color:${subjColors[s]};font-size:9px;">${s}</b><span style="color:#666;">${txt}</span></span>`).join('')}
                 </div></div>`);
             }
@@ -3101,7 +3101,7 @@ function renderCalendar() {
                 </div>`;
               }).join('')}
             </form>`
-            : (goalSummary ? `<div style="margin-bottom:2px;padding:0 2px;max-height:60px;overflow-y:auto;display:flex;flex-wrap:wrap;gap:3px;">${goalSummary}</div>` : '')
+            : (goalSummary ? `<div style="margin-bottom:2px;padding:0 2px;max-height:60px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;">${goalSummary}</div>` : '')
           }
           <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:10px;text-align:center;color:#999;margin-bottom:2px;">
             ${['日','一','二','三','四','五','六'].map(d => `<div>${d}</div>`).join('')}
