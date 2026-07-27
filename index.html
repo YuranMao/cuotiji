@@ -2682,55 +2682,55 @@ const MONTHLY_GOALS = [
   {
     month: '7月', monthNum: 7, days: 31,
     subjects: {
-      '专业课': { goal: '第二轮教材+第一轮背诵', weeks: {1:'',2:'',3:'',4:''}, completed: '', issues: '' },
-      '数学':   { goal: '结束线代强化并开高数的头', weeks: {1:'',2:'',3:'',4:'',5:'二次型复习加函数数列极限'}, completed: '二次型1000a；36讲；没咋了讲义；函数、数列极限36讲；函数极限1000b；不定积分660', issues: '' },
-      '英语':   { goal: '开始背考研核心词和刷阅读真题', weeks: {1:'',2:'',3:'',4:''}, completed: '', issues: '' },
-      '政治':   { goal: '过第一轮马原和新思想', weeks: {1:'',2:'',3:'',4:''}, completed: '/', issues: '/' }
+      '专业课': { goal: '第二轮教材+第一轮背诵', weeks: {1:'',2:'',3:'',4:''} },
+      '数学':   { goal: '结束线代强化并开高数的头', weeks: {1:'',2:'',3:'',4:'',5:'二次型复习加函数数列极限'} },
+      '英语':   { goal: '开始背考研核心词和刷阅读真题', weeks: {1:'',2:'',3:'',4:''} },
+      '政治':   { goal: '过第一轮马原和新思想', weeks: {1:'',2:'',3:'',4:''} }
     }
   },
   {
     month: '8月', monthNum: 8, days: 31,
     subjects: {
-      '专业课': { goal: '第二轮教材+第一轮背诵', weeks: {1:'',2:'',3:'',4:''}, completed: '', issues: '' },
-      '数学':   { goal: '争取结束高数强化', weeks: {1:'',2:'',3:'',4:''}, completed: '', issues: '' },
-      '英语':   { goal: '', weeks: {}, completed: '', issues: '' },
-      '政治':   { goal: '', weeks: {}, completed: '/', issues: '/' }
+      '专业课': { goal: '第二轮教材+第一轮背诵', weeks: {1:'',2:'',3:'',4:''} },
+      '数学':   { goal: '争取结束高数强化', weeks: {1:'',2:'',3:'',4:''} },
+      '英语':   { goal: '', weeks: {} },
+      '政治':   { goal: '', weeks: {} }
     }
   },
   {
     month: '9月', monthNum: 9, days: 30,
     subjects: {
-      '专业课': { goal: '', weeks: {}, completed: '', issues: '' },
-      '数学':   { goal: '过渡真题+李范全书？', weeks: {1:'',2:'',3:'',4:''}, completed: '', issues: '' },
-      '英语':   { goal: '', weeks: {}, completed: '', issues: '' },
-      '政治':   { goal: '', weeks: {}, completed: '/', issues: '/' }
+      '专业课': { goal: '', weeks: {} },
+      '数学':   { goal: '过渡真题+李范全书？', weeks: {1:'',2:'',3:'',4:''} },
+      '英语':   { goal: '', weeks: {} },
+      '政治':   { goal: '', weeks: {} }
     }
   },
   {
     month: '10月', monthNum: 10, days: 31,
     subjects: {
-      '专业课': { goal: '刷真题', weeks: {1:'',2:'',3:'',4:''}, completed: '', issues: '' },
-      '数学':   { goal: '', weeks: {}, completed: '', issues: '' },
-      '英语':   { goal: '', weeks: {}, completed: '', issues: '' },
-      '政治':   { goal: '', weeks: {}, completed: '/', issues: '/' }
+      '专业课': { goal: '刷真题', weeks: {1:'',2:'',3:'',4:''} },
+      '数学':   { goal: '', weeks: {} },
+      '英语':   { goal: '', weeks: {} },
+      '政治':   { goal: '', weeks: {} }
     }
   },
   {
     month: '11月', monthNum: 11, days: 30,
     subjects: {
-      '专业课': { goal: '模考', weeks: {1:'',2:'',3:'',4:''}, completed: '', issues: '' },
-      '数学':   { goal: '', weeks: {}, completed: '', issues: '' },
-      '英语':   { goal: '', weeks: {}, completed: '', issues: '' },
-      '政治':   { goal: '', weeks: {}, completed: '/', issues: '/' }
+      '专业课': { goal: '模考', weeks: {1:'',2:'',3:'',4:''} },
+      '数学':   { goal: '', weeks: {} },
+      '英语':   { goal: '', weeks: {} },
+      '政治':   { goal: '', weeks: {} }
     }
   },
   {
     month: '12月', monthNum: 12, days: 31,
     subjects: {
-      '专业课': { goal: '', weeks: {}, completed: '', issues: '' },
-      '数学':   { goal: '', weeks: {}, completed: '', issues: '' },
-      '英语':   { goal: '', weeks: {}, completed: '', issues: '' },
-      '政治':   { goal: '', weeks: {}, completed: '/', issues: '/' }
+      '专业课': { goal: '', weeks: {} },
+      '数学':   { goal: '', weeks: {} },
+      '英语':   { goal: '', weeks: {} },
+      '政治':   { goal: '', weeks: {} }
     }
   }
 ];
@@ -2762,7 +2762,7 @@ function toggleGoalEdit() {
       inputs.forEach(inp => {
         const [monthIdx, subj, field, ...rest] = inp.name.split('|');
         const mi = parseInt(monthIdx);
-        if (field === 'goal' || field === 'completed' || field === 'issues') {
+        if (field === 'goal') {
           data[mi].subjects[subj][field] = inp.value;
         } else if (field === 'week') {
           const wk = rest[0];
@@ -2946,12 +2946,10 @@ function renderMonthlyGoals() {
       </div>
       <div style="padding:6px 0;">
         ${subjects.map(s => {
-          const sd = m.subjects[s] || { goal: '', weeks: {}, completed: '', issues: '' };
+          const sd = m.subjects[s] || { goal: '', weeks: {} };
           if (!goalEditMode && (!sd || (!sd.goal && !Object.values(sd.weeks||{}).some(w => w)))) return '';
           const weekKeys = Object.keys(sd.weeks||{}).sort((a,b)=>+a-+b);
           const hasWeeks = weekKeys.some(k => sd.weeks[k]);
-          const hasDone = sd.completed && sd.completed !== '/';
-          const hasIssues = sd.issues && sd.issues !== '/';
           if (goalEditMode) {
             return `<div style="padding:5px 14px;border-bottom:1px solid #f5f5f5;display:flex;gap:4px;align-items:flex-start;">
               <span style="font-size:13px;flex-shrink:0;padding-top:1px;">${subjIcons[s]}</span>
@@ -2964,10 +2962,6 @@ function renderMonthlyGoals() {
                     const val = sd.weeks?.[wk] || '';
                     return `<input name="${mi}|${s}|week|${wk}" value="${escapeHtml(val)}" placeholder="${WK_LABELS[k]}" style="flex:1;min-width:60px;padding:3px 6px;border:1px solid #ddd;border-radius:3px;font-size:11px;">`;
                   }).join('')}
-                </div>
-                <div style="display:flex;gap:4px;">
-                  <input name="${mi}|${s}|completed" value="${escapeHtml(sd.completed||'')}" placeholder="已完成" style="flex:1;padding:3px 6px;border:1px solid #d5f0dd;border-radius:3px;font-size:11px;color:#27ae60;">
-                  <input name="${mi}|${s}|issues" value="${escapeHtml(sd.issues||'')}" placeholder="遗留问题" style="flex:1;padding:3px 6px;border:1px solid #f5d0d0;border-radius:3px;font-size:11px;color:#e74c3c;">
                 </div>
               </div>
             </div>`;
@@ -2982,8 +2976,6 @@ function renderMonthlyGoals() {
               ${hasWeeks ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;">
                 ${weekKeys.filter(k => sd.weeks[k]).map(k => `<span style="font-size:10px;padding:1px 8px;border-radius:10px;background:#f0f6ff;color:#4a90d9;">第${k}周：${sd.weeks[k]}</span>`).join('')}
               </div>` : ''}
-              ${hasDone ? `<div style="font-size:10px;color:#27ae60;margin-top:2px;">✓ ${sd.completed}</div>` : ''}
-              ${hasIssues ? `<div style="font-size:10px;color:#e74c3c;margin-top:1px;">⚠ ${sd.issues}</div>` : ''}
             </div>
           </div>`;
         }).join('')}
@@ -3321,6 +3313,18 @@ function renderScheduleGrid() {
         </table>
       </div>
     </div>`;
+  // 等DOM渲染完成后统一每行td高度，消除色块留白
+  requestAnimationFrame(() => {
+    const table = container.querySelector('table.schedule-table');
+    if (!table) return;
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+      const tds = row.querySelectorAll('td');
+      let maxH = 0;
+      tds.forEach(td => { const h = td.scrollHeight; if (h > maxH) maxH = h; });
+      tds.forEach(td => { td.style.height = maxH + 'px'; });
+    });
+  });
 }
 
 async function addTimeSlot() {
