@@ -3124,21 +3124,23 @@ function renderCalendar() {
     { name: '12月', start: new Date(2026, 11, 1), days: 31 },
   ];
   const today = formatDate(new Date());
-  const subjects = ['数学', '专业课', '英语', '政治'];
+  const todayKey = today;
+
+  const subjColors = { '专业课': '#27ae60', '数学': '#4a90d9', '英语': '#e67e22', '政治': '#9b59b6' };
 
   return `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
       ${months.map(m => {
-        const startDow = m.start.getDay(); // 0=Sun
+        const startDow = m.start.getDay();
         const todayMonth = 2026 + '-' + String(m.start.getMonth() + 1).padStart(2, '0');
 
-        // Find monthly goals for this month
+        // Month goals
         const monthGoals = getGoalsData().find(g => g.month === m.name);
         const goalSubjects = monthGoals ? Object.entries(monthGoals.subjects).filter(([, v]) => v.goal) : [];
 
-        // Build week goal map with global week numbers
-        const monthWeekBase = getGlobalWeek(formatDate(m.start)); // 该月1号的全局周号
-        const weekGoals = {}; // { globalWeek: { '数学': 'xxx', ... } }
+        // Build week goal map
+        const monthWeekBase = getGlobalWeek(formatDate(m.start));
+        const weekGoals = {};
         if (monthGoals) {
           for (const [s, sd] of Object.entries(monthGoals.subjects)) {
             for (const [wk, txt] of Object.entries(sd.weeks)) {
@@ -3151,61 +3153,84 @@ function renderCalendar() {
           }
         }
 
-        // Gather events for this month
+        // Gather month dates
         const monthDates = [];
         for (let d = 1; d <= m.days; d++) {
           const ds = todayMonth + '-' + String(d).padStart(2, '0');
           const events = cachedTimeline.filter(ev => ev.end_date === ds);
           const impDate = IMPORTANT_DATES.find(id => id.date === ds);
-          // Check if this day matches a week that has goals
           const globalWeek = getGlobalWeek(ds);
-          const dayWeekGoals = weekGoals[globalWeek] || {};
-          monthDates.push({ day: d, date: ds, events, impDate, weekGoals: dayWeekGoals });
+          monthDates.push({ day: d, date: ds, events, impDate, globalWeek });
         }
 
-        // Get the day key for today
-        const todayKey = today;
-
-        // Build goal text summary with global week numbers
+        // Month goal summary (below month name)
         const goalSummary = goalSubjects.length > 0 ? goalSubjects.map(([s, v]) => {
           const subjWeeks = Object.entries(v.weeks).filter(([, t]) => t && t.trim());
           const weekStr = subjWeeks.length > 0 ? ' · W' + subjWeeks.map(([wk]) => monthWeekBase + parseInt(wk) - 1).join(',W') : '';
           const goalText = v.goal.length > 18 ? v.goal.slice(0, 16) + '…' : v.goal;
           return `<div style="display:flex;align-items:flex-start;gap:3px;font-size:9px;line-height:1.4;padding:1px 0;">
-            <span style="width:6px;height:6px;border-radius:50%;background:${SUBJECT_COLORS[s]};flex-shrink:0;margin-top:3px;"></span>
-            <span><b style="color:${SUBJECT_COLORS[s]};margin-right:2px;">${s}</b>${goalText}<span style="color:#aaa;">${weekStr}</span></span>
+            <span style="width:6px;height:6px;border-radius:50%;background:${subjColors[s]};flex-shrink:0;margin-top:3px;"></span>
+            <span><b style="color:${subjColors[s]};margin-right:2px;">${s}</b>${goalText}<span style="color:#aaa;">${weekStr}</span></span>
           </div>`;
         }).join('') : '';
 
+        // Day cell renderer
+        function cell(md) {
+          const isToday = md.date === todayKey;
+          const hasEvents = md.events.length > 0;
+          const hasImp = md.impDate;
+          let bg = '', tc = '';
+          if (isToday) { bg = 'background:#e74c3c;'; tc = 'color:#fff;font-weight:700;'; }
+          else if (hasImp) { bg = 'background:' + md.impDate.color + ';'; tc = 'color:#fff;'; }
+          else if (hasEvents) bg = 'background:#f0f6ff;';
+          return `<div style="position:relative;height:38px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:3px;cursor:${hasImp?'pointer':'default'};${bg}${tc}" title="${md.date}${md.impDate?' · '+md.impDate.label:''}${hasEvents?' · '+md.events.map(e=>e.label).join(', '):''}">
+            <span style="font-size:10px;line-height:1;">${md.day}</span>
+            ${hasImp ? `<span style="font-size:7px;line-height:1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${md.impDate.icon}</span>` : ''}
+            ${hasEvents ? md.events.slice(0,2).map(e => `<span style="font-size:7px;line-height:1.1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${tc?'#fff':(e.color||subjColors[e.subject])};">${escapeHtml(e.label)}</span>`).join('') : ''}
+          </div>`;
+        }
+
+        // Build week rows with goal bars between
+        const totalCells = startDow + m.days;
+        const numRows = Math.ceil(totalCells / 7);
+        const gridRows = [];
+
+        for (let row = 0; row < numRows; row++) {
+          const cells = [];
+          let firstGW = null;
+          for (let col = 0; col < 7; col++) {
+            const pos = row * 7 + col;
+            if (pos < startDow || pos >= totalCells) {
+              cells.push('<div></div>');
+            } else {
+              const md = monthDates[pos - startDow];
+              cells.push(cell(md));
+              if (firstGW === null) firstGW = md.globalWeek;
+            }
+          }
+          gridRows.push(`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;">${cells.join('')}</div>`);
+
+          // Week goal bar under this week's day row
+          if (firstGW !== null) {
+            const wkGoals = weekGoals[firstGW] || {};
+            const entries = Object.entries(wkGoals);
+            if (entries.length > 0) {
+              gridRows.push(`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;">
+                <div style="grid-column:1/-1;padding:2px 6px;font-size:9px;line-height:1.4;background:#fafbfc;border-top:1px solid #eee;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+                  <span style="color:#aaa;font-weight:600;font-size:8px;">W${firstGW}</span>
+                  ${entries.map(([s, txt]) => `<span style="display:flex;align-items:center;gap:2px;"><span style="width:5px;height:5px;border-radius:50%;background:${subjColors[s]};flex-shrink:0;"></span><b style="color:${subjColors[s]};font-size:9px;">${s}</b><span style="color:#666;">${txt}</span></span>`).join('')}
+                </div></div>`);
+            }
+          }
+        }
+
         return `<div style="background:#fff;border-radius:10px;padding:8px;box-shadow:0 1px 3px rgba(0,0,0,.05);display:flex;flex-direction:column;">
           <div style="font-weight:700;font-size:14px;text-align:center;padding:4px 0 4px;color:#333;">${m.name}</div>
-          ${goalSubjects.length > 0 ? `<div style="display:flex;justify-content:center;gap:5px;margin-bottom:4px;">
-            ${goalSubjects.map(([s]) => `<span title="${s}" style="width:7px;height:7px;border-radius:50%;background:${SUBJECT_COLORS[s]};display:inline-block;"></span>`).join('')}
-          </div>` : ''}
+          ${goalSummary ? `<div style="margin-bottom:2px;padding:0 2px;max-height:60px;overflow-y:auto;">${goalSummary}</div>` : ''}
           <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:10px;text-align:center;color:#999;margin-bottom:2px;">
             ${['日','一','二','三','四','五','六'].map(d => `<div>${d}</div>`).join('')}
           </div>
-          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;">
-            ${'<div></div>'.repeat(startDow)}
-            ${monthDates.map(md => {
-              const isToday = md.date === todayKey;
-              const hasEvents = md.events.length > 0;
-              const hasImp = md.impDate;
-              let bg = '';
-              let textColor = '';
-              if (isToday) { bg = 'background:#e74c3c;'; textColor = 'color:#fff;font-weight:700;'; }
-              else if (hasImp) { bg = 'background:' + md.impDate.color + ';'; textColor = 'color:#fff;'; }
-              else if (hasEvents) bg = 'background:#f0f6ff;';
-              const wkSubjs = Object.keys(md.weekGoals);
-              return `<div style="position:relative;height:38px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:3px;cursor:${hasImp?'pointer':'default'};${bg}${textColor}" title="${md.date}${md.impDate?' · '+md.impDate.label:''}${hasEvents?' · '+md.events.map(e=>e.label).join(', '):''}${wkSubjs.length>0?' · 周目标:'+wkSubjs.map(s=>s+':'+md.weekGoals[s]).join('、'):''}">
-                <span style="font-size:10px;line-height:1;">${md.day}</span>
-                ${hasImp ? `<span style="font-size:7px;line-height:1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${md.impDate.icon}</span>` : ''}
-                ${wkSubjs.length > 0 && !hasImp ? `<span style="display:flex;gap:1px;margin-top:1px;">${wkSubjs.slice(0,3).map(s => `<span style="width:5px;height:5px;border-radius:50%;background:${SUBJECT_COLORS[s]};" title="${s}: ${md.weekGoals[s]}"></span>`).join('')}</span>` : ''}
-                ${hasEvents ? md.events.slice(0,2).map(e => `<span style="font-size:7px;line-height:1.1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${textColor ? '#fff' : (e.color || SUBJECT_COLORS[e.subject])};">${escapeHtml(e.label)}</span>`).join('') : ''}
-              </div>`;
-            }).join('')}
-          </div>
-          ${goalSummary ? `<div style="margin-top:6px;padding-top:4px;border-top:1px solid #f0f0f0;max-height:72px;overflow-y:auto;">${goalSummary}</div>` : ''}
+          ${gridRows.join('')}
         </div>`;
       }).join('')}
     </div>
