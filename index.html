@@ -3189,7 +3189,9 @@ function renderCalendar() {
 
         for (let row = 0; row < numRows; row++) {
           const cells = [];
-          let firstGW = null;
+          // Collect all unique global weeks in this calendar row
+          const gwsInRow = [];
+          const seenGW = new Set();
           for (let col = 0; col < 7; col++) {
             const pos = row * 7 + col;
             if (pos < startDow || pos >= totalCells) {
@@ -3197,22 +3199,24 @@ function renderCalendar() {
             } else {
               const md = monthDates[pos - startDow];
               cells.push(cell(md));
-              if (firstGW === null) firstGW = md.globalWeek;
+              if (!seenGW.has(md.globalWeek)) { seenGW.add(md.globalWeek); gwsInRow.push(md.globalWeek); }
             }
           }
           gridRows.push(`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;">${cells.join('')}</div>`);
 
-          // Week goal bar under this week's day row
-          if (firstGW !== null) {
-            const wkGoals = weekGoals[firstGW] || {};
-            const entries = Object.entries(wkGoals);
-            if (entries.length > 0) {
-              gridRows.push(`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;">
-                <div style="grid-column:1/-1;padding:2px 6px;font-size:9px;line-height:1.4;background:#fafbfc;border-top:1px solid #eee;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
-                  <span style="color:#aaa;font-weight:600;font-size:8px;">W${firstGW}</span>
-                  ${entries.map(([s, txt]) => `<span style="display:flex;align-items:center;gap:2px;"><span style="width:5px;height:5px;border-radius:50%;background:${subjColors[s]};flex-shrink:0;"></span><b style="color:${subjColors[s]};font-size:9px;">${s}</b><span style="color:#666;">${txt}</span></span>`).join('')}
-                </div></div>`);
+          // Week goal bar(s) under this week's day row — check ALL global weeks in the row
+          const allEntries = [];
+          for (const gw of gwsInRow) {
+            const goals = weekGoals[gw] || {};
+            for (const [s, txt] of Object.entries(goals)) {
+              allEntries.push({ gw, s, txt });
             }
+          }
+          if (allEntries.length > 0) {
+            gridRows.push(`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;">
+              <div style="grid-column:1/-1;padding:2px 6px;font-size:9px;line-height:1.4;background:#fafbfc;border-top:1px solid #eee;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+                ${allEntries.map(e => `<span style="display:flex;align-items:center;gap:2px;"><span style="color:#aaa;font-weight:600;font-size:8px;">W${e.gw}</span><span style="width:5px;height:5px;border-radius:50%;background:${subjColors[e.s]};flex-shrink:0;"></span><b style="color:${subjColors[e.s]};font-size:9px;">${e.s}</b><span style="color:#666;">${e.txt}</span></span>`).join('')}
+              </div></div>`);
           }
         }
 
