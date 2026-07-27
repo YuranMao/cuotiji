@@ -2739,7 +2739,7 @@ const DEFAULT_GOALS = JSON.parse(JSON.stringify(MONTHLY_GOALS));
 async function getGoalsData() {
   try {
     const { data, error } = await sb.from('month_goals').select('data').eq('id', 1).single();
-    if (!error && data && data.data) return data.data;
+    if (!error && data && data.data && Array.isArray(data.data) && data.data.length > 0) return data.data;
   } catch(e) {}
   return DEFAULT_GOALS;
 }
