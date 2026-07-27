@@ -1128,6 +1128,7 @@ body {
         <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('36讲')" style="padding:4px 12px;font-size:12px;background:#60a5fa;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">36讲</button>
         <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('没咋了强化')" style="padding:4px 12px;font-size:12px;background:#60a5fa;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">没咋了强化</button>
         <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('线代三轮复习')" style="padding:4px 12px;font-size:12px;background:#4e94f8;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">线代三轮复习</button>
+        <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('高数专题课')" style="padding:4px 12px;font-size:12px;background:#4e94f8;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">高数专题课</button>
         <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('660')" style="padding:4px 12px;font-size:12px;background:#3b82f6;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">660</button>
         <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('1000b')" style="padding:4px 12px;font-size:12px;background:#1d4ed8;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">1000b</button>
         <button type="button" class="sch-subtag-btn" onclick="setSchSubTag('880')" style="padding:4px 12px;font-size:12px;background:#1e3a8a;color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:0.5;">880</button>
@@ -2547,6 +2548,7 @@ function renderEbb() {
             <td class="eb-date">${item.first_date}</td>
             ${schedule.map(slot => {
               const isMergeZone = slot.day >= mergeDay;
+              const btnBaseStyle = 'font-size:11px;padding:3px 10px;border-radius:4px;cursor:pointer;white-space:nowrap;';
               if (slot.done) {
                 const reviewDate = slot.reviewDate ? slot.reviewDate.slice(5) : slot.scheduled.slice(5);
                 // Show notes textarea for 专业课 and 英语
@@ -2563,27 +2565,22 @@ function renderEbb() {
                 return `<td class="ebb-done"><div style="font-size:11px;color:#27ae60;">✓ ${reviewDate}</div></td>`;
               }
               const isFuture = slot.scheduled > today;
-              if (isFuture) {
-                const mergeHint = isMergeZone ? ' style="border-color:#e67e22;color:#e67e22;"' : ' style="opacity:0.5;"';
-                return `<td><div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
-                  <span style="font-size:11px;color:#bbb;">${slot.scheduled.slice(5)}</span>
-                  <button onclick="toggleEbbReview(${item.id}, ${slot.day})"
-                    ${mergeHint}
-                    style="font-size:10px;padding:2px 8px;border-radius:4px;cursor:pointer;white-space:nowrap;background:#fff;border:1px solid #d9d9d9;">
-                    提前
-                  </button>
-                </div></td>`;
-              }
-              const isToday = slot.scheduled === today;
-              const btnStyle = isMergeZone ? 'style="border-color:#e67e22;color:#e67e22;background:#fff8f0;font-weight:600;"' : '';
-              return `<td class="${isToday ? 'ebb-due' : ''}">
+              const todayOrPast = slot.scheduled <= today;
+              const btnColor = isMergeZone
+                ? 'background:#fff8f0;color:#e67e22;border:1px solid #e67e22;'
+                : (isFuture
+                  ? 'background:#f0f4ff;color:#4a90d9;border:1px solid #b8cfe8;'
+                  : 'background:#fdeaea;color:#e74c3c;border:1px solid #e74c3c;');
+              const btnLabel = isFuture ? '提前' : '已背';
+              const dateColor = isFuture ? '#bbb' : '#e74c3c';
+              const dateWeight = isFuture ? '' : 'font-weight:600;';
+              const cellClass = (todayOrPast && slot.scheduled === today) ? 'ebb-due' : '';
+              return `<td class="${cellClass}">
                 <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
-                  <span style="font-size:11px;color:#e74c3c;font-weight:600;">${slot.scheduled.slice(5)}</span>
+                  <span style="font-size:11px;color:${dateColor};${dateWeight}">${slot.scheduled.slice(5)}</span>
                   <button onclick="toggleEbbReview(${item.id}, ${slot.day})"
-                    ${btnStyle}
-                    style="font-size:11px;padding:3px 10px;border-radius:4px;cursor:pointer;white-space:nowrap;
-                    background:#fdeaea;color:#e74c3c;border:1px solid #e74c3c;">
-                    已背
+                    style="${btnBaseStyle}${btnColor}">
+                    ${btnLabel}
                   </button>
                 </div></td>`;
             }).join('')}
@@ -2656,6 +2653,7 @@ const MATH_SUB_COLORS = {
   '36讲': '#60a5fa',
   '没咋了强化': '#60a5fa',
   '线代三轮复习': '#4e94f8',
+  '高数专题课': '#4e94f8',
   '660': '#3b82f6',
   '1000b': '#1d4ed8',
   '880': '#1e3a8a'
