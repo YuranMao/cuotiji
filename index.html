@@ -2734,17 +2734,19 @@ const MONTHLY_GOALS = [
     }
   }
 ];
-// 目标数据：优先从 localStorage 加载，否则用默认值
+// 目标数据：优先从 month_goals 表加载，否则用默认值
 const DEFAULT_GOALS = JSON.parse(JSON.stringify(MONTHLY_GOALS));
-function getGoalsData() {
+async function getGoalsData() {
   try {
-    const saved = localStorage.getItem('monthly_goals');
-    if (saved) return JSON.parse(saved);
+    const { data, error } = await sb.from('month_goals').select('data').eq('id', 1).single();
+    if (!error && data && data.data) return data.data;
   } catch(e) {}
   return DEFAULT_GOALS;
 }
-function saveGoalsData(data) {
-  localStorage.setItem('monthly_goals', JSON.stringify(data));
+async function saveGoalsData(data) {
+  try {
+    await sb.from('month_goals').upsert({ id: 1, data: data, updated_at: new Date().toISOString() });
+  } catch(e) {}
 }
 let goalEditMonth = null; // null = none, or '7月'/'8月'/...
 const WEEK1 = new Date(2026, 5, 22); // 第1周从6月22日开始
@@ -2769,10 +2771,12 @@ function saveMonthGoals(monthName) {
       data[mi].subjects[subj].weeks[wk] = inp.value;
     }
   });
-  saveGoalsData(data);
-  goalEditMonth = null;
-  showToast('目标已保存');
-  refreshCalendarView();
+  (async () => {
+    await saveGoalsData(data);
+    goalEditMonth = null;
+    showToast('目标已保存');
+    refreshCalendarView();
+  })();
 }
 
 function refreshCalendarView() {
@@ -2848,7 +2852,7 @@ function moveTimeline(dir) {
   renderTimeline();
 }
 
-function renderTimeline() {
+async function renderTimeline() {
   const container = document.getElementById('panelTimeline');
   const today = formatDate(new Date());
 
@@ -2867,7 +2871,7 @@ function renderTimeline() {
     </div>`;
 
   if (tlViewMode === 'calendar') {
-    container.innerHTML = viewToggle + renderCalendar();
+    container.innerHTML = viewToggle + await renderCalendar();
     return;
   }
 
@@ -2964,7 +2968,7 @@ function renderTimeline() {
   else renderScheduleGrid();
 }
 
-function renderCalendar() {
+async function renderCalendar() {
   const months = [
     { name: '7月', start: new Date(2026, 6, 1), days: 31 },
     { name: '8月', start: new Date(2026, 7, 1), days: 31 },
@@ -2977,6 +2981,7 @@ function renderCalendar() {
   const todayKey = today;
 
   const subjColors = { '专业课': '#27ae60', '数学': '#4a90d9', '英语': '#e67e22', '政治': '#9b59b6' };
+  const goalsData = await getGoalsData();
 
   return `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
@@ -2985,7 +2990,7 @@ function renderCalendar() {
         const todayMonth = 2026 + '-' + String(m.start.getMonth() + 1).padStart(2, '0');
 
         // Month goals
-        const monthGoals = getGoalsData().find(g => g.month === m.name);
+        const monthGoals = goalsData.find(g => g.month === m.name);
         const goalSubjects = monthGoals ? Object.entries(monthGoals.subjects).filter(([, v]) => v.goal) : [];
 
         // Build week goal map
@@ -3086,7 +3091,7 @@ function renderCalendar() {
             }
           </div>
           ${goalEditMonth === m.name
-            ? `<form id="monthGoalsForm_${m.name}" data-original="${encodeURIComponent(JSON.stringify(getGoalsData()))}" data-idx="${m.start.getMonth() + 1 - 7}" style="margin-bottom:2px;padding:0 2px;">
+            ? `<form id="monthGoalsForm_${m.name}" data-original="${encodeURIComponent(JSON.stringify(goalsData))}" data-idx="${m.start.getMonth() + 1 - 7}" style="margin-bottom:2px;padding:0 2px;">
               ${['专业课','数学','英语','政治'].map(s => {
                 const sd = monthGoals?.subjects?.[s] || { goal: '', weeks: {} };
                 const numWeeks = m.days > 28 ? 5 : 4;
