@@ -2758,10 +2758,12 @@ function getGlobalWeek(dateStr) {
 function editMonthGoals(monthName) { goalEditMonth = monthName; refreshCalendarView(); }
 function saveMonthGoals(monthName) {
   const form = document.getElementById('monthGoalsForm_' + monthName);
-  if (!form) return;
-  const data = JSON.parse(decodeURIComponent(form.getAttribute('data-original')));
+  if (!form) { showToast('表单未找到'); return; }
+  const raw = form.getAttribute('data-original');
+  if (!raw) { showToast('目标数据为空'); return; }
+  const data = JSON.parse(decodeURIComponent(raw));
   const mi = parseInt(form.getAttribute('data-idx'));
-  if (!data[mi] || !data[mi].subjects) return;
+  if (isNaN(mi) || !data[mi] || !data[mi].subjects) { showToast('数据解析失败: mi='+mi+' dataLen='+(data?data.length:'null')); return; }
   const inputs = form.querySelectorAll('input');
   inputs.forEach(inp => {
     const [subj, field, ...rest] = inp.name.split('|');
