@@ -3063,9 +3063,9 @@ async function renderCalendar() {
         const goalSummary = goalSubjects.length > 0 ? goalSubjects.map(([s, v]) => {
           const subjWeeks = Object.entries(v.weeks).filter(([, t]) => t && t.trim());
           const weekStr = subjWeeks.length > 0 ? ' · W' + subjWeeks.map(([wk]) => monthWeekBase + parseInt(wk) - 1).join(',W') : '';
-          const goalText = v.goal.length > 18 ? v.goal.slice(0, 16) + '…' : v.goal;
-          return `<span style="display:inline-flex;align-items:center;gap:2px;font-size:9px;line-height:1.4;border:1px dashed ${subjColors[s]};background:${subjColors[s]}18;border-radius:4px;padding:1px 6px;">
-            <b style="color:${subjColors[s]};">${s}</b>${goalText}<span style="color:#aaa;">${weekStr}</span>
+          const goalText = v.goal;
+          return `<span style="display:inline-block;font-size:9px;line-height:1.4;border:1px dashed ${subjColors[s]};background:${subjColors[s]}18;border-radius:4px;padding:2px 6px;white-space:normal;word-break:break-all;">
+            <b style="color:${subjColors[s]};margin-right:2px;">${s}</b>${goalText}<span style="color:#aaa;">${weekStr}</span>
           </span>`;
         }).join('') : '';
 
