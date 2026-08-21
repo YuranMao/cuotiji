@@ -1601,12 +1601,14 @@ function connStatusHtml(extraClass, text) {
   el.className = extraClass ? ('conn-status ' + extraClass) : 'conn-status';
   let btn = '';
   if (hasLegacyImages()) {
-    btn = '<button onclick="migrateLegacyImages()" style="margin-left:8px;padding:2px 10px;font-size:11px;background:#e67e22;color:#fff;border:none;border-radius:4px;cursor:pointer;">迁移旧图片</button>';
+    btn = '<button id="migrateBtn" onclick="migrateLegacyImages()" style="margin-left:8px;padding:2px 10px;font-size:11px;background:#e67e22;color:#fff;border:none;border-radius:4px;cursor:pointer;">迁移旧图片</button>';
   }
   el.innerHTML = '<span class="dot"></span> ' + text + btn;
 }
 
 async function migrateLegacyImages() {
+  const btn = document.getElementById('migrateBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '准备中…'; }
   await reloadCoreQuestions();
   const targets = [];
   cachedQuestions.forEach(q => {
@@ -1615,19 +1617,23 @@ async function migrateLegacyImages() {
   cachedCoreQuestions.forEach(q => {
     if (q.image_data && String(q.image_data).startsWith('data:')) targets.push({ table: 'core_questions', id: q.id, data: q.image_data, folder: 'core' });
   });
-  if (targets.length === 0) { showToast('没有需要迁移的旧图片'); return; }
-  showToast('开始迁移 ' + targets.length + ' 张图片…');
+  if (targets.length === 0) { showToast('没有需要迁移的旧图片'); connStatusHtml('', '数据已同步'); return; }
   let ok = 0, fail = 0;
-  for (const t of targets) {
+  for (let i = 0; i < targets.length; i++) {
+    const t = targets[i];
+    if (btn) btn.textContent = '迁移中 ' + (i + 1) + '/' + targets.length;
     try {
       const url = await uploadImageToStorage(t.data, t.folder);
       const { error } = await sb.from(t.table).update({ image_data: url }).eq('id', t.id);
       if (error) throw error;
+      const list = t.table === 'questions' ? cachedQuestions : cachedCoreQuestions;
+      const obj = list.find(x => x.id == t.id);
+      if (obj) obj.image_data = url;
       ok++;
     } catch (e) { fail++; console.warn('迁移失败 id=' + t.id, e.message); }
   }
   showToast('图片迁移完成：成功 ' + ok + '，失败 ' + fail);
-  if (ok > 0) await reloadAllCore();
+  connStatusHtml('', '数据已同步');
 }
 
 // ==================== 章节 / 知识点操作 ====================
