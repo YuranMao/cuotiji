@@ -3047,10 +3047,10 @@ async function renderCalendar() {
           if (isToday) { bg = 'background:#e74c3c;'; tc = 'color:#fff;font-weight:700;'; }
           else if (hasImp) { bg = 'background:' + md.impDate.color + ';'; tc = 'color:#fff;'; }
           else if (hasEvents) bg = 'background:#f0f6ff;';
-          return `<div style="position:relative;height:38px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:3px;cursor:${hasImp?'pointer':'default'};${bg}${tc}" title="${md.date}${md.impDate?' · '+md.impDate.label:''}${hasEvents?' · '+md.events.map(e=>e.label).join(', '):''}">
+          return `<div style="position:relative;min-height:38px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:3px;cursor:${hasImp?'pointer':'default'};${bg}${tc}" title="${md.date}${md.impDate?' · '+md.impDate.label:''}${hasEvents?' · '+md.events.map(e=>e.label).join(', '):''}">
             <span style="font-size:10px;line-height:1;">${md.day}</span>
             ${hasImp ? `<span style="font-size:7px;line-height:1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${md.impDate.icon}</span>` : ''}
-            ${hasEvents ? md.events.slice(0,2).map(e => `<span style="font-size:7px;line-height:1.1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${tc?'#fff':(e.color||subjColors[e.subject])};">${escapeHtml(e.label)}</span>`).join('') : ''}
+            ${hasEvents ? md.events.map(e => `<span style="font-size:7px;line-height:1.1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${tc?'#fff':(e.color||subjColors[e.subject])};">${escapeHtml(e.label)}</span>`).join('') : ''}
           </div>`;
         }
 
