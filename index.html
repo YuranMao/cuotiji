@@ -2745,35 +2745,35 @@ async function saveGoalsData(data) {
     return !error;
   } catch(e) { return false; }
 }
-let goalEditMonth = null; // null = none, or '7月'/'8月'/...
+let goalOverviewEdit = false; // 目标一览表编辑态
 const WEEK1 = new Date(2026, 5, 22); // 第1周从6月22日开始
 function getGlobalWeek(dateStr) {
   return Math.floor((new Date(dateStr + 'T00:00:00').getTime() - WEEK1.getTime()) / 604800000) + 1;
 }
 
-function editMonthGoals(monthName) { goalEditMonth = monthName; refreshCalendarView(); }
-function saveMonthGoals(monthName) {
-  const form = document.getElementById('monthGoalsForm_' + monthName);
+function editGoalOverview() { goalOverviewEdit = true; refreshCalendarView(); }
+function cancelGoalOverview() { goalOverviewEdit = false; refreshCalendarView(); }
+function saveGoalOverview() {
+  const form = document.getElementById('goalOverviewForm');
   if (!form) { showToast('表单未找到'); return; }
   const raw = form.getAttribute('data-original');
   if (!raw) { showToast('目标数据为空'); return; }
   const data = JSON.parse(decodeURIComponent(raw));
-  const mi = parseInt(form.getAttribute('data-idx'));
-  if (isNaN(mi) || !data[mi] || !data[mi].subjects) { showToast('数据解析失败: mi='+mi+' dataLen='+(data?data.length:'null')); return; }
-  const inputs = form.querySelectorAll('input');
+  const inputs = form.querySelectorAll('input, textarea');
   inputs.forEach(inp => {
-    const [subj, field, ...rest] = inp.name.split('|');
+    const [, monthName, subj, field, wk] = inp.name.split('|');
+    const mi = data.findIndex(g => g.month === monthName);
+    if (mi < 0 || !data[mi].subjects || !data[mi].subjects[subj]) return;
     if (field === 'goal') {
-      data[mi].subjects[subj][field] = inp.value;
+      data[mi].subjects[subj].goal = inp.value;
     } else if (field === 'week') {
-      const wk = rest[0];
       if (!data[mi].subjects[subj].weeks) data[mi].subjects[subj].weeks = {};
       data[mi].subjects[subj].weeks[wk] = inp.value;
     }
   });
   (async () => {
     const ok = await saveGoalsData(data);
-    goalEditMonth = null;
+    goalOverviewEdit = false;
     if (ok) {
       showToast('目标已保存');
       refreshCalendarView();
@@ -3061,11 +3061,8 @@ async function renderCalendar() {
 
         // Month goal summary (below month name)
         const goalSummary = goalSubjects.length > 0 ? goalSubjects.map(([s, v]) => {
-          const subjWeeks = Object.entries(v.weeks).filter(([, t]) => t && t.trim());
-          const weekStr = subjWeeks.length > 0 ? ' · W' + subjWeeks.map(([wk]) => monthWeekBase + parseInt(wk) - 1).join(',W') : '';
-          const goalText = v.goal;
           return `<span style="display:inline-block;font-size:9px;line-height:1.4;border:1px dashed ${subjColors[s]};background:${subjColors[s]}18;border-radius:4px;padding:2px 6px;white-space:normal;word-break:break-all;">
-            <b style="color:${subjColors[s]};margin-right:2px;">${s}</b>${goalText}<span style="color:#aaa;">${weekStr}</span>
+            <b style="color:${subjColors[s]};margin-right:2px;">${s}</b>${escapeHtml(v.goal)}
           </span>`;
         }).join('') : '';
 
@@ -3127,29 +3124,8 @@ async function renderCalendar() {
         return `<div style="background:#fff;border-radius:10px;padding:8px;box-shadow:0 1px 3px rgba(0,0,0,.05);display:flex;flex-direction:column;">
           <div style="font-weight:700;font-size:14px;text-align:center;padding:4px 0 4px;color:#333;display:flex;align-items:center;justify-content:center;gap:6px;">
             ${m.name}
-            ${goalEditMonth === m.name
-              ? `<button onclick="saveMonthGoals('${m.name}')" style="font-size:10px;padding:2px 8px;background:#e67e22;color:#fff;border:none;border-radius:3px;cursor:pointer;">保存</button>`
-              : `<button onclick="editMonthGoals('${m.name}')" style="font-size:12px;padding:0 4px;background:none;border:none;cursor:pointer;color:#ccc;line-height:1;" title="编辑本月目标">✎</button>`
-            }
           </div>
-          ${goalEditMonth === m.name
-            ? `<form id="monthGoalsForm_${m.name}" data-original="${encodeURIComponent(JSON.stringify(goalsData))}" data-idx="${m.start.getMonth() + 1 - 7}" style="margin-bottom:2px;padding:0 2px;">
-              ${subjOrder.map(s => {
-                const sd = monthGoals?.subjects?.[s] || { goal: '', weeks: {} };
-                const numWeeks = m.days > 28 ? 5 : 4;
-                return `<div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;padding:1px 0;font-size:10px;white-space:nowrap;">
-                  <b style="color:${subjColors[s]};min-width:28px;font-size:10px;">${s}</b>
-                  <input name="${s}|goal" value="${escapeHtml(sd.goal||'')}" placeholder="月目标" style="flex:1;min-width:80px;padding:2px 4px;border:1px solid #ddd;border-radius:3px;font-size:10px;">
-                  ${Array.from({length:numWeeks},(_,k) => {
-                    const wk = String(k+1);
-                    const gwk = monthWeekBase + k;
-                    return `<input name="${s}|week|${wk}" value="${escapeHtml(sd.weeks?.[wk]||'')}" placeholder="W${gwk}" style="width:64px;padding:3px 6px;border:1px solid #ddd;border-radius:3px;font-size:11px;" title="第${wk}周(全局W${gwk})">`;
-                  }).join('')}
-                </div>`;
-              }).join('')}
-            </form>`
-            : (goalSummary ? `<div style="margin-bottom:2px;padding:0 2px;display:flex;flex-direction:column;gap:2px;">${goalSummary}</div>` : '')
-          }
+          ${goalSummary ? `<div style="margin-bottom:2px;padding:0 2px;display:flex;flex-direction:column;gap:2px;">${goalSummary}</div>` : ''}
           <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:10px;text-align:center;color:#999;margin-bottom:2px;">
             ${['日','一','二','三','四','五','六'].map(d => `<div>${d}</div>`).join('')}
           </div>
@@ -3166,18 +3142,33 @@ async function renderCalendar() {
 
 function renderGoalOverviewTable(months, goalsData, subjOrder) {
   const weekCount = 4;
-  const th = (title, width) => `<th style="padding:6px 8px;border:1px solid #eee;background:#f5f7fa;text-align:center;${width ? 'width:' + width + ';' : ''}white-space:nowrap;">${title}</th>`;
-  const td = (content, extra) => `<td style="padding:6px 8px;border:1px solid #eee;text-align:left;vertical-align:top;word-break:break-all;white-space:normal;${extra || ''}">${content}</td>`;
+  // 月份列文字颜色：7月最浅，逐月加深
+  const monthColors = months.map((m, i) => {
+    const ratio = months.length <= 1 ? 1 : i / (months.length - 1);
+    const v = Math.round(180 - ratio * 140);
+    return `rgb(${v},${v},${v})`;
+  });
+
+  const th = (title, width, color) => `<th style="padding:6px 8px;border:1px solid #eee;background:#f5f7fa;text-align:center;${width ? 'width:' + width + ';' : ''}${color ? 'color:' + color + ';' : ''}white-space:nowrap;">${title}</th>`;
+  const cellStyle = (color) => `padding:6px 8px;border:1px solid #eee;text-align:left;vertical-align:top;word-break:break-all;white-space:normal;${color ? 'color:' + color + ';' : ''}`;
+
   const monthCell = (m, s, field) => {
     const mg = goalsData.find(g => g.month === m.name);
     const val = field === 'goal' ? (mg?.subjects?.[s]?.goal || '') : (mg?.subjects?.[s]?.weeks?.[field] || '');
-    return td(escapeHtml(val) || '<span style="color:#ccc;">—</span>');
+    const mi = months.findIndex(x => x.name === m.name);
+    const color = monthColors[mi] || '#333';
+    const fieldKey = field === 'goal' ? 'goal' : ('week|' + field);
+    const name = `ov|${m.name}|${s}|${fieldKey}`;
+    const content = goalOverviewEdit
+      ? `<textarea name="${name}" style="width:100%;min-height:32px;padding:2px 4px;border:1px solid #ddd;border-radius:3px;font-size:10px;resize:vertical;box-sizing:border-box;">${escapeHtml(val)}</textarea>`
+      : (escapeHtml(val) || '<span style="color:#ccc;">—</span>');
+    return `<td style="${cellStyle(color)}">${content}</td>`;
   };
 
   const rows = subjOrder.map(s => {
     const goalRow = `<tr>
       <td rowspan="${weekCount + 1}" style="padding:6px 8px;border:1px solid #eee;text-align:center;vertical-align:middle;background:${SUBJECT_COLORS[s]}18;color:${SUBJECT_COLORS[s]};font-weight:700;">${s}</td>
-      <td style="padding:4px 8px;border:1px solid #eee;background:#fafbfc;color:#888;text-align:center;font-size:10px;white-space:nowrap;">总目标</td>
+      <td style="padding:4px 8px;border:1px solid #eee;background:#e9ecef;color:#000;font-weight:700;text-align:center;font-size:10px;white-space:nowrap;">总目标</td>
       ${months.map(m => monthCell(m, s, 'goal')).join('')}
     </tr>`;
     const weekRows = Array.from({ length: weekCount }, (_, i) => {
@@ -3190,17 +3181,30 @@ function renderGoalOverviewTable(months, goalsData, subjOrder) {
     return goalRow + weekRows;
   }).join('');
 
+  const table = `
+    <table style="width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed;">
+      <thead>
+        <tr>${th('科目', '64px')}${th('目标', '52px')}${months.map((m, i) => th(m.name, '', monthColors[i])).join('')}</tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  const inner = goalOverviewEdit
+    ? `<form id="goalOverviewForm" data-original="${encodeURIComponent(JSON.stringify(goalsData))}">${table}</form>`
+    : table;
+
   return `
     <div style="margin-top:16px;background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,.05);">
-      <div style="font-weight:700;font-size:14px;margin-bottom:8px;color:#333;">目标一览表</div>
-      <div style="overflow-x:auto;">
-        <table style="width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed;">
-          <thead>
-            <tr>${th('科目', '64px')}${th('目标', '52px')}${months.map(m => th(m.name)).join('')}</tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-weight:700;font-size:14px;color:#333;">目标一览表</div>
+        <div style="display:flex;gap:6px;">
+          ${goalOverviewEdit
+            ? `<button onclick="saveGoalOverview()" style="font-size:11px;padding:3px 10px;background:#e67e22;color:#fff;border:none;border-radius:4px;cursor:pointer;">保存</button>
+               <button onclick="cancelGoalOverview()" style="font-size:11px;padding:3px 10px;background:#f0f0f0;color:#666;border:none;border-radius:4px;cursor:pointer;">取消</button>`
+            : `<button onclick="editGoalOverview()" style="font-size:11px;padding:3px 10px;background:#4a90d9;color:#fff;border:none;border-radius:4px;cursor:pointer;">编辑</button>`}
+        </div>
       </div>
+      <div style="overflow-x:auto;">${inner}</div>
     </div>`;
 }
 
