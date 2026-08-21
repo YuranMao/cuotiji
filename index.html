@@ -2989,6 +2989,7 @@ async function renderCalendar() {
   const todayKey = today;
 
   const subjColors = { '专业课': '#27ae60', '数学': '#4a90d9', '英语': '#e67e22', '政治': '#9b59b6' };
+  const subjOrder = ['数学', '英语', '专业课', '政治'];
   const goalsData = await getGoalsData();
   const renderedGoalWeeks = new Set();
 
@@ -3000,7 +3001,7 @@ async function renderCalendar() {
 
         // Month goals
         const monthGoals = goalsData.find(g => g.month === m.name);
-        const goalSubjects = monthGoals ? Object.entries(monthGoals.subjects).filter(([, v]) => v.goal) : [];
+        const goalSubjects = monthGoals ? Object.entries(monthGoals.subjects).filter(([, v]) => v.goal).sort((a, b) => subjOrder.indexOf(a[0]) - subjOrder.indexOf(b[0])) : [];
 
         // Build week goal map
         const monthWeekBase = getGlobalWeek(formatDate(m.start));
@@ -3082,7 +3083,7 @@ async function renderCalendar() {
           if (primaryGW && !renderedGoalWeeks.has(primaryGW)) {
             renderedGoalWeeks.add(primaryGW);
             const goals = weekGoals[primaryGW] || {};
-            const entries = Object.entries(goals).filter(([, t]) => t && t.trim());
+            const entries = Object.entries(goals).filter(([, t]) => t && t.trim()).sort((a, b) => subjOrder.indexOf(a[0]) - subjOrder.indexOf(b[0]));
             if (entries.length > 0) {
               gridRows.push(`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;">
                 <div style="grid-column:1/-1;padding:2px 6px;font-size:9px;line-height:1.4;background:#fafbfc;border-top:1px solid #eee;display:flex;flex-direction:column;gap:1px;">
@@ -3102,7 +3103,7 @@ async function renderCalendar() {
           </div>
           ${goalEditMonth === m.name
             ? `<form id="monthGoalsForm_${m.name}" data-original="${encodeURIComponent(JSON.stringify(goalsData))}" data-idx="${m.start.getMonth() + 1 - 7}" style="margin-bottom:2px;padding:0 2px;">
-              ${['专业课','数学','英语','政治'].map(s => {
+              ${subjOrder.map(s => {
                 const sd = monthGoals?.subjects?.[s] || { goal: '', weeks: {} };
                 const numWeeks = m.days > 28 ? 5 : 4;
                 return `<div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;padding:1px 0;font-size:10px;white-space:nowrap;">
@@ -3111,7 +3112,7 @@ async function renderCalendar() {
                   ${Array.from({length:numWeeks},(_,k) => {
                     const wk = String(k+1);
                     const gwk = monthWeekBase + k;
-                    return `<input name="${s}|week|${wk}" value="${escapeHtml(sd.weeks?.[wk]||'')}" placeholder="W${gwk}" style="width:40px;padding:2px 4px;border:1px solid #ddd;border-radius:3px;font-size:10px;" title="第${wk}周(全局W${gwk})">`;
+                    return `<input name="${s}|week|${wk}" value="${escapeHtml(sd.weeks?.[wk]||'')}" placeholder="W${gwk}" style="width:64px;padding:3px 6px;border:1px solid #ddd;border-radius:3px;font-size:11px;" title="第${wk}周(全局W${gwk})">`;
                   }).join('')}
                 </div>`;
               }).join('')}
