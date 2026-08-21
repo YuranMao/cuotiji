@@ -3141,7 +3141,18 @@ async function renderCalendar() {
 }
 
 function renderGoalOverviewTable(months, goalsData, subjOrder) {
-  const weekCount = 4;
+  // 各月周目标的全局周编号（相对周1对应 monthWeekStart）
+  const monthWeekStart = { '7月': 3, '8月': 7, '9月': 11, '10月': 15, '11月': 19, '12月': 23 };
+  const monthWeekCount = { '7月': 4, '8月': 4, '9月': 4, '10月': 4, '11月': 4, '12月': 3 };
+
+  // 全局周列表（W3 ~ W25），记录每周所属月份
+  const globalWeeks = [];
+  months.forEach(m => {
+    const start = monthWeekStart[m.name];
+    const cnt = monthWeekCount[m.name] || 4;
+    for (let i = 0; i < cnt; i++) globalWeeks.push({ w: start + i, month: m.name });
+  });
+
   // 月份列文字颜色：7月最浅，逐月加深
   const monthColors = months.map((m, i) => {
     const ratio = months.length <= 1 ? 1 : i / (months.length - 1);
@@ -3150,32 +3161,41 @@ function renderGoalOverviewTable(months, goalsData, subjOrder) {
   });
 
   const th = (title, width, color) => `<th style="padding:6px 8px;border:1px solid #eee;background:#f5f7fa;text-align:center;${width ? 'width:' + width + ';' : ''}${color ? 'color:' + color + ';' : ''}white-space:nowrap;">${title}</th>`;
-  const cellStyle = (color) => `padding:6px 8px;border:1px solid #eee;text-align:left;vertical-align:top;word-break:break-all;white-space:normal;${color ? 'color:' + color + ';' : ''}`;
+  const cellStyle = (color, extra) => `padding:6px 8px;border:1px solid #eee;text-align:left;vertical-align:top;word-break:break-all;white-space:normal;${color ? 'color:' + color + ';' : ''}${extra || ''}`;
+  const emptyCell = `<td style="padding:6px 8px;border:1px solid #f5f5f5;background:#fcfcfc;"></td>`;
 
-  const monthCell = (m, s, field) => {
+  const monthCell = (m, s, field, extra) => {
     const mg = goalsData.find(g => g.month === m.name);
-    const val = field === 'goal' ? (mg?.subjects?.[s]?.goal || '') : (mg?.subjects?.[s]?.weeks?.[field] || '');
+    let val = '', name;
+    if (field === 'goal') {
+      val = mg?.subjects?.[s]?.goal || '';
+      name = `ov|${m.name}|${s}|goal`;
+    } else {
+      const rel = field - monthWeekStart[m.name] + 1;
+      val = mg?.subjects?.[s]?.weeks?.[String(rel)] || '';
+      name = `ov|${m.name}|${s}|week|${rel}`;
+    }
     const mi = months.findIndex(x => x.name === m.name);
     const color = monthColors[mi] || '#333';
-    const fieldKey = field === 'goal' ? 'goal' : ('week|' + field);
-    const name = `ov|${m.name}|${s}|${fieldKey}`;
     const content = goalOverviewEdit
       ? `<textarea name="${name}" style="width:100%;min-height:32px;padding:2px 4px;border:1px solid #ddd;border-radius:3px;font-size:10px;resize:vertical;box-sizing:border-box;">${escapeHtml(val)}</textarea>`
       : (escapeHtml(val) || '<span style="color:#ccc;">—</span>');
-    return `<td style="${cellStyle(color)}">${content}</td>`;
+    return `<td style="${cellStyle(color, extra)}">${content}</td>`;
   };
 
   const rows = subjOrder.map(s => {
+    // 总目标行：科目 + 各月总目标（加粗灰底）
     const goalRow = `<tr>
-      <td rowspan="${weekCount + 1}" style="padding:6px 8px;border:1px solid #eee;text-align:center;vertical-align:middle;background:${SUBJECT_COLORS[s]}18;color:${SUBJECT_COLORS[s]};font-weight:700;">${s}</td>
+      <td rowspan="${globalWeeks.length + 1}" style="padding:6px 8px;border:1px solid #eee;text-align:center;vertical-align:middle;background:${SUBJECT_COLORS[s]}18;color:${SUBJECT_COLORS[s]};font-weight:700;">${s}</td>
       <td style="padding:4px 8px;border:1px solid #eee;background:#e9ecef;color:#000;font-weight:700;text-align:center;font-size:10px;white-space:nowrap;">总目标</td>
-      ${months.map(m => monthCell(m, s, 'goal')).join('')}
+      ${months.map(m => monthCell(m, s, 'goal', 'background:#e9ecef;font-weight:700;')).join('')}
     </tr>`;
-    const weekRows = Array.from({ length: weekCount }, (_, i) => {
-      const wk = String(i + 1);
+    // 周目标行：按全局周编号展开，仅该周所属月份列有内容
+    const weekRows = globalWeeks.map(gw => {
+      const cells = months.map(m => m.name === gw.month ? monthCell(m, s, gw.w) : emptyCell).join('');
       return `<tr>
-        <td style="padding:4px 8px;border:1px solid #eee;background:#fafbfc;color:#888;text-align:center;font-size:10px;white-space:nowrap;">第${wk}周</td>
-        ${months.map(m => monthCell(m, s, wk)).join('')}
+        <td style="padding:4px 8px;border:1px solid #eee;background:#fafbfc;color:#666;font-weight:600;text-align:center;font-size:10px;white-space:nowrap;">W${gw.w}</td>
+        ${cells}
       </tr>`;
     }).join('');
     return goalRow + weekRows;
