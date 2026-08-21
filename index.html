@@ -3160,6 +3160,47 @@ async function renderCalendar() {
     <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;font-size:11px;color:#888;">
       <span>重要节点：</span>
       ${IMPORTANT_DATES.map(d => `<span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:${d.color};display:inline-block;"></span>${d.date} ${d.icon} ${d.label}</span>`).join('')}
+    </div>
+    ${renderGoalOverviewTable(months, goalsData, subjOrder)}`;
+}
+
+function renderGoalOverviewTable(months, goalsData, subjOrder) {
+  const weekCount = 4;
+  const th = (title, width) => `<th style="padding:6px 8px;border:1px solid #eee;background:#f5f7fa;text-align:center;${width ? 'width:' + width + ';' : ''}white-space:nowrap;">${title}</th>`;
+  const td = (content, extra) => `<td style="padding:6px 8px;border:1px solid #eee;text-align:left;vertical-align:top;word-break:break-all;white-space:normal;${extra || ''}">${content}</td>`;
+  const monthCell = (m, s, field) => {
+    const mg = goalsData.find(g => g.month === m.name);
+    const val = field === 'goal' ? (mg?.subjects?.[s]?.goal || '') : (mg?.subjects?.[s]?.weeks?.[field] || '');
+    return td(escapeHtml(val) || '<span style="color:#ccc;">—</span>');
+  };
+
+  const rows = subjOrder.map(s => {
+    const goalRow = `<tr>
+      <td rowspan="${weekCount + 1}" style="padding:6px 8px;border:1px solid #eee;text-align:center;vertical-align:middle;background:${SUBJECT_COLORS[s]}18;color:${SUBJECT_COLORS[s]};font-weight:700;">${s}</td>
+      <td style="padding:4px 8px;border:1px solid #eee;background:#fafbfc;color:#888;text-align:center;font-size:10px;white-space:nowrap;">总目标</td>
+      ${months.map(m => monthCell(m, s, 'goal')).join('')}
+    </tr>`;
+    const weekRows = Array.from({ length: weekCount }, (_, i) => {
+      const wk = String(i + 1);
+      return `<tr>
+        <td style="padding:4px 8px;border:1px solid #eee;background:#fafbfc;color:#888;text-align:center;font-size:10px;white-space:nowrap;">第${wk}周</td>
+        ${months.map(m => monthCell(m, s, wk)).join('')}
+      </tr>`;
+    }).join('');
+    return goalRow + weekRows;
+  }).join('');
+
+  return `
+    <div style="margin-top:16px;background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,.05);">
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px;color:#333;">目标一览表</div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed;">
+          <thead>
+            <tr>${th('科目', '64px')}${th('目标', '52px')}${months.map(m => th(m.name)).join('')}</tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
     </div>`;
 }
 
