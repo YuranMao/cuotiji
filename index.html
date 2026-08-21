@@ -1172,6 +1172,27 @@ const supabaseUrl = 'https://owuckenvwmdsithqvsod.supabase.co';
 const supabaseKey = 'sb_publishable_2Ccd-_BuUgE2RJ35YKyhBA_XhysffVW';
 const sb = supabase.createClient(supabaseUrl, supabaseKey);
 
+// ==================== 图片存储（Supabase Storage） ====================
+const IMG_BUCKET = 'cuotiji';
+
+function dataUrlToBlob(dataUrl) {
+  const parts = dataUrl.split(',');
+  const mime = (parts[0].match(/:(.*?);/) || [])[1] || 'image/jpeg';
+  const bin = atob(parts[1]);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+async function uploadImageToStorage(dataUrl, folder) {
+  const blob = dataUrlToBlob(dataUrl);
+  const ext = (blob.type.split('/')[1] || 'jpeg').replace('jpeg', 'jpg');
+  const path = folder + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext;
+  const { error } = await sb.storage.from(IMG_BUCKET).upload(path, blob, { contentType: blob.type });
+  if (error) throw error;
+  return sb.storage.from(IMG_BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
 // ==================== 艾宾浩斯间隔 ====================
 const EBB_INTERVALS = [1, 2, 4, 7, 15, 30];
 const EBB_LABELS_EN = { 1: '拼写', 2: '用法', 4: '综合缩词', 7: '缩词' };
@@ -1476,7 +1497,6 @@ async function loadFromCache() {
 }
 
 async function loadAllData() {
-  const statusEl = document.getElementById('connStatus');
   try {
     const [cRes, kpRes, qRes] = await Promise.all([
       sb.from('chapters').select('*').order('sort_order', { ascending: true }).order('id'),
@@ -1492,10 +1512,9 @@ async function loadAllData() {
     cachedKps = kpRes.data || [];
     cachedQuestions = qRes.data || [];
 
-    await saveToCache({ chapters: cachedChapters, kps: cachedKps, questions: cachedQuestions, ebbItems: cachedEbbItems, timeline: cachedTimeline });
+    saveToCache({ chapters: cachedChapters, kps: cachedKps, questions: cachedQuestions, ebbItems: cachedEbbItems, timeline: cachedTimeline });
 
-    statusEl.className = 'conn-status';
-    statusEl.innerHTML = '<span class="dot"></span> 数据已同步';
+    connStatusHtml('', '数据已同步');
   } catch (err) {
     console.warn('Supabase 加载失败，尝试离线缓存:', err.message);
     const cache = await loadFromCache();
@@ -1505,11 +1524,9 @@ async function loadAllData() {
       cachedQuestions = cache.questions || [];
       cachedEbbItems = cache.ebbItems || [];
       cachedTimeline = cache.timeline || [];
-      statusEl.className = 'conn-status warn';
-      statusEl.innerHTML = '<span class="dot"></span> 离线模式（上次缓存）';
+      connStatusHtml('warn', '离线模式（上次缓存）');
     } else {
-      statusEl.className = 'conn-status error';
-      statusEl.innerHTML = '<span class="dot"></span> 无数据，请检查网络';
+      connStatusHtml('error', '无数据，请检查网络');
     }
   }
 }
@@ -1572,6 +1589,47 @@ async function reloadSchedule() {
   scheduleLoaded = true;
 }
 
+// ==================== 旧图片迁移到 Storage ====================
+function hasLegacyImages() {
+  const q = cachedQuestions.some(x => x.image_data && String(x.image_data).startsWith('data:'));
+  const c = (cachedCoreQuestions || []).some(x => x.image_data && String(x.image_data).startsWith('data:'));
+  return q || c;
+}
+
+function connStatusHtml(extraClass, text) {
+  const el = document.getElementById('connStatus');
+  el.className = extraClass ? ('conn-status ' + extraClass) : 'conn-status';
+  let btn = '';
+  if (hasLegacyImages()) {
+    btn = '<button onclick="migrateLegacyImages()" style="margin-left:8px;padding:2px 10px;font-size:11px;background:#e67e22;color:#fff;border:none;border-radius:4px;cursor:pointer;">迁移旧图片</button>';
+  }
+  el.innerHTML = '<span class="dot"></span> ' + text + btn;
+}
+
+async function migrateLegacyImages() {
+  await reloadCoreQuestions();
+  const targets = [];
+  cachedQuestions.forEach(q => {
+    if (q.image_data && String(q.image_data).startsWith('data:')) targets.push({ table: 'questions', id: q.id, data: q.image_data, folder: 'questions' });
+  });
+  cachedCoreQuestions.forEach(q => {
+    if (q.image_data && String(q.image_data).startsWith('data:')) targets.push({ table: 'core_questions', id: q.id, data: q.image_data, folder: 'core' });
+  });
+  if (targets.length === 0) { showToast('没有需要迁移的旧图片'); return; }
+  showToast('开始迁移 ' + targets.length + ' 张图片…');
+  let ok = 0, fail = 0;
+  for (const t of targets) {
+    try {
+      const url = await uploadImageToStorage(t.data, t.folder);
+      const { error } = await sb.from(t.table).update({ image_data: url }).eq('id', t.id);
+      if (error) throw error;
+      ok++;
+    } catch (e) { fail++; console.warn('迁移失败 id=' + t.id, e.message); }
+  }
+  showToast('图片迁移完成：成功 ' + ok + '，失败 ' + fail);
+  if (ok > 0) await reloadAllCore();
+}
+
 // ==================== 章节 / 知识点操作 ====================
 async function saveChapter() {
   const name = document.getElementById('chapterNameInput').value.trim();
@@ -1621,16 +1679,21 @@ async function saveQuestion() {
   const kpId = parseInt(document.getElementById('qKpSelect').value, 10);
   const now = new Date().toISOString().slice(0, 10);
   try {
+    let imageData = selectedImageData;
+    try { imageData = await uploadImageToStorage(selectedImageData, 'questions'); }
+    catch (e) { console.warn('图片上传 Storage 失败，回退 base64 存储:', e.message); }
     const res = await sb.from('questions').insert({
       knowledge_point_id: kpId,
-      image_data: selectedImageData,
+      image_data: imageData,
       first_upload_date: now,
       correct_count: 0,
       wrong_count: 0,
       review_log: []
     });
     if (res.error) throw res.error;
-    await reloadQuestions();
+    const inserted = res.data && res.data[0];
+    if (inserted) cachedQuestions.push(inserted);
+    else await reloadQuestions();
     closeModal('questionModal');
     await refreshMainContent();
     await refreshSidebar();
@@ -1676,7 +1739,7 @@ async function deleteQuestion(id) {
   if (!confirm('确定删除该错题？')) return;
   try {
     await sb.from('questions').delete().eq('id', id);
-    await reloadQuestions();
+    cachedQuestions = cachedQuestions.filter(q => q.id != id);
     await refreshMainContent();
     await refreshSidebar();
     showToast('已删除');
@@ -1692,7 +1755,8 @@ async function markCorrect(id) {
   try {
     const res = await sb.from('questions').update({ correct_count: newCorrect, review_log: newLog }).eq('id', id);
     if (res.error) throw res.error;
-    await reloadQuestions();
+    q.correct_count = newCorrect;
+    q.review_log = newLog;
     await refreshMainContent();
     showToast(newCorrect >= 5 ? '恭喜！已完成！' : '答对了（' + newCorrect + '/5）');
   } catch (err) { showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err))); }
@@ -1707,7 +1771,8 @@ async function markWrong(id) {
   try {
     const res = await sb.from('questions').update({ wrong_count: newWrong, review_log: newLog }).eq('id', id);
     if (res.error) throw res.error;
-    await reloadQuestions();
+    q.wrong_count = newWrong;
+    q.review_log = newLog;
     await refreshMainContent();
     showToast('已记录（答错 ' + newWrong + ' 次）');
   } catch (err) { showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err))); }
@@ -1778,8 +1843,8 @@ async function swapChapterOrder(id1, id2) {
     elB.parentNode.insertBefore(elB, nextA);
   }
   // Fire API in background
-  sb.from('chapters').update({ sort_order: b.sort_order }).eq('id', a.id).then(() => {
-    return sb.from('chapters').update({ sort_order: a.sort_order }).eq('id', b.id);
+  sb.from('chapters').update({ sort_order: a.sort_order }).eq('id', a.id).then(() => {
+    return sb.from('chapters').update({ sort_order: b.sort_order }).eq('id', b.id);
   }).catch(err => showToast('排序保存失败: ' + err.message));
 }
 
@@ -1801,8 +1866,8 @@ async function swapKpOrder(id1, id2, chapterId) {
     elB.parentNode.insertBefore(elB, nextA);
   }
   // Fire API in background
-  sb.from('knowledge_points').update({ sort_order: b.sort_order }).eq('id', a.id).then(() => {
-    return sb.from('knowledge_points').update({ sort_order: a.sort_order }).eq('id', b.id);
+  sb.from('knowledge_points').update({ sort_order: a.sort_order }).eq('id', a.id).then(() => {
+    return sb.from('knowledge_points').update({ sort_order: b.sort_order }).eq('id', b.id);
   }).catch(err => showToast('排序保存失败: ' + err.message));
 }
 
@@ -1858,8 +1923,8 @@ async function swapQuestionOrder(id1, id2, kpId) {
   const a = list.find(q => q.id == id1);
   const b = list.find(q => q.id == id2);
   // Fire API in background
-  sb.from('questions').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id).then(() => {
-    return sb.from('questions').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
+  sb.from('questions').update({ sort_order: (a.sort_order || a.id) }).eq('id', a.id).then(() => {
+    return sb.from('questions').update({ sort_order: (b.sort_order || b.id) }).eq('id', b.id);
   }).catch(err => showToast('排序保存失败: ' + err.message));
 }
 
@@ -1875,8 +1940,8 @@ async function swapCoreQOrder(id1, id2, chapterId) {
   const a = list.find(q => q.id == id1);
   const b = list.find(q => q.id == id2);
   // Fire API in background
-  sb.from('core_questions').update({ sort_order: (b.sort_order || b.id) }).eq('id', a.id).then(() => {
-    return sb.from('core_questions').update({ sort_order: (a.sort_order || a.id) }).eq('id', b.id);
+  sb.from('core_questions').update({ sort_order: (a.sort_order || a.id) }).eq('id', a.id).then(() => {
+    return sb.from('core_questions').update({ sort_order: (b.sort_order || b.id) }).eq('id', b.id);
   }).catch(err => showToast('排序保存失败: ' + err.message));
 }
 
@@ -2044,7 +2109,10 @@ async function saveCoreQuestion() {
   const tag = document.getElementById('coreTagInput').value.trim();
   if (!selectedImageData) { showToast('请上传题目图片'); return; }
   try {
-    const res = await sb.from('core_questions').insert({ chapter_id: chapterId, image_data: selectedImageData, tag, correct_count: 0, wrong_count: 0, review_log: [] });
+    let imageData = selectedImageData;
+    try { imageData = await uploadImageToStorage(selectedImageData, 'core'); }
+    catch (e) { console.warn('图片上传 Storage 失败，回退 base64 存储:', e.message); }
+    const res = await sb.from('core_questions').insert({ chapter_id: chapterId, image_data: imageData, tag, correct_count: 0, wrong_count: 0, review_log: [] });
     if (res.error) throw res.error;
     await reloadCoreQuestions();
     closeModal('coreQuestionModal');
