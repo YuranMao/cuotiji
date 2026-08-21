@@ -509,7 +509,8 @@ body {
 }
 
 /* ---- Timeline ---- */
-.tl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; cursor: grab; }
+.tl-wrap.dragging { cursor: grabbing; user-select: none; }
 .tl-inner { min-width: 600px; }
 .tl-header {
   display: flex;
@@ -631,13 +632,6 @@ body {
   font-size: 13px;
 }
 .tl-toolbar button:active { background: #3a7bc8; }
-.tl-toolbar .tl-nav {
-  background: #fff;
-  color: #333;
-  border: 1px solid #d9d9d9;
-  padding: 6px 12px;
-  font-size: 12px;
-}
 .tl-legend {
   display: flex;
   gap: 10px;
@@ -2851,16 +2845,51 @@ function setTlView(mode) {
   renderTimeline();
 }
 
-function moveTimeline(dir) {
-  const days = dir * 14;
-  tlRangeStart = new Date(tlRangeStart);
-  tlRangeStart.setDate(tlRangeStart.getDate() + days);
-  tlRangeStart = formatDate(tlRangeStart);
-  tlRangeEnd = new Date(tlRangeEnd);
-  tlRangeEnd.setDate(tlRangeEnd.getDate() + days);
-  tlRangeEnd = formatDate(tlRangeEnd);
-  renderTimeline();
+// 甘特图：按住拖动平移日期窗口，替代前两周/后两周按钮
+let tlDrag = { active: false, startX: 0, dx: 0, dayWidth: 28, el: null, inner: null };
+let tlMoved = false;
+function tlDragStart(e) {
+  const el = e.currentTarget;
+  const inner = el.querySelector('.tl-inner');
+  if (!inner) return;
+  const dayEl = inner.querySelector('.tl-days .tl-day');
+  tlDrag.active = true;
+  tlDrag.startX = e.pageX;
+  tlDrag.dx = 0;
+  tlDrag.dayWidth = (dayEl && dayEl.offsetWidth) || 28;
+  tlDrag.el = el;
+  tlDrag.inner = inner;
+  tlMoved = false;
+  el.classList.add('dragging');
 }
+function tlDragMove(e) {
+  if (!tlDrag.active || !tlDrag.inner) return;
+  const dx = e.pageX - tlDrag.startX;
+  if (Math.abs(dx) > 5) tlMoved = true;
+  if (tlMoved) { e.preventDefault(); tlDrag.dx = dx; tlDrag.inner.style.transform = 'translateX(' + dx + 'px)'; }
+}
+function tlDragEnd() {
+  if (!tlDrag.active) return;
+  if (tlDrag.el) tlDrag.el.classList.remove('dragging');
+  const dx = tlDrag.dx;
+  if (tlMoved && Math.abs(dx) > 5) {
+    const shiftDays = -Math.round(dx / tlDrag.dayWidth);
+    if (shiftDays !== 0) {
+      const s = new Date(tlRangeStart); s.setDate(s.getDate() + shiftDays); tlRangeStart = formatDate(s);
+      const e = new Date(tlRangeEnd); e.setDate(e.getDate() + shiftDays); tlRangeEnd = formatDate(e);
+      renderTimeline();
+      tlDrag.active = false; tlDrag.el = null; tlDrag.inner = null;
+      return;
+    }
+  }
+  if (tlDrag.inner) tlDrag.inner.style.transform = '';
+  tlDrag.active = false; tlDrag.el = null; tlDrag.inner = null;
+}
+document.addEventListener('mousemove', tlDragMove);
+document.addEventListener('mouseup', tlDragEnd);
+document.addEventListener('click', (e) => {
+  if (tlMoved) { tlMoved = false; e.stopPropagation(); e.preventDefault(); }
+}, true);
 
 async function renderTimeline() {
   const container = document.getElementById('panelTimeline');
@@ -2874,9 +2903,9 @@ async function renderTimeline() {
         <button onclick="setTlView('calendar')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${tlViewMode==='calendar'?'background:#4a90d9;color:#fff;border-color:#4a90d9':'background:#fff;color:#333'}">月历 + 目标</button>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
-        ${tlViewMode === 'gantt' ? `<div><button class="tl-nav" onclick="moveTimeline(-1)">◀ 前两周</button>
-        <span style="font-size:12px;color:#888;margin:0 8px;">${tlRangeStart} ~ ${tlRangeEnd}</span>
-        <button class="tl-nav" onclick="moveTimeline(1)">后两周 ▶</button></div>` : ''}
+        ${tlViewMode === 'gantt' ? `<div style="display:flex;gap:6px;align-items:center;">
+        <span style="font-size:12px;color:#888;">${tlRangeStart} ~ ${tlRangeEnd}</span>
+        <span style="font-size:10px;color:#bbb;">（可左右拖动查看）</span></div>` : ''}
       </div>
     </div>`;
 
@@ -2915,7 +2944,7 @@ async function renderTimeline() {
     <div class="tl-legend">
       ${subjects.map(s => `<span><span class="tl-l-dot" style="background:${SUBJECT_COLORS[s]}"></span>${s}</span>`).join('')}
     </div>
-    <div class="tl-wrap">
+    <div class="tl-wrap" onmousedown="tlDragStart(event)">
       <div class="tl-inner">
         <div class="tl-header">
           <div class="tl-label-col">科目</div>
