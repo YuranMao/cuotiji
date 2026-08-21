@@ -2990,6 +2990,7 @@ async function renderCalendar() {
 
   const subjColors = { '专业课': '#27ae60', '数学': '#4a90d9', '英语': '#e67e22', '政治': '#9b59b6' };
   const goalsData = await getGoalsData();
+  const renderedGoalWeeks = new Set();
 
   return `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
@@ -3078,7 +3079,8 @@ async function renderCalendar() {
           for (const [gw, cnt] of Object.entries(gwsCount)) {
             if (cnt > maxCount) { maxCount = cnt; primaryGW = parseInt(gw); }
           }
-          if (primaryGW) {
+          if (primaryGW && !renderedGoalWeeks.has(primaryGW)) {
+            renderedGoalWeeks.add(primaryGW);
             const goals = weekGoals[primaryGW] || {};
             const entries = Object.entries(goals).filter(([, t]) => t && t.trim());
             if (entries.length > 0) {
