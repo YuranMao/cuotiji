@@ -3228,24 +3228,49 @@ function renderScheduleGrid() {
   });
 }
 
-// 滚动复习表：按住拖动横向滚动，替代前3天/后3天按钮
-let schDrag = { active: false, startX: 0, scrollLeft: 0, el: null };
+// 滚动复习表：按住拖动平移日期窗口，替代前3天/后3天按钮
+let schDrag = { active: false, startX: 0, dx: 0, dayWidth: 40, el: null, table: null };
 let schMoved = false;
 function schDragStart(e) {
   const el = e.currentTarget;
-  schDrag.active = true; schDrag.startX = e.pageX; schDrag.scrollLeft = el.scrollLeft; schDrag.el = el;
+  const table = el.querySelector('table.schedule-table');
+  if (!table) return;
+  const dayTh = table.querySelector('thead th:nth-child(2)');
+  schDrag.active = true;
+  schDrag.startX = e.pageX;
+  schDrag.dx = 0;
+  schDrag.dayWidth = (dayTh && dayTh.offsetWidth) || 40;
+  schDrag.el = el;
+  schDrag.table = table;
   schMoved = false;
   el.classList.add('dragging');
 }
 function schDragMove(e) {
-  if (!schDrag.active || !schDrag.el) return;
+  if (!schDrag.active || !schDrag.table) return;
   const dx = e.pageX - schDrag.startX;
   if (Math.abs(dx) > 5) schMoved = true;
-  if (schMoved) { e.preventDefault(); schDrag.el.scrollLeft = schDrag.scrollLeft - dx; }
+  if (schMoved) { e.preventDefault(); schDrag.dx = dx; schDrag.table.style.transform = 'translateX(' + dx + 'px)'; }
 }
 function schDragEnd() {
+  if (!schDrag.active) return;
   if (schDrag.el) schDrag.el.classList.remove('dragging');
-  schDrag.active = false; schDrag.el = null;
+  const dx = schDrag.dx;
+  if (schMoved && Math.abs(dx) > 5) {
+    const shiftDays = -Math.round(dx / schDrag.dayWidth);
+    if (shiftDays !== 0) {
+      const start = new Date(scheduleDateRange.start);
+      start.setDate(start.getDate() + shiftDays);
+      scheduleDateRange.start = formatDate(start);
+      const end = new Date(scheduleDateRange.end);
+      end.setDate(end.getDate() + shiftDays);
+      scheduleDateRange.end = formatDate(end);
+      reloadSchedule().then(() => renderScheduleGrid());
+      schDrag.active = false; schDrag.el = null; schDrag.table = null;
+      return;
+    }
+  }
+  if (schDrag.table) schDrag.table.style.transform = '';
+  schDrag.active = false; schDrag.el = null; schDrag.table = null;
 }
 document.addEventListener('mousemove', schDragMove);
 document.addEventListener('mouseup', schDragEnd);
