@@ -2830,17 +2830,9 @@ async function saveGoalsData(data) {
   } catch(e) { return false; }
 }
 let goalOverviewEdit = false; // 目标一览表编辑态
-// 各月第1周的全局周编号（月历与目标一览表共用，保证周数一致）
-const MONTH_WEEK_START = { '7月': 3, '8月': 7, '9月': 11, '10月': 15, '11月': 19, '12月': 23 };
-const MONTH_WEEK_COUNT = { '7月': 4, '8月': 4, '9月': 4, '10月': 4, '11月': 4, '12月': 3 };
-function getGoalWeek(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  const monthName = (d.getMonth() + 1) + '月';
-  const start = MONTH_WEEK_START[monthName];
-  if (start == null) return 0;
-  const cnt = MONTH_WEEK_COUNT[monthName] || 4;
-  const rel = Math.min(Math.floor((d.getDate() - 1) / 7) + 1, cnt);
-  return start + rel - 1;
+const WEEK1 = new Date(2026, 5, 22); // 第1周从6月22日开始
+function getGlobalWeek(dateStr) {
+  return Math.floor((new Date(dateStr + 'T00:00:00').getTime() - WEEK1.getTime()) / 604800000) + 1;
 }
 
 function editGoalOverview() { goalOverviewEdit = true; refreshCalendarView(); }
@@ -3128,7 +3120,7 @@ async function renderCalendar() {
         const goalSubjects = monthGoals ? Object.entries(monthGoals.subjects).filter(([, v]) => v.goal).sort((a, b) => subjOrder.indexOf(a[0]) - subjOrder.indexOf(b[0])) : [];
 
         // Build week goal map
-        const monthWeekBase = MONTH_WEEK_START[m.name];
+        const monthWeekBase = getGlobalWeek(formatDate(m.start));
         const weekGoals = {};
         if (monthGoals) {
           for (const [s, sd] of Object.entries(monthGoals.subjects)) {
@@ -3148,7 +3140,7 @@ async function renderCalendar() {
           const ds = todayMonth + '-' + String(d).padStart(2, '0');
           const events = cachedTimeline.filter(ev => ev.end_date === ds);
           const impDate = IMPORTANT_DATES.find(id => id.date === ds);
-          const globalWeek = getGoalWeek(ds);
+          const globalWeek = getGlobalWeek(ds);
           monthDates.push({ day: d, date: ds, events, impDate, globalWeek });
         }
 
@@ -3235,8 +3227,9 @@ async function renderCalendar() {
 
 function renderGoalOverviewTable(months, goalsData, subjOrder) {
   const weekCount = 4; // 每科每月4个周目标
-  const monthWeekStart = MONTH_WEEK_START;
-  const monthWeekCount = MONTH_WEEK_COUNT;
+  // 各月第1周的全局周编号（相对周rel对应 monthWeekStart + rel - 1）
+  const monthWeekStart = { '7月': 3, '8月': 7, '9月': 11, '10月': 15, '11月': 19, '12月': 23 };
+  const monthWeekCount = { '7月': 4, '8月': 4, '9月': 4, '10月': 4, '11月': 4, '12月': 3 };
 
   // 月份列文字颜色：7月最浅，逐月加深
   const monthColors = months.map((m, i) => {
