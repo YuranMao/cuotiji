@@ -338,8 +338,10 @@ body {
   cursor: pointer;
   overflow: hidden;
 }
-.answer-title { color: #4a90d9; font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.answer-title { color: #4a90d9; font-size: 12px; font-weight: 600; margin-bottom: 6px; display:flex; align-items:center; justify-content:space-between; }
+.answer-edit-btn { border:1px solid #b8d2ea; border-radius:4px; background:#fff; color:#4a90d9; padding:2px 7px; font-size:11px; cursor:pointer; }
 .answer-content { color: #333; font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+.answer-image { display:block; max-width:100%; max-height:180px; margin-top:8px; object-fit:contain; cursor:zoom-in; }
 .answer-mask {
   position: absolute;
   inset: 0;
@@ -1035,6 +1037,17 @@ body {
       <label for="qAnswerInput">答案（支持 LaTeX）</label>
       <textarea id="qAnswerInput" rows="4" placeholder="输入答案，可使用 $...$ 或 $$...$$ 输入公式"></textarea>
     </div>
+    <div class="form-group">
+      <label>上传答案图片</label>
+      <div class="image-upload-area" id="answerImageUploadArea">
+        <input type="file" id="answerImageFileInput" accept="image/*" capture="environment" onchange="handleAnswerImageSelect(event)">
+        <div class="placeholder">
+          <span class="upload-icon">🖼️</span>
+          点击上传答案图片
+        </div>
+      </div>
+    </div>
+    <input type="hidden" id="editQuestionId">
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal('questionModal')">取消</button>
       <button class="btn-confirm" onclick="saveQuestion()">保存</button>
@@ -1252,6 +1265,7 @@ let selectedChapterId = null;
 let selectedKpId = null;
 let selectedCoreChapterId = null;
 let selectedImageData = null;
+let selectedAnswerImageData = null;
 let cachedChapters = [];
 let cachedKps = [];
 let cachedQuestions = [];
@@ -1343,6 +1357,14 @@ function closeModal(id) {
     area.classList.remove('has-image');
     area.querySelector('img')?.remove();
     area.querySelector('.placeholder').style.display = '';
+    selectedAnswerImageData = null;
+    document.getElementById('answerImageFileInput').value = '';
+    const answerArea = document.getElementById('answerImageUploadArea');
+    answerArea.classList.remove('has-image');
+    answerArea.querySelector('img')?.remove();
+    answerArea.querySelector('.placeholder').style.display = '';
+    document.getElementById('editQuestionId').value = '';
+    document.getElementById('qAnswerInput').value = '';
   }
   if (id === 'chapterModal') {
     document.getElementById('chapterNameInput').value = '';
@@ -1416,12 +1438,20 @@ async function showQuestionModal() {
     </option>`;
   }).join('');
   selectedImageData = null;
+  selectedAnswerImageData = null;
+  document.getElementById('editQuestionId').value = '';
   document.getElementById('qAnswerInput').value = '';
   document.getElementById('imageFileInput').value = '';
+  document.getElementById('answerImageFileInput').value = '';
   const area = document.getElementById('imageUploadArea');
   area.classList.remove('has-image');
   area.querySelector('img')?.remove();
   area.querySelector('.placeholder').style.display = '';
+  const answerArea = document.getElementById('answerImageUploadArea');
+  answerArea.classList.remove('has-image');
+  answerArea.querySelector('img')?.remove();
+  answerArea.querySelector('.placeholder').style.display = '';
+  document.getElementById('questionModal').querySelector('h3').textContent = '添加错题';
   openModal('questionModal');
 }
 
@@ -1454,6 +1484,44 @@ function handleImageSelect(e) {
     img.src = ev.target.result;
   };
   reader.readAsDataURL(file);
+}
+
+function handleAnswerImageSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    selectedAnswerImageData = ev.target.result;
+    const area = document.getElementById('answerImageUploadArea');
+    area.classList.add('has-image');
+    area.querySelector('.placeholder').style.display = 'none';
+    let preview = area.querySelector('img');
+    if (!preview) { preview = document.createElement('img'); area.appendChild(preview); }
+    preview.src = selectedAnswerImageData;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function editQuestionAnswer(id) {
+  const q = cachedQuestions.find(item => item.id == id);
+  if (!q) return;
+  selectedAnswerImageData = null;
+  document.getElementById('editQuestionId').value = id;
+  document.getElementById('qAnswerInput').value = q.answer || '';
+  const area = document.getElementById('answerImageUploadArea');
+  area.classList.remove('has-image');
+  area.querySelector('img')?.remove();
+  area.querySelector('.placeholder').style.display = '';
+  if (q.answer_image) {
+    selectedAnswerImageData = q.answer_image;
+    area.classList.add('has-image');
+    area.querySelector('.placeholder').style.display = 'none';
+    const preview = document.createElement('img');
+    preview.src = q.answer_image;
+    area.appendChild(preview);
+  }
+  document.getElementById('questionModal').querySelector('h3').textContent = '编辑错题答案';
+  openModal('questionModal');
 }
 
 function closeImgPreview() { document.getElementById('imgPreview').classList.remove('show'); }
@@ -1718,6 +1786,25 @@ async function saveKnowledgePoint() {
 }
 
 async function saveQuestion() {
+  const editId = document.getElementById('editQuestionId').value;
+  if (editId) {
+    try {
+      let answerImage = selectedAnswerImageData || '';
+      if (answerImage.startsWith('data:')) {
+        try { answerImage = await uploadImageToStorage(answerImage, 'answers'); }
+        catch (e) { console.warn('答案图片上传 Storage 失败，回退 base64 存储:', e.message); }
+      }
+      const answer = document.getElementById('qAnswerInput').value.trim();
+      const res = await sb.from('questions').update({ answer, answer_image: answerImage }).eq('id', editId);
+      if (res.error) throw res.error;
+      const q = cachedQuestions.find(item => item.id == editId);
+      if (q) { q.answer = answer; q.answer_image = answerImage; }
+      closeModal('questionModal');
+      await refreshMainContent();
+      showToast('答案已更新');
+    } catch (err) { showToast('保存失败: ' + (err.message || err.details || JSON.stringify(err))); }
+    return;
+  }
   if (!selectedImageData) { showToast('请上传题目图片'); return; }
   const kpId = parseInt(document.getElementById('qKpSelect').value, 10);
   const now = new Date().toISOString().slice(0, 10);
@@ -1725,10 +1812,16 @@ async function saveQuestion() {
     let imageData = selectedImageData;
     try { imageData = await uploadImageToStorage(selectedImageData, 'questions'); }
     catch (e) { console.warn('图片上传 Storage 失败，回退 base64 存储:', e.message); }
+    let answerImage = selectedAnswerImageData || '';
+    if (answerImage.startsWith('data:')) {
+      try { answerImage = await uploadImageToStorage(answerImage, 'answers'); }
+      catch (e) { console.warn('答案图片上传 Storage 失败，回退 base64 存储:', e.message); }
+    }
     const res = await sb.from('questions').insert({
       knowledge_point_id: kpId,
       image_data: imageData,
       answer: document.getElementById('qAnswerInput').value.trim(),
+      answer_image: answerImage,
       first_upload_date: now,
       correct_count: 0,
       wrong_count: 0,
@@ -2305,11 +2398,13 @@ function revealAnswer(element) {
   }
 }
 
-function renderAnswerHtml(answer) {
-  const text = answer ? escapeHtml(answer) : '未填写答案';
+function renderAnswerHtml(answer, answerImage, questionId) {
+  const text = answer ? escapeHtml(answer) : '未填写文字答案';
+  const image = answerImage ? `<img src="${escapeHtml(answerImage)}" alt="答案图片" class="answer-image" onclick="event.stopPropagation();previewImage(this.src)">` : '';
   return `<div class="answer-section" onclick="event.stopPropagation();revealAnswer(this)" title="点击显示答案">
-    <div class="answer-title">答案</div>
+    <div class="answer-title">答案 <button class="answer-edit-btn" onclick="event.stopPropagation();editQuestionAnswer(${questionId})">编辑</button></div>
     <div class="answer-content">${text}</div>
+    ${image}
     <div class="answer-mask">点击显示答案</div>
   </div>`;
 }
@@ -2443,7 +2538,7 @@ async function refreshMainContent() {
         <div class="card-info">
           <div class="card-date">📅 首次上传：${q.first_upload_date}</div>
           ${q.file_name ? `<div class="card-date" style="margin-top:4px;color:#888;">📄 ${escapeHtml(q.file_name)}</div>` : ''}
-          ${renderAnswerHtml(q.answer)}
+          ${renderAnswerHtml(q.answer, q.answer_image, q.id)}
           <div class="progress-section">
             ${isCompleted ? '<span class="card-badge">✓ 已完成</span>' : ''}
             <div class="progress-header">

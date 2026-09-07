@@ -21,6 +21,7 @@ create table if not exists questions (
   knowledge_point_id bigint references knowledge_points(id) on delete cascade,
   image_data text not null,
   answer text default '',
+  answer_image text default '',
   first_upload_date date not null,
   file_name text,
   sort_order int default 0,
@@ -64,6 +65,7 @@ create table if not exists core_questions (
 
 -- questions 表已存在时执行以下升级：
 alter table questions add column if not exists answer text default '';
+alter table questions add column if not exists answer_image text default '';
 
 -- 如果 core_questions 表已存在，执行以下 alter 来升级：
 -- alter table core_questions alter column name drop not null;
