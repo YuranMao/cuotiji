@@ -327,6 +327,31 @@ body {
   user-drag: none;
 }
 .card-info { padding: 12px 14px; }
+.answer-section {
+  position: relative;
+  min-height: 48px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid #dbe8f5;
+  border-radius: 6px;
+  background: #f7fbff;
+  cursor: pointer;
+  overflow: hidden;
+}
+.answer-title { color: #4a90d9; font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.answer-content { color: #333; font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+.answer-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: repeating-linear-gradient(135deg, #d8e5f2 0, #d8e5f2 8px, #c9d9e8 8px, #c9d9e8 16px);
+  color: #52708d;
+  font-size: 12px;
+  transition: opacity .2s;
+}
+.answer-section.revealed .answer-mask { opacity: 0; pointer-events: none; }
 .card-date {
   font-size: 12px;
   color: #999;
@@ -1006,6 +1031,10 @@ body {
         </div>
       </div>
     </div>
+    <div class="form-group">
+      <label for="qAnswerInput">答案（支持 LaTeX）</label>
+      <textarea id="qAnswerInput" rows="4" placeholder="输入答案，可使用 $...$ 或 $$...$$ 输入公式"></textarea>
+    </div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal('questionModal')">取消</button>
       <button class="btn-confirm" onclick="saveQuestion()">保存</button>
@@ -1165,6 +1194,13 @@ body {
 
 <!-- Supabase JS -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+    options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre'] }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
 <script>
 // ==================== Supabase ====================
@@ -1380,6 +1416,7 @@ async function showQuestionModal() {
     </option>`;
   }).join('');
   selectedImageData = null;
+  document.getElementById('qAnswerInput').value = '';
   document.getElementById('imageFileInput').value = '';
   const area = document.getElementById('imageUploadArea');
   area.classList.remove('has-image');
@@ -1691,6 +1728,7 @@ async function saveQuestion() {
     const res = await sb.from('questions').insert({
       knowledge_point_id: kpId,
       image_data: imageData,
+      answer: document.getElementById('qAnswerInput').value.trim(),
       first_upload_date: now,
       correct_count: 0,
       wrong_count: 0,
@@ -2260,6 +2298,22 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function revealAnswer(element) {
+  element.classList.add('revealed');
+  if (window.MathJax && MathJax.typesetPromise) {
+    MathJax.typesetPromise([element.querySelector('.answer-content')]).catch(() => {});
+  }
+}
+
+function renderAnswerHtml(answer) {
+  const text = answer ? escapeHtml(answer) : '未填写答案';
+  return `<div class="answer-section" onclick="event.stopPropagation();revealAnswer(this)" title="点击显示答案">
+    <div class="answer-title">答案</div>
+    <div class="answer-content">${text}</div>
+    <div class="answer-mask">点击显示答案</div>
+  </div>`;
+}
+
 function selectChapter(chapterId) {
   selectedChapterId = (selectedChapterId == chapterId) ? null : chapterId;
   selectedKpId = null;
@@ -2389,6 +2443,7 @@ async function refreshMainContent() {
         <div class="card-info">
           <div class="card-date">📅 首次上传：${q.first_upload_date}</div>
           ${q.file_name ? `<div class="card-date" style="margin-top:4px;color:#888;">📄 ${escapeHtml(q.file_name)}</div>` : ''}
+          ${renderAnswerHtml(q.answer)}
           <div class="progress-section">
             ${isCompleted ? '<span class="card-badge">✓ 已完成</span>' : ''}
             <div class="progress-header">
