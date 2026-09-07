@@ -291,6 +291,14 @@ body {
 .empty-state .empty-icon { font-size: 52px; margin-bottom: 14px; }
 .empty-state p { font-size: 14px; line-height: 1.8; }
 
+.kp-note-block { margin-bottom: 16px; padding: 14px; background: #fffdf2; border: 1px solid #eadca8; border-radius: 6px; }
+.kp-note-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.kp-note-title { color:#8a6d1d; font-size:14px; font-weight:600; }
+.kp-note-block textarea { width:100%; min-height:100px; padding:10px; border:1px solid #e2d49c; border-radius:5px; background:#fffef8; resize:vertical; font:13px/1.7 inherit; color:#333; }
+.kp-note-content { padding:4px 2px; color:#333; font-size:14px; line-height:1.8; white-space:pre-wrap; word-break:break-word; }
+.kp-note-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:8px; }
+.kp-note-actions button { padding:5px 12px; border:1px solid #d6bf67; border-radius:4px; background:#fff; color:#8a6d1d; cursor:pointer; font-size:12px; }
+.kp-note-actions button.primary { background:#c9a227; border-color:#c9a227; color:#fff; }
 .question-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -2469,6 +2477,34 @@ async function selectKp(kpId) {
   await refreshMainContent();
 }
 
+async function saveKpNote(kpId) {
+  const input = document.getElementById('kpNoteInput');
+  if (!input) return;
+  const note = input.value.trim();
+  const res = await sb.from('knowledge_points').update({ note }).eq('id', kpId);
+  if (res.error) { showToast('笔记保存失败: ' + res.error.message); return; }
+  const kp = cachedKps.find(item => item.id == kpId);
+  if (kp) kp.note = note;
+  const block = document.getElementById('kpNoteBlock');
+  if (block) block.outerHTML = renderKpNote(kpId, false);
+  showToast('笔记已保存');
+}
+
+function editKpNote(kpId) {
+  const block = document.getElementById('kpNoteBlock');
+  if (block) block.outerHTML = renderKpNote(kpId, true);
+}
+
+function renderKpNote(kpId, editing = false) {
+  const kp = cachedKps.find(item => item.id == kpId);
+  if (!kp) return '';
+  const note = kp.note || '';
+  if (editing) {
+    return `<div class="kp-note-block" id="kpNoteBlock"><div class="kp-note-header"><span class="kp-note-title">我的笔记</span><span style="font-size:11px;color:#999;">支持 LaTeX</span></div><textarea id="kpNoteInput" placeholder="记录这个知识点的重点、易错点或公式，支持 $...$ 和 $$...$$">${escapeHtml(note)}</textarea><div class="kp-note-actions"><button class="primary" onclick="saveKpNote(${kpId})">保存笔记</button></div></div>`;
+  }
+  return `<div class="kp-note-block" id="kpNoteBlock"><div class="kp-note-header"><span class="kp-note-title">我的笔记</span><button onclick="editKpNote(${kpId})" style="padding:3px 9px;border:1px solid #d6bf67;border-radius:4px;background:#fff;color:#8a6d1d;cursor:pointer;font-size:11px;">编辑</button></div>${note ? `<div class="kp-note-content">${escapeHtml(note)}</div>` : '<div style="color:#aaa;font-size:13px;padding:4px 2px;">暂无笔记</div>'}</div>`;
+}
+
 async function refreshMainContent() {
   updateMainHeader();
 
@@ -2552,12 +2588,14 @@ async function refreshMainContent() {
 
   const container = document.getElementById('panelCuoti');
 
+  const noteBlock = renderKpNote(selectedKpId, false);
   if (filtered.length === 0) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><p>该知识点下暂无错题</p></div>';
+    container.innerHTML = noteBlock + '<div class="empty-state"><div class="empty-icon">📝</div><p>该知识点下暂无错题</p></div>';
+    typesetKpNote(container);
     return;
   }
 
-  container.innerHTML = `<div class="question-grid">${filtered.map((q, qIdx) => {
+  container.innerHTML = noteBlock + `<div class="question-grid">${filtered.map((q, qIdx) => {
     const correct = q.correct_count || 0;
     const wrong = q.wrong_count || 0;
     const total = correct + wrong;
@@ -2606,6 +2644,11 @@ async function refreshMainContent() {
         </div>
       </div>`;
   }).join('')}</div>`;
+  typesetKpNote(container);
+}
+
+function typesetKpNote(container) {
+  if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([container.querySelector('.kp-note-content')].filter(Boolean)).catch(() => {});
 }
 
 function updateMainHeader() {
