@@ -40,6 +40,14 @@ create table if not exists ebbinghaus_items (
   created_at timestamptz default now()
 );
 
+create table if not exists political_mindmaps (
+  id bigserial primary key,
+  name text not null,
+  code text not null default 'mindmap\n  root((章节))',
+  sort_order int default 0,
+  created_at timestamptz default now()
+);
+
 create table if not exists timeline_events (
   id bigserial primary key,
   subject text not null,
@@ -99,6 +107,7 @@ alter table timeline_events enable row level security;
 alter table core_questions enable row level security;
 alter table schedule_time_slots enable row level security;
 alter table daily_schedule enable row level security;
+alter table political_mindmaps enable row level security;
 
 -- 允许 anon key 全权限操作（个人应用）
 do $$
@@ -126,5 +135,8 @@ begin
   end if;
   if not exists (select 1 from pg_policies where policyname='Allow all on daily_schedule') then
     create policy "Allow all on daily_schedule" on daily_schedule for all using (true);
+  end if;
+  if not exists (select 1 from pg_policies where policyname='Allow all on political_mindmaps') then
+    create policy "Allow all on political_mindmaps" on political_mindmaps for all using (true);
   end if;
 end $$;

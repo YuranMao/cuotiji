@@ -528,6 +528,17 @@ body {
   justify-content: space-between;
   flex-wrap: wrap;
 }
+.mindmap-panel { margin-top: 14px; }
+.mindmap-chapters { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+.mindmap-chapters button { padding:6px 12px; border:1px solid #d9d9d9; border-radius:6px; background:#fff; color:#555; cursor:pointer; font-size:12px; }
+.mindmap-chapters button.active { background:#9b59b6; border-color:#9b59b6; color:#fff; }
+.mindmap-editor { display:grid; grid-template-columns:minmax(240px, .8fr) minmax(320px, 1.2fr); gap:14px; }
+.mindmap-editor textarea { width:100%; min-height:360px; padding:12px; border:1px solid #d9d9d9; border-radius:6px; resize:vertical; font:13px/1.6 Consolas, monospace; }
+.mindmap-preview { min-height:360px; overflow:auto; padding:12px; border:1px solid #e6e6e6; border-radius:6px; background:#fff; }
+.mindmap-actions { display:flex; gap:8px; margin-top:10px; }
+.mindmap-actions button { padding:7px 14px; border:0; border-radius:6px; background:#9b59b6; color:#fff; cursor:pointer; font-size:12px; }
+.mindmap-actions button.secondary { background:#f1eaf5; color:#7d3c98; }
+@media (max-width:768px) { .mindmap-editor { grid-template-columns:1fr; } .mindmap-editor textarea, .mindmap-preview { min-height:260px; } }
 @media (max-width:768px) {
   .ebb-table { font-size: 11px; }
   .ebb-table thead th { padding: 8px 3px; font-size: 10px; }
@@ -1081,6 +1092,22 @@ body {
   </div>
 </div>
 
+<!-- 政治思维导图弹窗 -->
+<div class="modal-overlay" id="mindmapModal">
+  <div class="modal">
+    <h3 id="mindmapModalTitle">添加政治章节</h3>
+    <div class="form-group">
+      <label>章节名称</label>
+      <input type="text" id="mindmapChapterInput" placeholder="例如：马克思主义基本原理" autocomplete="off">
+    </div>
+    <input type="hidden" id="editMindmapId">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('mindmapModal')">取消</button>
+      <button class="btn-confirm" onclick="saveMindmapChapter()">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- 艾宾浩斯弹窗 -->
 <div class="modal-overlay" id="ebbModal">
   <div class="modal">
@@ -1214,6 +1241,11 @@ body {
   };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+
+<script>
+  mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
+</script>
 
 <script>
 // ==================== Supabase ====================
@@ -1270,6 +1302,8 @@ let cachedChapters = [];
 let cachedKps = [];
 let cachedQuestions = [];
 let cachedEbbItems = [];
+let cachedMindmaps = [];
+let selectedMindmapId = null;
 let cachedTimeline = [];
 let ebbLoaded = false;
 let tlLoaded = false;
@@ -1308,11 +1342,17 @@ function switchTab(tab) {
   } else if (tab === 'ebb') {
     appLayout.classList.add('not-cuoti');
     closeSidebar();
-    addBtn.textContent = '+ 背诵项';
+    addBtn.textContent = ebbSubject === '政治' ? '+ 章节' : '+ 背诵项';
     addBtn.disabled = false;
-    breadcrumb.textContent = '艾宾浩斯遗忘表';
-    if (!ebbLoaded) { reloadEbb().then(() => { ebbLoaded = true; renderEbb(); }); }
-    else renderEbb();
+    breadcrumb.textContent = ebbSubject === '政治' ? '政治思维导图' : '艾宾浩斯遗忘表';
+    if (ebbSubject === '政治') {
+      addBtn.onclick = () => showMindmapModal();
+      if (!cachedMindmaps.length) reloadMindmaps().then(renderEbb); else renderEbb();
+    } else {
+      addBtn.onclick = () => showEbbModal();
+      if (!ebbLoaded) { reloadEbb().then(() => { ebbLoaded = true; renderEbb(); }); }
+      else renderEbb();
+    }
   } else if (tab === 'timeline') {
     appLayout.classList.add('not-cuoti');
     closeSidebar();
@@ -1326,7 +1366,7 @@ function switchTab(tab) {
 
 function handleAddBtn() {
   if (currentTab === 'cuoti') showQuestionModal();
-  else if (currentTab === 'ebb') showEbbModal();
+  else if (currentTab === 'ebb') ebbSubject === '政治' ? showMindmapModal() : showEbbModal();
   else if (currentTab === 'timeline') showTlModal();
 }
 
@@ -2731,11 +2771,79 @@ function getEbbDynamicSchedule(item) {
 
 function setEbbSubject(subj) {
   ebbSubject = subj;
+  if (currentTab === 'ebb') {
+    const addBtn = document.getElementById('addBtn');
+    addBtn.textContent = subj === '政治' ? '+ 章节' : '+ 背诵项';
+    addBtn.onclick = () => subj === '政治' ? showMindmapModal() : showEbbModal();
+    document.getElementById('breadcrumb').textContent = subj === '政治' ? '政治思维导图' : '艾宾浩斯遗忘表';
+  }
+  if (subj === '政治' && !cachedMindmaps.length) reloadMindmaps().then(renderEbb);
+  else renderEbb();
+}
+
+async function reloadMindmaps() {
+  const res = await sb.from('political_mindmaps').select('*').order('sort_order').order('created_at');
+  if (res.error) { showToast('政治章节加载失败，请先执行 schema.sql'); return; }
+  cachedMindmaps = res.data || [];
+  if (!selectedMindmapId && cachedMindmaps.length) selectedMindmapId = cachedMindmaps[0].id;
+}
+
+function showMindmapModal(id) {
+  const item = cachedMindmaps.find(m => m.id == id);
+  document.getElementById('mindmapModalTitle').textContent = item ? '编辑政治章节' : '添加政治章节';
+  document.getElementById('mindmapChapterInput').value = item ? item.name : '';
+  document.getElementById('editMindmapId').value = item ? item.id : '';
+  openModal('mindmapModal');
+}
+
+async function saveMindmapChapter() {
+  const name = document.getElementById('mindmapChapterInput').value.trim();
+  const id = document.getElementById('editMindmapId').value;
+  if (!name) { showToast('请输入章节名称'); return; }
+  const payload = { name };
+  const res = id ? await sb.from('political_mindmaps').update(payload).eq('id', id) : await sb.from('political_mindmaps').insert({ name, code: 'mindmap\n  root((章节))' });
+  if (res.error) { showToast('保存失败: ' + res.error.message); return; }
+  await reloadMindmaps();
+  if (!id) selectedMindmapId = cachedMindmaps[cachedMindmaps.length - 1]?.id;
+  closeModal('mindmapModal');
   renderEbb();
+}
+
+async function saveMindmapCode() {
+  const item = cachedMindmaps.find(m => m.id == selectedMindmapId);
+  if (!item) return;
+  const code = document.getElementById('mindmapCodeInput').value.trim();
+  if (!code) { showToast('请输入 Mermaid 代码'); return; }
+  const res = await sb.from('political_mindmaps').update({ code }).eq('id', item.id);
+  if (res.error) { showToast('保存失败: ' + res.error.message); return; }
+  item.code = code;
+  await renderMindmapPreview(code);
+  showToast('已保存');
+}
+
+async function renderMindmapPreview(code) {
+  const target = document.getElementById('mindmapPreview');
+  if (!target) return;
+  target.innerHTML = '<div class="mermaid">' + escapeHtml(code) + '</div>';
+  try { await mermaid.run({ nodes: target.querySelectorAll('.mermaid') }); }
+  catch (err) { target.innerHTML = '<div style="color:#e74c3c;font-size:12px;white-space:pre-wrap;">Mermaid 代码有误：' + escapeHtml(err.message) + '</div>'; }
+}
+
+function selectMindmap(id) { selectedMindmapId = id; renderEbb(); }
+
+async function renderMindmaps(container) {
+  const subjects = ['专业课', '单词', '政治'];
+  const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;">${subjects.map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#9b59b6;color:#fff;border-color:#9b59b6;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><span style="font-size:12px;color:#888;">输入 Mermaid mindmap 代码生成思维导图</span></div>`;
+  const item = cachedMindmaps.find(m => m.id == selectedMindmapId);
+  const chapters = `<div class="mindmap-chapters">${cachedMindmaps.map(m => `<button class="${m.id == selectedMindmapId ? 'active' : ''}" onclick="selectMindmap(${m.id})">${escapeHtml(m.name)}</button>`).join('')}</div>`;
+  if (!item) { container.innerHTML = subTabs + '<div class="empty-state"><div class="empty-icon">🧠</div><p>暂无政治章节，请点击右上角添加</p></div>'; return; }
+  container.innerHTML = subTabs + `<div class="mindmap-panel">${chapters}<div class="mindmap-editor"><textarea id="mindmapCodeInput" spellcheck="false">${escapeHtml(item.code || 'mindmap\n  root((章节))')}</textarea><div id="mindmapPreview" class="mindmap-preview"></div></div><div class="mindmap-actions"><button onclick="saveMindmapCode()">保存并渲染</button><button class="secondary" onclick="showMindmapModal(${item.id})">编辑章节名</button></div></div>`;
+  await renderMindmapPreview(item.code || 'mindmap\n  root((章节))');
 }
 
 function renderEbb() {
   const container = document.getElementById('panelEbb');
+  if (ebbSubject === '政治') { renderMindmaps(container); return; }
   const subjects = ['专业课', '单词', '政治'];
   const subjectIcons = { '专业课': '📘', '单词': '📖', '政治': '📙' };
 
