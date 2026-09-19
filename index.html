@@ -141,6 +141,8 @@ body {
 }
 .kp-item:hover { background: #f5f7fa; }
 .kp-item.active { background: #e8f0fe; color: #4a90d9; font-weight: 600; }
+.kp-item.custom-color { border-left: 4px solid var(--kp-color); background: color-mix(in srgb, var(--kp-color) 12%, #fff); }
+.kp-item.custom-color.active { background: color-mix(in srgb, var(--kp-color) 22%, #fff); color: var(--kp-color); }
 .kp-item .kp-dot { font-size: 5px; color: #bbb; flex-shrink: 0; }
 .kp-item .kp-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kp-item .kp-count {
@@ -271,6 +273,10 @@ body {
   flex-shrink: 0;
 }
 .main-header .add-btn:active { background: #3a7bc8; }
+.main-header .header-edit-btn, .main-header .header-color-btn { padding: 7px 10px; border: 1px solid #d8d8d8; border-radius: 5px; background: #fff; color: #555; cursor: pointer; font-size: 12px; white-space: nowrap; }
+.main-header .header-edit-btn:hover, .main-header .header-color-btn:hover { border-color: #4a90d9; color: #4a90d9; }
+.main-header .header-color-input { width: 28px; height: 28px; padding: 1px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; }
+.main-header .accuracy { font-size: 12px; color: #666; white-space: nowrap; }
 .main-header .add-btn:disabled {
   background: #c0c0c0;
   cursor: not-allowed;
@@ -961,6 +967,7 @@ body {
   <div class="main-header">
     <button class="menu-btn" onclick="toggleSidebar()" title="目录">☰</button>
     <div class="breadcrumb" id="breadcrumb"><span>选择知识点查看错题</span></div>
+    <div id="kpHeaderTools" style="display:none;align-items:center;gap:6px;"></div>
     <button class="add-btn" id="addBtn" disabled onclick="handleAddBtn()">+ 错题</button>
   </div>
   <div class="main-content" id="mainContent">
@@ -1112,6 +1119,21 @@ body {
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal('mindmapModal')">取消</button>
       <button class="btn-confirm" onclick="saveMindmapChapter()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 政治思维导图代码编辑弹窗 -->
+<div class="modal-overlay" id="mindmapCodeModal">
+  <div class="modal" style="max-width:760px;width:100%;">
+    <h3>编辑思维导图</h3>
+    <div class="form-group">
+      <label>Mermaid 代码</label>
+      <textarea id="mindmapCodeInput" spellcheck="false" style="width:100%;min-height:360px;padding:10px;border:1px solid #ddd;border-radius:6px;font:13px/1.6 monospace;resize:vertical;"></textarea>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('mindmapCodeModal')">取消</button>
+      <button class="btn-confirm" onclick="saveMindmapCode()">保存并渲染</button>
     </div>
   </div>
 </div>
@@ -1811,6 +1833,16 @@ async function saveChapter() {
   }
 }
 
+async function saveKpColor(kpId, color) {
+  const res = await sb.from('knowledge_points').update({ color }).eq('id', kpId);
+  if (res.error) { showToast('颜色保存失败: ' + res.error.message); return; }
+  const kp = cachedKps.find(item => item.id == kpId);
+  if (kp) kp.color = color;
+  await refreshSidebar();
+  updateMainHeader();
+  showToast('目录颜色已更新');
+}
+
 async function saveKnowledgePoint() {
   const chapterId = parseInt(document.getElementById('kpChapterSelect').value, 10);
   const name = document.getElementById('kpNameInput').value.trim();
@@ -2004,11 +2036,25 @@ async function onDropKp(e, targetId, targetChapterId) {
   e.currentTarget.classList.remove('drag-over-kp');
   document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
   if (!dragData || dragData.type !== 'kp') { dragData = null; return; }
-  if (dragData.id === targetId) { dragData = null; return; }
-  // Only reorder within same chapter
   if (dragData.chapterId !== targetChapterId) { dragData = null; return; }
-  await swapKpOrder(dragData.id, targetId, targetChapterId);
+  const target = e.currentTarget;
+  const insertAfter = e.clientY > target.getBoundingClientRect().top + target.offsetHeight / 2;
+  await moveKpToPosition(dragData.id, targetId, targetChapterId, insertAfter);
   dragData = null;
+}
+
+async function moveKpToPosition(dragId, targetId, chapterId, insertAfter) {
+  const list = cachedKps.filter(kp => kp.chapter_id == chapterId).sort((a, b) => (a.sort_order || a.id) - (b.sort_order || b.id));
+  const from = list.findIndex(kp => kp.id == dragId);
+  const target = list.findIndex(kp => kp.id == targetId);
+  if (from < 0 || target < 0 || from === target && !insertAfter) return;
+  const [item] = list.splice(from, 1);
+  let destination = list.findIndex(kp => kp.id == targetId) + (insertAfter ? 1 : 0);
+  list.splice(destination, 0, item);
+  list.forEach((kp, index) => { kp.sort_order = index + 1; });
+  const results = await Promise.all(list.map(kp => sb.from('knowledge_points').update({ sort_order: kp.sort_order }).eq('id', kp.id)));
+  if (results.some(res => res.error)) { showToast('排序保存失败'); return; }
+  await refreshSidebar();
 }
 
 async function swapChapterOrder(id1, id2) {
@@ -2403,7 +2449,7 @@ async function refreshSidebar() {
           ${childKps.map((kp, kpIdx) => {
             const kpCount = cachedQuestions.filter(q => q.knowledge_point_id === kp.id).length;
             return `
-              <div class="kp-item ${selectedKpId == kp.id ? 'active' : ''}" data-id="${kp.id}"
+              <div class="kp-item ${selectedKpId == kp.id ? 'active' : ''} ${kp.color ? 'custom-color' : ''}" data-id="${kp.id}" style="${kp.color ? `--kp-color:${escapeHtml(kp.color)}` : ''}"
                    draggable="true"
                    ondragstart="onDragStart(event, 'kp', ${kp.id}, ${ch.id})"
                    ondragover="onDragOverKp(event)"
@@ -2652,6 +2698,8 @@ function typesetKpNote(container) {
 }
 
 function updateMainHeader() {
+  const headerTools = document.getElementById('kpHeaderTools');
+  if (headerTools) headerTools.style.display = 'none';
   if (currentTab === 'cuoti') {
     const breadcrumb = document.getElementById('breadcrumb');
     const addBtn = document.getElementById('addBtn');
@@ -2667,10 +2715,20 @@ function updateMainHeader() {
       addBtn.disabled = true;
       addBtn.onclick = () => showQuestionModal();
     } else {
+      const kp = cachedKps.find(k => k.id == selectedKpId);
       breadcrumb.innerHTML = getBreadcrumbHtml();
       addBtn.textContent = '+ 错题';
       addBtn.disabled = false;
       addBtn.onclick = () => showQuestionModal();
+      if (kp && headerTools) {
+        const questions = cachedQuestions.filter(q => q.knowledge_point_id == kp.id);
+        const correct = questions.reduce((sum, q) => sum + (q.correct_count || 0), 0);
+        const wrong = questions.reduce((sum, q) => sum + (q.wrong_count || 0), 0);
+        const total = correct + wrong;
+        const rate = total ? Math.round(correct / total * 100) : 0;
+        headerTools.style.display = 'flex';
+        headerTools.innerHTML = `<span class="accuracy">正确率 ${rate}%（${correct}/${total}）</span><button class="header-edit-btn" onclick="showKpEditModal(${kp.id}, '${escapeHtml(kp.name).replace(/'/g, "\\'")}', ${kp.chapter_id})">编辑知识点</button><input class="header-color-input" type="color" value="${kp.color || '#4a90d9'}" title="设置目录背景颜色" onchange="saveKpColor(${kp.id}, this.value)">`;
+      }
     }
   }
 }
@@ -2852,6 +2910,13 @@ async function saveMindmapChapter() {
   renderEbb();
 }
 
+function showMindmapCodeModal() {
+  const item = cachedMindmaps.find(m => m.id == selectedMindmapId);
+  if (!item) return;
+  document.getElementById('mindmapCodeInput').value = item.code || 'mindmap\n  root((章节))';
+  openModal('mindmapCodeModal');
+}
+
 async function saveMindmapCode() {
   const item = cachedMindmaps.find(m => m.id == selectedMindmapId);
   if (!item) return;
@@ -2860,6 +2925,7 @@ async function saveMindmapCode() {
   const res = await sb.from('political_mindmaps').update({ code }).eq('id', item.id);
   if (res.error) { showToast('保存失败: ' + res.error.message); return; }
   item.code = code;
+  closeModal('mindmapCodeModal');
   await renderMindmapPreview(code);
   showToast('已保存');
 }
@@ -2880,7 +2946,7 @@ async function renderMindmaps(container) {
   const item = cachedMindmaps.find(m => m.id == selectedMindmapId);
   const chapters = `<div class="mindmap-chapters">${cachedMindmaps.map(m => `<button class="${m.id == selectedMindmapId ? 'active' : ''}" onclick="selectMindmap(${m.id})">${escapeHtml(m.name)}</button>`).join('')}</div>`;
   if (!item) { container.innerHTML = subTabs + '<div class="empty-state"><div class="empty-icon">🧠</div><p>暂无政治章节，请点击右上角添加</p></div>'; return; }
-  container.innerHTML = subTabs + `<div class="mindmap-panel">${chapters}<div class="mindmap-editor"><textarea id="mindmapCodeInput" spellcheck="false">${escapeHtml(item.code || 'mindmap\n  root((章节))')}</textarea><div id="mindmapPreview" class="mindmap-preview"></div></div><div class="mindmap-actions"><button onclick="saveMindmapCode()">保存并渲染</button><button class="secondary" onclick="showMindmapModal(${item.id})">编辑章节名</button></div></div>`;
+  container.innerHTML = subTabs + `<div class="mindmap-panel">${chapters}<div id="mindmapPreview" class="mindmap-preview"></div><div class="mindmap-actions"><button onclick="showMindmapCodeModal()">编辑思维导图</button><button class="secondary" onclick="showMindmapModal(${item.id})">编辑章节名</button></div></div>`;
   await renderMindmapPreview(item.code || 'mindmap\n  root((章节))');
 }
 

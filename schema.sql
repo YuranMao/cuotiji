@@ -14,7 +14,8 @@ create table if not exists knowledge_points (
   name text not null,
   created_at timestamptz default now(),
   sort_order int default 0,
-  note text default ''
+  note text default '',
+  color text default ''
 );
 
 create table if not exists questions (
@@ -74,6 +75,7 @@ create table if not exists core_questions (
 
 -- 已存在的表执行以下升级：
 alter table knowledge_points add column if not exists note text default '';
+alter table knowledge_points add column if not exists color text default '';
 alter table questions add column if not exists answer text default '';
 alter table questions add column if not exists answer_image text default '';
 
