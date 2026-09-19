@@ -1391,6 +1391,7 @@ function switchTab(tab) {
     closeSidebar();
     addBtn.textContent = '+ 任务';
     addBtn.disabled = false;
+    addBtn.onclick = () => showTlModal();
     breadcrumb.textContent = '考研进度时间表';
     if (!tlLoaded) { Promise.all([reloadTimelineData(), reloadTimeSlots().catch(() => {})]).then(() => { tlLoaded = true; renderTimeline(); }); }
     else renderTimeline();
