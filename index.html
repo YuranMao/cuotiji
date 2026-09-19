@@ -275,8 +275,10 @@ body {
 .main-header .add-btn:active { background: #3a7bc8; }
 .main-header .header-edit-btn, .main-header .header-color-btn { padding: 7px 10px; border: 1px solid #d8d8d8; border-radius: 5px; background: #fff; color: #555; cursor: pointer; font-size: 12px; white-space: nowrap; }
 .main-header .header-edit-btn:hover, .main-header .header-color-btn:hover { border-color: #4a90d9; color: #4a90d9; }
-.main-header .header-color-input { width: 28px; height: 28px; padding: 1px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; }
-.main-header .accuracy { font-size: 12px; color: #666; white-space: nowrap; }
+.main-header .accuracy, .main-header .total-count { font-size: 12px; color: #666; white-space: nowrap; }
+.kp-color-swatches { display:flex; align-items:center; gap:4px; }
+.kp-color-swatch { width:20px; height:20px; border:1px solid rgba(0,0,0,.15); border-radius:4px; cursor:pointer; }
+.kp-color-default { padding:3px 6px; border:1px solid #d8d8d8; border-radius:4px; background:#fff; color:#777; cursor:pointer; font-size:11px; }
 .main-header .add-btn:disabled {
   background: #c0c0c0;
   cursor: not-allowed;
@@ -968,6 +970,7 @@ body {
     <button class="menu-btn" onclick="toggleSidebar()" title="目录">☰</button>
     <div class="breadcrumb" id="breadcrumb"><span>选择知识点查看错题</span></div>
     <div id="kpHeaderTools" style="display:none;align-items:center;gap:6px;"></div>
+    <span class="total-count" id="totalQuestionCount">总错题数 0</span>
     <button class="add-btn" id="addBtn" disabled onclick="handleAddBtn()">+ 错题</button>
   </div>
   <div class="main-content" id="mainContent">
@@ -2699,6 +2702,11 @@ function typesetKpNote(container) {
 
 function updateMainHeader() {
   const headerTools = document.getElementById('kpHeaderTools');
+  const totalCount = document.getElementById('totalQuestionCount');
+  if (totalCount) {
+    totalCount.textContent = `总错题数 ${cachedQuestions.length}`;
+    totalCount.style.display = currentTab === 'cuoti' ? 'inline' : 'none';
+  }
   if (headerTools) headerTools.style.display = 'none';
   if (currentTab === 'cuoti') {
     const breadcrumb = document.getElementById('breadcrumb');
@@ -2727,7 +2735,9 @@ function updateMainHeader() {
         const total = correct + wrong;
         const rate = total ? Math.round(correct / total * 100) : 0;
         headerTools.style.display = 'flex';
-        headerTools.innerHTML = `<span class="accuracy">正确率 ${rate}%（${correct}/${total}）</span><button class="header-edit-btn" onclick="showKpEditModal(${kp.id}, '${escapeHtml(kp.name).replace(/'/g, "\\'")}', ${kp.chapter_id})">编辑知识点</button><input class="header-color-input" type="color" value="${kp.color || '#4a90d9'}" title="设置目录背景颜色" onchange="saveKpColor(${kp.id}, this.value)">`;
+        const colors = ['#dbeafe', '#dcfce7', '#fef3c7', '#fee2e2', '#f3e8ff'];
+        const swatches = colors.map(color => `<button class="kp-color-swatch" style="background:${color}" title="设置背景色" onclick="saveKpColor(${kp.id}, '${color}')"></button>`).join('');
+        headerTools.innerHTML = `<span class="accuracy">正确率 ${rate}%（${correct}/${total}）</span><button class="header-edit-btn" onclick="showKpEditModal(${kp.id}, '${escapeHtml(kp.name).replace(/'/g, "\\'")}', ${kp.chapter_id})">编辑知识点</button><span class="kp-color-swatches" title="设置目录背景颜色">${swatches}<button class="kp-color-default" onclick="saveKpColor(${kp.id}, '')">默认</button></span>`;
       }
     }
   }
