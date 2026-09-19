@@ -2040,24 +2040,9 @@ async function onDropKp(e, targetId, targetChapterId) {
   document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
   if (!dragData || dragData.type !== 'kp') { dragData = null; return; }
   if (dragData.chapterId !== targetChapterId) { dragData = null; return; }
-  const target = e.currentTarget;
-  const insertAfter = e.clientY > target.getBoundingClientRect().top + target.offsetHeight / 2;
-  await moveKpToPosition(dragData.id, targetId, targetChapterId, insertAfter);
+  if (dragData.id === targetId) { dragData = null; return; }
+  await swapKpOrder(dragData.id, targetId, targetChapterId);
   dragData = null;
-}
-
-async function moveKpToPosition(dragId, targetId, chapterId, insertAfter) {
-  const list = cachedKps.filter(kp => kp.chapter_id == chapterId).sort((a, b) => (a.sort_order || a.id) - (b.sort_order || b.id));
-  const from = list.findIndex(kp => kp.id == dragId);
-  const target = list.findIndex(kp => kp.id == targetId);
-  if (from < 0 || target < 0 || from === target && !insertAfter) return;
-  const [item] = list.splice(from, 1);
-  let destination = list.findIndex(kp => kp.id == targetId) + (insertAfter ? 1 : 0);
-  list.splice(destination, 0, item);
-  list.forEach((kp, index) => { kp.sort_order = index + 1; });
-  const results = await Promise.all(list.map(kp => sb.from('knowledge_points').update({ sort_order: kp.sort_order }).eq('id', kp.id)));
-  if (results.some(res => res.error)) { showToast('排序保存失败'); return; }
-  await refreshSidebar();
 }
 
 async function swapChapterOrder(id1, id2) {
