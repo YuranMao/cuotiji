@@ -1504,10 +1504,16 @@ function showKpEditModal(kpId, currentName, chapterId) {
 async function showQuestionModal() {
   if (!selectedKpId) { showToast('请先选择知识点'); return; }
   const sel = document.getElementById('qKpSelect');
-  sel.innerHTML = cachedKps.map(kp => {
-    const ch = cachedChapters.find(c => c.id == kp.chapter_id);
+  const directoryKps = cachedChapters
+    .slice()
+    .sort((a, b) => (a.sort_order || a.id) - (b.sort_order || b.id))
+    .flatMap(ch => cachedKps
+      .filter(kp => kp.chapter_id == ch.id)
+      .sort((a, b) => (a.sort_order || a.id) - (b.sort_order || b.id))
+      .map(kp => ({ kp, ch })));
+  sel.innerHTML = directoryKps.map(({ kp, ch }) => {
     return `<option value="${kp.id}" ${kp.id == selectedKpId ? 'selected' : ''}>
-      ${ch ? ch.name + ' > ' : ''}${escapeHtml(kp.name)}
+      ${escapeHtml(ch.name)} > ${escapeHtml(kp.name)}
     </option>`;
   }).join('');
   selectedImageData = null;
