@@ -141,8 +141,8 @@ body {
 }
 .kp-item:hover { background: #f5f7fa; }
 .kp-item.active { background: #e8f0fe; color: #4a90d9; font-weight: 600; }
-.kp-item.custom-color { border-left: 4px solid var(--kp-color); background: color-mix(in srgb, var(--kp-color) 12%, #fff); }
-.kp-item.custom-color.active { background: color-mix(in srgb, var(--kp-color) 22%, #fff); color: var(--kp-color); }
+.kp-item.custom-color { border-left: 4px solid var(--kp-color); background: color-mix(in srgb, var(--kp-color) 30%, #fff); }
+.kp-item.custom-color.active { background: color-mix(in srgb, var(--kp-color) 45%, #fff); color: #222; }
 .kp-item .kp-dot { font-size: 5px; color: #bbb; flex-shrink: 0; }
 .kp-item .kp-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kp-item .kp-count {
@@ -2735,7 +2735,7 @@ function updateMainHeader() {
         const total = correct + wrong;
         const rate = total ? Math.round(correct / total * 100) : 0;
         headerTools.style.display = 'flex';
-        const colors = ['#dbeafe', '#dcfce7', '#fef3c7', '#fee2e2', '#f3e8ff'];
+        const colors = ['#3b82f6', '#16a34a', '#f59e0b', '#ef4444', '#9333ea'];
         const swatches = colors.map(color => `<button class="kp-color-swatch" style="background:${color}" title="设置背景色" onclick="saveKpColor(${kp.id}, '${color}')"></button>`).join('');
         headerTools.innerHTML = `<span class="accuracy">正确率 ${rate}%（${correct}/${total}）</span><button class="header-edit-btn" onclick="showKpEditModal(${kp.id}, '${escapeHtml(kp.name).replace(/'/g, "\\'")}', ${kp.chapter_id})">编辑知识点</button><span class="kp-color-swatches" title="设置目录背景颜色">${swatches}<button class="kp-color-default" onclick="saveKpColor(${kp.id}, '')">默认</button></span>`;
       }
