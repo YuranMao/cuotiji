@@ -1486,6 +1486,7 @@ async function showKpModal() {
   if (cachedChapters.length === 0) { showToast('请先添加章节'); return; }
   const sel = document.getElementById('kpChapterSelect');
   sel.innerHTML = cachedChapters.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  if (selectedChapterId && cachedChapters.some(c => c.id == selectedChapterId)) sel.value = selectedChapterId;
   document.getElementById('kpNameInput').value = '';
   document.getElementById('editKpId').value = '';
   openModal('kpModal');
@@ -2061,22 +2062,15 @@ async function swapChapterOrder(id1, id2) {
   // 交换数组位置（refreshSidebar 依赖数组顺序渲染）
   cachedChapters[idxA] = b;
   cachedChapters[idxB] = a;
-  // Optimistic: swap sort_order in cache
-  const tmp = a.sort_order;
-  a.sort_order = b.sort_order;
-  b.sort_order = tmp;
-  // Swap in DOM (sidebar tree)
-  const elA = document.querySelector(`.tree-chapter[data-id="${id1}"]`);
-  const elB = document.querySelector(`.tree-chapter[data-id="${id2}"]`);
-  if (elA && elB && elA.parentNode === elB.parentNode) {
-    const nextA = elA.nextSibling === elB ? elA : elA.nextSibling;
-    elB.parentNode.insertBefore(elA, elB);
-    elB.parentNode.insertBefore(elB, nextA);
+  cachedChapters.forEach((chapter, index) => { chapter.sort_order = index + 1; });
+  const results = await Promise.all(cachedChapters.map(chapter =>
+    sb.from('chapters').update({ sort_order: chapter.sort_order }).eq('id', chapter.id)
+  ));
+  if (results.some(result => result.error)) {
+    showToast('章节排序保存失败');
+    await reloadChapters();
   }
-  // Fire API in background
-  sb.from('chapters').update({ sort_order: a.sort_order }).eq('id', a.id).then(() => {
-    return sb.from('chapters').update({ sort_order: b.sort_order }).eq('id', b.id);
-  }).catch(err => showToast('排序保存失败: ' + err.message));
+  await refreshSidebar();
 }
 
 async function swapKpOrder(id1, id2, chapterId) {
