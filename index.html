@@ -1169,6 +1169,50 @@ body {
   </div>
 </div>
 
+<!-- 长难句分析弹窗 -->
+<div class="modal-overlay" id="sentenceModal">
+  <div class="modal" style="max-width:780px;width:100%;">
+    <h3 id="sentenceModalTitle">添加长难句</h3>
+    <div class="form-group">
+      <label>长难句</label>
+      <textarea id="sentenceInput" rows="7" placeholder="粘贴需要分析的英文长难句"></textarea>
+    </div>
+    <div class="form-group">
+      <label>分析说明（可选）</label>
+      <input type="text" id="sentenceHintInput" placeholder="例如：重点分析从句和非谓语">
+    </div>
+    <input type="hidden" id="editSentenceId">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('sentenceModal')">取消</button>
+      <button class="btn-confirm" onclick="analyzeSentence()">分析并保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 长难句 API 设置弹窗 -->
+<div class="modal-overlay" id="sentenceSettingsModal">
+  <div class="modal">
+    <h3>长难句 API 设置</h3>
+    <div class="form-group">
+      <label>API 地址</label>
+      <input type="url" id="sentenceApiUrlInput" placeholder="https://www.heilovehei.com">
+    </div>
+    <div class="form-group">
+      <label>API Key</label>
+      <input type="password" id="sentenceApiKeyInput" placeholder="sk-...">
+    </div>
+    <div class="form-group">
+      <label>模型名称</label>
+      <input type="text" id="sentenceModelInput" placeholder="gpt-5.5">
+    </div>
+    <p style="font-size:12px;color:#888;margin:0 0 12px;">密钥仅保存在当前浏览器本地，不会写入代码或数据库。</p>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('sentenceSettingsModal')">取消</button>
+      <button class="btn-confirm" onclick="saveSentenceSettings()">保存设置</button>
+    </div>
+  </div>
+</div>
+
 <!-- 进度条弹窗 -->
 <div class="modal-overlay" id="tlModal">
   <div class="modal">
@@ -1337,6 +1381,7 @@ let cachedQuestions = [];
 let cachedEbbItems = [];
 let cachedMindmaps = [];
 let selectedMindmapId = null;
+let cachedSentenceAnalyses = [];
 let cachedTimeline = [];
 let ebbLoaded = false;
 let tlLoaded = false;
@@ -1375,12 +1420,16 @@ function switchTab(tab) {
   } else if (tab === 'ebb') {
     appLayout.classList.add('not-cuoti');
     closeSidebar();
-    addBtn.textContent = ebbSubject === '政治' ? '+ 章节' : '+ 背诵项';
+    addBtn.textContent = ebbSubject === '政治' ? '+ 章节' : ebbSubject === '长难句' ? '+ 长难句' : '+ 背诵项';
     addBtn.disabled = false;
-    breadcrumb.textContent = ebbSubject === '政治' ? '政治思维导图' : '艾宾浩斯遗忘表';
+    addBtn.onclick = () => ebbSubject === '政治' ? showMindmapModal() : ebbSubject === '长难句' ? showSentenceModal() : showEbbModal();
+    breadcrumb.textContent = ebbSubject === '政治' ? '政治思维导图' : ebbSubject === '长难句' ? '长难句分析' : '艾宾浩斯遗忘表';
     if (ebbSubject === '政治') {
       addBtn.onclick = () => showMindmapModal();
       if (!cachedMindmaps.length) reloadMindmaps().then(renderEbb); else renderEbb();
+    } else if (ebbSubject === '长难句') {
+      addBtn.onclick = () => showSentenceModal();
+      if (!cachedSentenceAnalyses.length) reloadSentenceAnalyses().then(renderEbb); else renderEbb();
     } else {
       addBtn.onclick = () => showEbbModal();
       if (!ebbLoaded) { reloadEbb().then(() => { ebbLoaded = true; renderEbb(); }); }
@@ -1400,7 +1449,7 @@ function switchTab(tab) {
 
 function handleAddBtn() {
   if (currentTab === 'cuoti') showQuestionModal();
-  else if (currentTab === 'ebb') ebbSubject === '政治' ? showMindmapModal() : showEbbModal();
+  else if (currentTab === 'ebb') ebbSubject === '政治' ? showMindmapModal() : ebbSubject === '长难句' ? showSentenceModal() : showEbbModal();
   else if (currentTab === 'timeline') showTlModal();
 }
 
@@ -2870,11 +2919,12 @@ function setEbbSubject(subj) {
   ebbSubject = subj;
   if (currentTab === 'ebb') {
     const addBtn = document.getElementById('addBtn');
-    addBtn.textContent = subj === '政治' ? '+ 章节' : '+ 背诵项';
-    addBtn.onclick = () => subj === '政治' ? showMindmapModal() : showEbbModal();
-    document.getElementById('breadcrumb').textContent = subj === '政治' ? '政治思维导图' : '艾宾浩斯遗忘表';
+    addBtn.textContent = subj === '政治' ? '+ 章节' : subj === '长难句' ? '+ 长难句' : '+ 背诵项';
+    addBtn.onclick = () => subj === '政治' ? showMindmapModal() : subj === '长难句' ? showSentenceModal() : showEbbModal();
+    document.getElementById('breadcrumb').textContent = subj === '政治' ? '政治思维导图' : subj === '长难句' ? '长难句分析' : '艾宾浩斯遗忘表';
   }
   if (subj === '政治' && !cachedMindmaps.length) reloadMindmaps().then(renderEbb);
+  else if (subj === '长难句' && !cachedSentenceAnalyses.length) reloadSentenceAnalyses().then(renderEbb);
   else renderEbb();
 }
 
@@ -2936,9 +2986,116 @@ async function renderMindmapPreview(code) {
 
 function selectMindmap(id) { selectedMindmapId = id; renderEbb(); }
 
+function getSentenceSettings() {
+  return {
+    apiUrl: localStorage.getItem('sentence_api_url') || 'https://www.heilovehei.com',
+    apiKey: localStorage.getItem('sentence_api_key') || '',
+    model: localStorage.getItem('sentence_model') || 'gpt-5.5'
+  };
+}
+
+function showSentenceSettings() {
+  const settings = getSentenceSettings();
+  document.getElementById('sentenceApiUrlInput').value = settings.apiUrl;
+  document.getElementById('sentenceApiKeyInput').value = settings.apiKey;
+  document.getElementById('sentenceModelInput').value = settings.model;
+  openModal('sentenceSettingsModal');
+}
+
+function saveSentenceSettings() {
+  const apiUrl = document.getElementById('sentenceApiUrlInput').value.trim().replace(/\/$/, '');
+  const apiKey = document.getElementById('sentenceApiKeyInput').value.trim();
+  const model = document.getElementById('sentenceModelInput').value.trim() || 'gpt-5.5';
+  if (!apiUrl || !apiKey) { showToast('请输入 API 地址和 API Key'); return; }
+  localStorage.setItem('sentence_api_url', apiUrl);
+  localStorage.setItem('sentence_api_key', apiKey);
+  localStorage.setItem('sentence_model', model);
+  closeModal('sentenceSettingsModal');
+  showToast('API 设置已保存');
+}
+
+function showSentenceModal(id) {
+  const item = cachedSentenceAnalyses.find(row => row.id == id);
+  document.getElementById('sentenceModalTitle').textContent = item ? '编辑长难句' : '添加长难句';
+  document.getElementById('sentenceInput').value = item ? item.sentence : '';
+  document.getElementById('sentenceHintInput').value = item ? (item.hint || '') : '';
+  document.getElementById('editSentenceId').value = item ? item.id : '';
+  openModal('sentenceModal');
+}
+
+async function reloadSentenceAnalyses() {
+  const res = await sb.from('sentence_analyses').select('*').order('created_at', { ascending: false });
+  if (res.error) { showToast('长难句记录加载失败，请先执行 schema.sql'); return; }
+  cachedSentenceAnalyses = res.data || [];
+}
+
+function parseSentenceJson(content) {
+  const cleaned = String(content || '').replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/i, '').trim();
+  return JSON.parse(cleaned);
+}
+
+async function analyzeSentence() {
+  const sentence = document.getElementById('sentenceInput').value.trim();
+  const hint = document.getElementById('sentenceHintInput').value.trim();
+  const editId = document.getElementById('editSentenceId').value;
+  const settings = getSentenceSettings();
+  if (!sentence) { showToast('请输入长难句'); return; }
+  if (!settings.apiKey) { closeModal('sentenceModal'); showSentenceSettings(); showToast('请先填写 API Key'); return; }
+  const button = document.querySelector('#sentenceModal .btn-confirm');
+  button.disabled = true;
+  button.textContent = '分析中...';
+  try {
+    const endpoint = settings.apiUrl.replace(/\/$/, '') + (settings.apiUrl.endsWith('/v1') ? '/chat/completions' : '/v1/chat/completions');
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + settings.apiKey },
+      body: JSON.stringify({
+        model: settings.model,
+        temperature: 0.2,
+        messages: [{ role: 'system', content: '你是一名考研英语长难句教师。请严格只返回 JSON，不要 Markdown 代码块。JSON 格式为：{"translation":"参考译文","structure":[{"text":"原文片段","role":"句子成分","explanation":"结构说明"}],"grammar_points":[{"name":"语法知识点","text":"对应原文","explanation":"学习要点"}]}。准确标出主句、从句、非谓语和核心谓语。' }, { role: 'user', content: '请分析这句话：\\n' + sentence + (hint ? '\\n补充要求：' + hint : '') }]
+      })
+    });
+    if (!response.ok) throw new Error('API 请求失败（' + response.status + '）');
+    const result = await response.json();
+    const content = result.choices?.[0]?.message?.content;
+    const analysis = parseSentenceJson(content);
+    const payload = { sentence, hint, analysis, updated_at: new Date().toISOString() };
+    const saveResult = editId ? await sb.from('sentence_analyses').update(payload).eq('id', editId) : await sb.from('sentence_analyses').insert(payload);
+    if (saveResult.error) throw saveResult.error;
+    await reloadSentenceAnalyses();
+    closeModal('sentenceModal');
+    renderEbb();
+    showToast(editId ? '长难句已重新分析' : '长难句已分析并保存');
+  } catch (err) {
+    showToast('分析失败：' + (err.message || '请检查 API 设置'));
+  } finally {
+    button.disabled = false;
+    button.textContent = '分析并保存';
+  }
+}
+
+async function deleteSentenceAnalysis(id) {
+  if (!confirm('确定删除这条长难句分析？')) return;
+  const res = await sb.from('sentence_analyses').delete().eq('id', id);
+  if (res.error) { showToast('删除失败：' + res.error.message); return; }
+  await reloadSentenceAnalyses();
+  renderEbb();
+}
+
+function renderSentenceAnalyses(container) {
+  const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;flex-wrap:wrap;">${['专业课', '单词', '政治', '长难句'].map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#4a90d9;color:#fff;border-color:#4a90d9;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><button onclick="showSentenceSettings()" style="padding:6px 12px;border:1px solid #d9d9d9;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;">API 设置</button></div>`;
+  const cards = cachedSentenceAnalyses.map(item => {
+    const analysis = item.analysis || {};
+    const structure = (analysis.structure || []).map(part => `<div style="margin:7px 0;padding:8px 10px;background:#f7f9fc;border-left:3px solid #4a90d9;"><b>${escapeHtml(part.role || '结构')}</b>：${escapeHtml(part.text || '')}<div style="font-size:12px;color:#666;margin-top:3px;">${escapeHtml(part.explanation || '')}</div></div>`).join('') || '<span style="color:#888;">暂无结构分析</span>';
+    const grammar = (analysis.grammar_points || []).map(point => `<li style="margin:6px 0;"><b>${escapeHtml(point.name || '')}</b>：${escapeHtml(point.text || '')}<div style="font-size:12px;color:#666;">${escapeHtml(point.explanation || '')}</div></li>`).join('') || '<li style="color:#888;">暂无语法知识点</li>';
+    return `<article style="border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:12px;background:#fff;"><div style="font-size:16px;line-height:1.7;font-weight:600;white-space:pre-wrap;">${escapeHtml(item.sentence)}</div><div style="margin-top:12px;"><b>参考译文：</b>${escapeHtml(analysis.translation || '暂无')}</div><div style="margin-top:12px;"><b>结构划分</b>${structure}</div><div style="margin-top:12px;"><b>语法知识点</b><ul style="margin:6px 0 0 20px;padding:0;">${grammar}</ul></div><div style="display:flex;gap:8px;margin-top:14px;"><button onclick="showSentenceModal(${item.id})" style="padding:5px 10px;border:1px solid #d9d9d9;border-radius:5px;background:#fff;cursor:pointer;">重新分析</button><button onclick="deleteSentenceAnalysis(${item.id})" style="padding:5px 10px;border:1px solid #f1b5b5;border-radius:5px;background:#fff;color:#d33;cursor:pointer;">删除</button></div></article>`;
+  }).join('');
+  container.innerHTML = subTabs + `<div style="max-width:900px;margin:16px auto;">${cards || '<div class="empty-state"><div class="empty-icon">Aa</div><p>暂无长难句，点击右上角“+ 长难句”添加</p></div>'}</div>`;
+}
+
 async function renderMindmaps(container) {
-  const subjects = ['专业课', '单词', '政治'];
-  const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;">${subjects.map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#9b59b6;color:#fff;border-color:#9b59b6;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><span style="font-size:12px;color:#888;">输入 Mermaid mindmap 代码生成思维导图</span></div>`;
+  const subjects = ['专业课', '单词', '政治', '长难句'];
+  const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;flex-wrap:wrap;">${subjects.map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#9b59b6;color:#fff;border-color:#9b59b6;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><span style="font-size:12px;color:#888;">输入 Mermaid mindmap 代码生成思维导图</span></div>`;
   const item = cachedMindmaps.find(m => m.id == selectedMindmapId);
   const chapters = `<div class="mindmap-chapters">${cachedMindmaps.map(m => `<button class="${m.id == selectedMindmapId ? 'active' : ''}" onclick="selectMindmap(${m.id})">${escapeHtml(m.name)}</button>`).join('')}</div>`;
   if (!item) { container.innerHTML = subTabs + '<div class="empty-state"><div class="empty-icon">🧠</div><p>暂无政治章节，请点击右上角添加</p></div>'; return; }
@@ -2949,8 +3106,9 @@ async function renderMindmaps(container) {
 function renderEbb() {
   const container = document.getElementById('panelEbb');
   if (ebbSubject === '政治') { renderMindmaps(container); return; }
-  const subjects = ['专业课', '单词', '政治'];
-  const subjectIcons = { '专业课': '📘', '单词': '📖', '政治': '📙' };
+  if (ebbSubject === '长难句') { renderSentenceAnalyses(container); return; }
+  const subjects = ['专业课', '单词', '政治', '长难句'];
+  const subjectIcons = { '专业课': '📘', '单词': '📖', '政治': '📙', '长难句': 'Aa' };
 
   const filteredItems = cachedEbbItems.filter(item => (item.subject || '专业课') === ebbSubject);
 

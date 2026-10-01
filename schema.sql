@@ -50,6 +50,15 @@ create table if not exists political_mindmaps (
   created_at timestamptz default now()
 );
 
+create table if not exists sentence_analyses (
+  id bigserial primary key,
+  sentence text not null,
+  hint text default '',
+  analysis jsonb not null default '{}'::jsonb,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 create table if not exists timeline_events (
   id bigserial primary key,
   subject text not null,
@@ -112,6 +121,7 @@ alter table core_questions enable row level security;
 alter table schedule_time_slots enable row level security;
 alter table daily_schedule enable row level security;
 alter table political_mindmaps enable row level security;
+alter table sentence_analyses enable row level security;
 
 -- 允许 anon key 全权限操作（个人应用）
 do $$
@@ -142,5 +152,8 @@ begin
   end if;
   if not exists (select 1 from pg_policies where policyname='Allow all on political_mindmaps') then
     create policy "Allow all on political_mindmaps" on political_mindmaps for all using (true);
+  end if;
+  if not exists (select 1 from pg_policies where policyname='Allow all on sentence_analyses') then
+    create policy "Allow all on sentence_analyses" on sentence_analyses for all using (true);
   end if;
 end $$;
