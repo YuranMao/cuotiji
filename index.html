@@ -1178,14 +1178,23 @@ body {
       <textarea id="sentenceInput" rows="7" placeholder="粘贴需要分析的英文长难句"></textarea>
     </div>
     <div class="form-group">
-      <label>分析说明（可选）</label>
-      <input type="text" id="sentenceHintInput" placeholder="例如：重点分析从句和非谓语">
+      <label>知识点归类标签</label>
+      <input type="text" id="sentenceHintInput" placeholder="例如：定语从句、非谓语、倒装句">
     </div>
     <input type="hidden" id="editSentenceId">
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal('sentenceModal')">取消</button>
       <button class="btn-confirm" onclick="analyzeSentence()">分析并保存</button>
     </div>
+  </div>
+</div>
+
+<!-- 长难句详情弹窗 -->
+<div class="modal-overlay" id="sentenceDetailModal">
+  <div class="modal" style="max-width:900px;width:100%;max-height:85vh;overflow:auto;">
+    <h3>长难句详细分析</h3>
+    <div id="sentenceDetailContent"></div>
+    <div class="modal-btns"><button class="btn-cancel" onclick="closeModal('sentenceDetailModal')">关闭</button></div>
   </div>
 </div>
 
@@ -3052,13 +3061,14 @@ async function analyzeSentence() {
       body: JSON.stringify({
         model: settings.model,
         temperature: 0.2,
-        messages: [{ role: 'system', content: '你是一名考研英语长难句教师。请严格只返回 JSON，不要 Markdown 代码块。JSON 格式为：{"translation":"参考译文","category":"知识点归类","tags":["语法标签"],"outline":[{"name":"大纲节点","children":["子节点"]}],"relations":[{"from":"节点","to":"节点","label":"关系"}],"structure":[{"text":"原文片段","role":"主句或从句或非谓语或核心谓语","explanation":"结构说明"}],"grammar_points":[{"name":"语法知识点","text":"对应原文","explanation":"学习要点"}]}。请准确区分主句、各类从句、非谓语和核心谓语，并根据本句分析结果生成知识点归类、语法标签、语法大纲和节点关系；没有内容时返回空数组或空字符串。' }, { role: 'user', content: '请分析这句话：\n' + sentence + (hint ? '\n补充要求：' + hint : '') }]
+        messages: [{ role: 'system', content: '你是一名考研英语长难句教师。请严格只返回 JSON，不要 Markdown 代码块。JSON 格式为：{"translation":"参考译文","tags":["语法标签"],"structure":[{"text":"原文片段","role":"主句或从句或非谓语或核心谓语","explanation":"结构说明"}],"grammar_points":[{"name":"语法知识点","text":"对应原文","explanation":"学习要点"}]}。请准确区分主句、各类从句、非谓语和核心谓语。不要生成知识点归类、语法大纲或知识关联；知识点归类由用户输入并由系统按全部句子聚合。没有内容时返回空数组或空字符串。' }, { role: 'user', content: '请分析这句话：\n' + sentence + (hint ? '\n补充要求：' + hint : '') }]
       })
     });
     if (!response.ok) throw new Error('API 请求失败（' + response.status + '）');
     const result = await response.json();
     const content = result.choices?.[0]?.message?.content;
     const analysis = parseSentenceJson(content);
+    delete analysis.relations;
     const payload = { sentence, hint, analysis, updated_at: new Date().toISOString() };
     const saveResult = editId ? await sb.from('sentence_analyses').update(payload).eq('id', editId) : await sb.from('sentence_analyses').insert(payload);
     if (saveResult.error) throw saveResult.error;
@@ -3082,25 +3092,48 @@ async function deleteSentenceAnalysis(id) {
   renderEbb();
 }
 
+function getSentenceTags(item) {
+  return String(item.hint || '').split(/[,，、]/).map(tag => tag.trim()).filter(Boolean);
+}
+
+function renderSentenceDetail(item) {
+  const analysis = item.analysis || {};
+  const structure = (analysis.structure || []).map(part => {
+    const role = part.role || '结构';
+    const isClause = /从句|clause/i.test(role);
+    const isMain = /主句|main/i.test(role);
+    const background = isClause ? '#fff3e8' : isMain ? '#eaf4ff' : '#f3f5f7';
+    const border = isClause ? '#e99a52' : isMain ? '#4a90d9' : '#9aa5b1';
+    return `<div style="margin:7px 0;padding:8px 10px;background:${background};border-left:3px solid ${border};"><b>${escapeHtml(role)}</b>：${escapeHtml(part.text || '')}<div style="font-size:12px;color:#666;margin-top:3px;">${escapeHtml(part.explanation || '')}</div></div>`;
+  }).join('') || '<span style="color:#888;">暂无结构分析</span>';
+  const grammar = (analysis.grammar_points || []).map(point => `<li style="margin:6px 0;"><b>${escapeHtml(point.name || '')}</b>：${escapeHtml(point.text || '')}<div style="font-size:12px;color:#666;">${escapeHtml(point.explanation || '')}</div></li>`).join('') || '<li style="color:#888;">暂无语法知识点</li>';
+  return `<div><div style="font-size:16px;line-height:1.7;font-weight:600;white-space:pre-wrap;overflow-wrap:anywhere;">${escapeHtml(item.sentence)}</div><div style="margin-top:12px;"><b>知识点归类：</b>${getSentenceTags(item).map(tag => `<span style="display:inline-block;margin:0 5px 0 0;padding:3px 8px;background:#edf3fa;color:#345b80;border-radius:4px;font-size:12px;">${escapeHtml(tag)}</span>`).join('') || '<span style="color:#888;">未设置</span>'}</div><div style="margin-top:12px;"><b>参考译文：</b>${escapeHtml(analysis.translation || '暂无')}</div><div style="margin-top:12px;"><b>结构划分</b>${structure}</div><div style="margin-top:12px;"><b>语法知识点</b><ul style="margin:6px 0 0 20px;padding:0;">${grammar}</ul></div></div>`;
+}
+
+function showSentenceDetail(id) {
+  const item = cachedSentenceAnalyses.find(row => row.id == id);
+  if (!item) return;
+  document.getElementById('sentenceDetailContent').innerHTML = renderSentenceDetail(item);
+  openModal('sentenceDetailModal');
+}
+
+function renderSentenceOutline() {
+  const groups = {};
+  cachedSentenceAnalyses.forEach(item => getSentenceTags(item).forEach(tag => {
+    if (!groups[tag]) groups[tag] = [];
+    groups[tag].push(item);
+  }));
+  const items = Object.keys(groups).sort().map(tag => `<details style="margin:8px 0;border:1px solid #e5e7eb;border-radius:6px;padding:8px 12px;"><summary style="cursor:pointer;font-weight:600;">${escapeHtml(tag)} <span style="font-size:12px;color:#888;">（${groups[tag].length}句）</span></summary><ul style="margin:8px 0 0 20px;padding:0;">${groups[tag].map(item => `<li style="margin:5px 0;cursor:pointer;" onclick="showSentenceDetail(${item.id})">${escapeHtml(item.sentence)}</li>`).join('')}</ul></details>`).join('');
+  return `<section style="margin:16px auto 0;max-width:900px;padding:14px;background:#f8fafc;border:1px solid #dfe6ee;border-radius:8px;"><div style="font-size:16px;font-weight:700;">语法知识大纲</div><div style="font-size:12px;color:#777;margin-top:4px;">按当前数据库中所有长难句的知识点归类聚合</div><div style="margin-top:10px;">${items || '<span style="color:#888;">暂无知识点归类</span>'}</div></section>`;
+}
+
 function renderSentenceAnalyses(container) {
   const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;flex-wrap:wrap;">${['专业课', '单词', '政治', '长难句'].map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#4a90d9;color:#fff;border-color:#4a90d9;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><button onclick="showSentenceSettings()" style="padding:6px 12px;border:1px solid #d9d9d9;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;">API 设置</button></div>`;
   const cards = cachedSentenceAnalyses.map(item => {
-    const analysis = item.analysis || {};
-    const structure = (analysis.structure || []).map(part => {
-      const role = part.role || '结构';
-      const isClause = /从句|clause/i.test(role);
-      const isMain = /主句|main/i.test(role);
-      const background = isClause ? '#fff3e8' : isMain ? '#eaf4ff' : '#f3f5f7';
-      const border = isClause ? '#e99a52' : isMain ? '#4a90d9' : '#9aa5b1';
-      return `<div style="margin:7px 0;padding:8px 10px;background:${background};border-left:3px solid ${border};"><b>${escapeHtml(role)}</b>：${escapeHtml(part.text || '')}<div style="font-size:12px;color:#666;margin-top:3px;">${escapeHtml(part.explanation || '')}</div></div>`;
-    }).join('') || '<span style="color:#888;">暂无结构分析</span>';
-    const grammar = (analysis.grammar_points || []).map(point => `<li style="margin:6px 0;"><b>${escapeHtml(point.name || '')}</b>：${escapeHtml(point.text || '')}<div style="font-size:12px;color:#666;">${escapeHtml(point.explanation || '')}</div></li>`).join('') || '<li style="color:#888;">暂无语法知识点</li>';
-    const tags = [...(analysis.tags || []), ...(item.hint ? [item.hint] : [])].map(tag => `<span style="display:inline-block;margin:4px 5px 0 0;padding:3px 8px;background:#edf3fa;color:#345b80;border-radius:4px;font-size:12px;">${escapeHtml(tag)}</span>`).join('');
-    const outline = (analysis.outline || []).map(node => `<li><b>${escapeHtml(node.name || '')}</b>${(node.children || []).length ? `<ul>${node.children.map(child => `<li>${escapeHtml(child)}</li>`).join('')}</ul>` : ''}</li>`).join('');
-    const relations = (analysis.relations || []).map(link => `<li>${escapeHtml(link.from || '')} <span style="color:#777;">${escapeHtml(link.label || '关联')}</span> ${escapeHtml(link.to || '')}</li>`).join('');
-    return `<article style="width:100%;box-sizing:border-box;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:12px;background:#fff;"><div style="display:block;width:100%;box-sizing:border-box;font-size:16px;line-height:1.7;font-weight:600;white-space:normal;overflow-wrap:anywhere;">${escapeHtml(item.sentence)}</div>${analysis.category ? `<div style="margin-top:10px;"><b>知识点归类：</b>${escapeHtml(analysis.category)}</div>` : ''}${tags ? `<div style="margin-top:7px;"><b>语法标签：</b>${tags}</div>` : ''}<div style="margin-top:12px;"><b>参考译文：</b>${escapeHtml(analysis.translation || '暂无')}</div><div style="margin-top:12px;"><b>结构划分</b>${structure}</div><div style="margin-top:12px;"><b>语法知识点</b><ul style="margin:6px 0 0 20px;padding:0;">${grammar}</ul></div>${outline ? `<div style="margin-top:12px;"><b>语法知识大纲</b><ul style="margin:6px 0 0 20px;padding:0;">${outline}</ul></div>` : ''}${relations ? `<div style="margin-top:12px;"><b>知识关联</b><ul style="margin:6px 0 0 20px;padding:0;">${relations}</ul></div>` : ''}<div style="display:flex;gap:8px;margin-top:14px;"><button onclick="showSentenceModal(${item.id})" style="padding:5px 10px;border:1px solid #d9d9d9;border-radius:5px;background:#fff;cursor:pointer;">重新分析</button><button onclick="deleteSentenceAnalysis(${item.id})" style="padding:5px 10px;border:1px solid #f1b5b5;border-radius:5px;background:#fff;color:#d33;cursor:pointer;">删除</button></div></article>`;
+    const tags = getSentenceTags(item).map(tag => `<span style="display:inline-block;margin:4px 5px 0 0;padding:3px 8px;background:#edf3fa;color:#345b80;border-radius:4px;font-size:12px;">${escapeHtml(tag)}</span>`).join('') || '<span style="color:#888;">未设置</span>';
+    return `<article onclick="showSentenceDetail(${item.id})" style="width:100%;box-sizing:border-box;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:12px;background:#fff;cursor:pointer;"><div style="font-size:16px;line-height:1.7;font-weight:600;white-space:pre-wrap;overflow-wrap:anywhere;">${escapeHtml(item.sentence)}</div><div style="margin-top:10px;"><b>知识点归类：</b>${tags}</div><div style="display:flex;gap:8px;margin-top:14px;" onclick="event.stopPropagation();"><button onclick="showSentenceModal(${item.id})" style="padding:5px 10px;border:1px solid #d9d9d9;border-radius:5px;background:#fff;cursor:pointer;">编辑</button><button onclick="deleteSentenceAnalysis(${item.id})" style="padding:5px 10px;border:1px solid #f1b5b5;border-radius:5px;background:#fff;color:#d33;cursor:pointer;">删除</button></div></article>`;
   }).join('');
-  container.innerHTML = subTabs + `<div style="max-width:900px;margin:16px auto;">${cards || '<div class="empty-state"><div class="empty-icon">Aa</div><p>暂无长难句，点击右上角“+ 长难句”添加</p></div>'}</div>`;
+  container.innerHTML = subTabs + renderSentenceOutline() + `<div style="max-width:900px;margin:16px auto;">${cards || '<div class="empty-state"><div class="empty-icon">Aa</div><p>暂无长难句，点击右上角“+ 长难句”添加</p></div>'}</div>`;
 }
 
 async function renderMindmaps(container) {
