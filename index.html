@@ -3044,7 +3044,7 @@ function parseSentenceJson(content) {
 }
 
 async function analyzeSentence() {
-  const sentence = document.getElementById('sentenceInput').value.trim();
+  const sentence = document.getElementById('sentenceInput').value.replace(/\s+/g, ' ').trim();
   const hint = document.getElementById('sentenceHintInput').value.trim();
   const editId = document.getElementById('editSentenceId').value;
   const settings = getSentenceSettings();
