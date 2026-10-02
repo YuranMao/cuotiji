@@ -3133,7 +3133,7 @@ function renderSentenceAnalyses(container) {
     const tags = getSentenceTags(item).map(tag => `<span style="display:inline-block;margin:4px 5px 0 0;padding:3px 8px;background:#edf3fa;color:#345b80;border-radius:4px;font-size:12px;">${escapeHtml(tag)}</span>`).join('') || '<span style="color:#888;">未设置</span>';
     return `<article onclick="showSentenceDetail(${item.id})" style="width:100%;box-sizing:border-box;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:12px;background:#fff;cursor:pointer;"><div style="display:block;width:100%;box-sizing:border-box;font-size:16px;line-height:1.7;font-weight:600;white-space:pre-wrap;word-break:normal;overflow-wrap:anywhere;">${escapeHtml(item.sentence)}</div><div style="margin-top:10px;"><b>知识点归类：</b>${tags}</div><div style="display:flex;gap:8px;margin-top:14px;" onclick="event.stopPropagation();"><button onclick="showSentenceModal(${item.id})" style="padding:5px 10px;border:1px solid #d9d9d9;border-radius:5px;background:#fff;cursor:pointer;">编辑</button><button onclick="deleteSentenceAnalysis(${item.id})" style="padding:5px 10px;border:1px solid #f1b5b5;border-radius:5px;background:#fff;color:#d33;cursor:pointer;">删除</button></div></article>`;
   }).join('');
-  container.innerHTML = subTabs + renderSentenceOutline() + `<div style="max-width:900px;margin:16px auto;">${cards || '<div class="empty-state"><div class="empty-icon">Aa</div><p>暂无长难句，点击右上角“+ 长难句”添加</p></div>'}</div>`;
+  container.innerHTML = subTabs + renderSentenceOutline() + `<div style="width:100%;max-width:none;box-sizing:border-box;margin:16px auto;">${cards || '<div class="empty-state"><div class="empty-icon">Aa</div><p>暂无长难句，点击右上角“+ 长难句”添加</p></div>'}</div>`;
 }
 
 async function renderMindmaps(container) {
