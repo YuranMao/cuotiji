@@ -2988,9 +2988,9 @@ function selectMindmap(id) { selectedMindmapId = id; renderEbb(); }
 
 function getSentenceSettings() {
   return {
-    apiUrl: localStorage.getItem('sentence_api_url') || 'https://www.heilovehei.com',
+    apiUrl: localStorage.getItem('sentence_api_url') || 'https://api.deepseek.com',
     apiKey: localStorage.getItem('sentence_api_key') || '',
-    model: localStorage.getItem('sentence_model') || 'gpt-5.5'
+    model: localStorage.getItem('sentence_model') || 'deepseek-v4-pro'
   };
 }
 
