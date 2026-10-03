@@ -2588,6 +2588,13 @@ function editKpNote(kpId) {
   if (block) block.outerHTML = renderKpNote(kpId, true);
 }
 
+function normalizeKpNoteLatex(note) {
+  return String(note || '')
+    .replace(/\\begin\{tabular\}(\{[^\n]*\})/g, '\\begin{array}$1')
+    .replace(/\\end\{tabular\}/g, '\\end{array}')
+    .replace(/\\(?:toprule|midrule|bottomrule)/g, '\\hline');
+}
+
 function renderKpNote(kpId, editing = false) {
   const kp = cachedKps.find(item => item.id == kpId);
   if (!kp) return '';
@@ -2595,7 +2602,7 @@ function renderKpNote(kpId, editing = false) {
   if (editing) {
     return `<div class="kp-note-block" id="kpNoteBlock"><div class="kp-note-header"><span class="kp-note-title">我的笔记</span><span style="font-size:11px;color:#999;">支持 LaTeX</span></div><textarea id="kpNoteInput" placeholder="记录这个知识点的重点、易错点或公式，支持 $...$ 和 $$...$$">${escapeHtml(note)}</textarea><div class="kp-note-actions"><button class="primary" onclick="saveKpNote(${kpId})">保存笔记</button></div></div>`;
   }
-  return `<div class="kp-note-block" id="kpNoteBlock"><div class="kp-note-header"><span class="kp-note-title">我的笔记</span><button onclick="editKpNote(${kpId})" style="padding:3px 9px;border:1px solid #d6bf67;border-radius:4px;background:#fff;color:#8a6d1d;cursor:pointer;font-size:11px;">编辑</button></div>${note ? `<div class="kp-note-content">${escapeHtml(note)}</div>` : '<div style="color:#aaa;font-size:13px;padding:4px 2px;">暂无笔记</div>'}</div>`;
+  return `<div class="kp-note-block" id="kpNoteBlock"><div class="kp-note-header"><span class="kp-note-title">我的笔记</span><button onclick="editKpNote(${kpId})" style="padding:3px 9px;border:1px solid #d6bf67;border-radius:4px;background:#fff;color:#8a6d1d;cursor:pointer;font-size:11px;">编辑</button></div>${note ? `<div class="kp-note-content">${escapeHtml(normalizeKpNoteLatex(note))}</div>` : '<div style="color:#aaa;font-size:13px;padding:4px 2px;">暂无笔记</div>'}</div>`;
 }
 
 async function refreshMainContent() {
