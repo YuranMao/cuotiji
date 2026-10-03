@@ -2240,21 +2240,27 @@ async function moveQuestionToKp(qId, fromKpId) {
   const allKps = cachedKps;
   if (allKps.length <= 1) { showToast('只有这一个知识点，无法转移'); return; }
 
-  const html = allKps.map(kp => {
-    const ch = cachedChapters.find(c => c.id == kp.chapter_id);
-    return `<option value="${kp.id}" ${kp.id == fromKpId ? 'disabled' : ''}>
-      ${escapeHtml(ch ? ch.name + ' / ' : '')}${escapeHtml(kp.name)}${kp.id == fromKpId ? '（当前）' : ''}
-    </option>`;
-  }).join('');
-  const selId = 'qMoveKpSelect_' + qId;
+  const sortedChapters = cachedChapters
+    .slice()
+    .sort((a, b) => (a.sort_order || a.id) - (b.sort_order || b.id));
+  const chapterSelId = 'qMoveChapterSelect_' + qId;
+  const kpSelId = 'qMoveKpSelect_' + qId;
+  const chapterHtml = sortedChapters.map(ch =>
+    `<option value="${ch.id}">${escapeHtml(ch.name)}</option>`
+  ).join('');
 
   const modal = document.createElement('div');
   modal.className = 'modal-overlay show';
   modal.innerHTML = `<div class="modal">
     <h3>转移错题</h3>
-    <p style="margin-bottom:12px;font-size:13px;color:#666;">将这道错题转移到其他知识点：</p>
+    <p style="margin-bottom:12px;font-size:13px;color:#666;">先选择目标章节，再选择目标知识点：</p>
     <div class="form-group">
-      <select id="${selId}" style="width:100%;padding:10px;border:1px solid #d9d9d9;border-radius:8px;font-size:14px;">${html}</select>
+      <label>目标章节</label>
+      <select id="${chapterSelId}" style="width:100%;padding:10px;border:1px solid #d9d9d9;border-radius:8px;font-size:14px;">${chapterHtml}</select>
+    </div>
+    <div class="form-group">
+      <label>目标知识点</label>
+      <select id="${kpSelId}" style="width:100%;padding:10px;border:1px solid #d9d9d9;border-radius:8px;font-size:14px;"></select>
     </div>
     <div class="modal-btns">
       <button class="btn-cancel" id="qMoveCancel">取消</button>
@@ -2263,9 +2269,28 @@ async function moveQuestionToKp(qId, fromKpId) {
   </div>`;
   document.body.appendChild(modal);
 
+  const chapterSelect = modal.querySelector('#' + chapterSelId);
+  const kpSelect = modal.querySelector('#' + kpSelId);
+  const refreshMoveKps = () => {
+    const chapterId = parseInt(chapterSelect.value, 10);
+    const kps = cachedKps
+      .filter(kp => kp.chapter_id == chapterId)
+      .sort((a, b) => (a.sort_order || a.id) - (b.sort_order || b.id));
+    kpSelect.innerHTML = kps.map(kp =>
+      `<option value="${kp.id}" ${kp.id == fromKpId ? 'disabled' : ''}>${escapeHtml(kp.name)}${kp.id == fromKpId ? '（当前）' : ''}</option>`
+    ).join('');
+    kpSelect.disabled = kps.length === 0 || kps.every(kp => kp.id == fromKpId);
+  };
+  chapterSelect.addEventListener('change', refreshMoveKps);
+  refreshMoveKps();
+
   modal.querySelector('#qMoveCancel').onclick = () => modal.remove();
   modal.querySelector('#qMoveConfirm').onclick = async () => {
-    const targetKpId = parseInt(modal.querySelector('#' + selId).value, 10);
+    const targetKpId = parseInt(kpSelect.value, 10);
+    if (!targetKpId || targetKpId === fromKpId) {
+      showToast('请选择其他知识点');
+      return;
+    }
     modal.remove();
     try {
       const res = await sb.from('questions').update({ knowledge_point_id: targetKpId }).eq('id', qId);
