@@ -59,6 +59,15 @@ create table if not exists sentence_analyses (
   updated_at timestamptz default now()
 );
 
+create table if not exists phrase_pairs (
+  id bigserial primary key,
+  phrase text not null,
+  meaning text default '',
+  note text default '',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 create table if not exists timeline_events (
   id bigserial primary key,
   subject text not null,
@@ -122,6 +131,7 @@ alter table schedule_time_slots enable row level security;
 alter table daily_schedule enable row level security;
 alter table political_mindmaps enable row level security;
 alter table sentence_analyses enable row level security;
+alter table phrase_pairs enable row level security;
 
 -- 允许 anon key 全权限操作（个人应用）
 do $$
@@ -155,5 +165,8 @@ begin
   end if;
   if not exists (select 1 from pg_policies where policyname='Allow all on sentence_analyses') then
     create policy "Allow all on sentence_analyses" on sentence_analyses for all using (true);
+  end if;
+  if not exists (select 1 from pg_policies where policyname='Allow all on phrase_pairs') then
+    create policy "Allow all on phrase_pairs" on phrase_pairs for all using (true);
   end if;
 end $$;
