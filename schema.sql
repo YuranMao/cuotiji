@@ -53,11 +53,15 @@ create table if not exists political_mindmaps (
 create table if not exists sentence_analyses (
   id bigserial primary key,
   sentence text not null,
+  question_type text not null default 'translation',
   hint text default '',
   analysis jsonb not null default '{}'::jsonb,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+
+alter table sentence_analyses
+  add column if not exists question_type text not null default 'translation';
 
 create table if not exists phrase_pairs (
   id bigserial primary key,
