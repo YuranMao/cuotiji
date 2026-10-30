@@ -2114,6 +2114,39 @@ async function markWrong(id) {
   } catch (err) { showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err))); }
 }
 
+function renderReviewLog(log, table, id) {
+  return log.slice(-8).reverse().map((entry, index) => {
+    const actualIndex = log.length - 1 - index;
+    const cls = entry.result === 'correct' ? 'tag-correct' : 'tag-wrong';
+    const symbol = entry.result === 'correct' ? '✓' : '✗';
+    return `<span class="review-date-tag ${cls}" style="display:inline-flex;align-items:center;gap:4px;">${escapeHtml(entry.date || '')} ${symbol}<button onclick="event.stopPropagation();deleteReviewEntry('${table}', ${id}, ${actualIndex})" title="删除这条记录" style="border:0;background:transparent;color:inherit;padding:0 1px;cursor:pointer;font-size:12px;line-height:1;">×</button></span>`;
+  }).join('');
+}
+
+async function deleteReviewEntry(table, id, index) {
+  const isCore = table === 'core_questions';
+  const collection = isCore ? cachedCoreQuestions : cachedQuestions;
+  const item = collection.find(q => q.id == id);
+  if (!item || !Array.isArray(item.review_log) || !item.review_log[index]) return;
+  if (!confirm('确定删除这条正确/错误记录吗？')) return;
+  const log = item.review_log.slice();
+  const [entry] = log.splice(index, 1);
+  const field = entry.result === 'correct' ? 'correct_count' : 'wrong_count';
+  const payload = { review_log: log, [field]: Math.max(0, (item[field] || 0) - 1) };
+  try {
+    const res = await sb.from(table).update(payload).eq('id', id);
+    if (res.error) throw res.error;
+    item.review_log = log;
+    item[field] = payload[field];
+    if (isCore) await reloadCoreQuestions();
+    await refreshMainContent();
+    await refreshSidebar();
+    showToast('记录已删除');
+  } catch (err) {
+    showToast('删除失败: ' + (err.message || err.details || JSON.stringify(err)));
+  }
+}
+
 // ==================== 拖拽排序 ====================
 let dragData = null; // { type: 'chapter'|'kp'|'question'|'core', id, chapterId?, parentId? }
 
@@ -2625,14 +2658,38 @@ function renderAnswerHtml(answer, answerImage, questionId) {
   </div>`;
 }
 
-function selectChapter(chapterId) {
+async function selectChapter(chapterId) {
+  if (!coreLoaded) await reloadCoreQuestions();
   selectedChapterId = (selectedChapterId == chapterId) ? null : chapterId;
   selectedKpId = null;
   selectedCoreChapterId = null;
   updateMainHeader();
-  document.getElementById('panelCuoti').innerHTML =
-    '<div class="empty-state"><div class="empty-icon">📂</div><p>请选择具体知识点查看错题</p></div>';
-  refreshSidebar();
+  await refreshSidebar();
+  const container = document.getElementById('panelCuoti');
+  if (!selectedChapterId) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">📂</div><p>请选择具体知识点查看错题</p></div>';
+    return;
+  }
+  const chapter = cachedChapters.find(item => item.id == selectedChapterId);
+  const kpIds = cachedKps.filter(kp => kp.chapter_id == selectedChapterId).map(kp => kp.id);
+  const questions = cachedQuestions.filter(q => kpIds.includes(q.knowledge_point_id));
+  const coreQuestions = cachedCoreQuestions.filter(q => q.chapter_id == selectedChapterId);
+  const allQuestions = [...questions, ...coreQuestions];
+  const correct = allQuestions.reduce((sum, q) => sum + (q.correct_count || 0), 0);
+  const wrong = allQuestions.reduce((sum, q) => sum + (q.wrong_count || 0), 0);
+  const attempts = correct + wrong;
+  const rate = attempts ? Math.round(correct / attempts * 100) : 0;
+  container.innerHTML = `<section style="max-width:760px;padding:22px 0;">
+    <h2 style="font-size:20px;margin:0 0 6px;">${escapeHtml(chapter?.name || '章节概况')}</h2>
+    <div style="font-size:13px;color:#777;margin-bottom:20px;">章节错题总体概况，包含普通错题和重要例题</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;">
+      <div style="padding:14px;border:1px solid #e5e7eb;border-radius:6px;"><div style="font-size:12px;color:#777;">错题总数</div><strong style="display:block;margin-top:6px;font-size:22px;">${allQuestions.length}</strong></div>
+      <div style="padding:14px;border:1px solid #e5e7eb;border-radius:6px;"><div style="font-size:12px;color:#777;">累计答题</div><strong style="display:block;margin-top:6px;font-size:22px;">${attempts}</strong></div>
+      <div style="padding:14px;border:1px solid #e5e7eb;border-radius:6px;"><div style="font-size:12px;color:#777;">答对次数</div><strong style="display:block;margin-top:6px;font-size:22px;color:#16a34a;">${correct}</strong></div>
+      <div style="padding:14px;border:1px solid #e5e7eb;border-radius:6px;"><div style="font-size:12px;color:#777;">答错次数</div><strong style="display:block;margin-top:6px;font-size:22px;color:#e74c3c;">${wrong}</strong></div>
+      <div style="padding:14px;border:1px solid #e5e7eb;border-radius:6px;"><div style="font-size:12px;color:#777;">总体正确率</div><strong style="display:block;margin-top:6px;font-size:22px;color:#3b82f6;">${rate}%</strong></div>
+    </div>
+  </section>`;
 }
 
 async function selectKp(kpId) {
@@ -2734,14 +2791,7 @@ async function refreshMainContent() {
               <div class="progress-bar-fill ${isCompleted ? 'full' : ''}"
                    style="width:${pct}%"></div>
             </div>
-            ${log.length > 0 ? `
-              <div class="review-dates">
-                ${log.slice(-8).reverse().map(entry => {
-                  const cls = entry.result === 'correct' ? 'tag-correct' : 'tag-wrong';
-                  const emoji = entry.result === 'correct' ? '✓' : '✗';
-                  return `<span class="review-date-tag ${cls}">${entry.date} ${emoji}</span>`;
-                }).join('')}
-              </div>` : '<div class="review-dates"></div>'}
+            ${log.length > 0 ? `<div class="review-dates">${renderReviewLog(log, 'core_questions', q.id)}</div>` : '<div class="review-dates"></div>'}
           </div>
           <div class="card-actions">
             <button class="btn-correct" onclick="event.stopPropagation();markCoreCorrect(${q.id})">答对了</button>
@@ -2801,14 +2851,7 @@ async function refreshMainContent() {
               <div class="progress-bar-fill ${isCompleted ? 'full' : ''}"
                    style="width:${pct}%"></div>
             </div>
-            ${log.length > 0 ? `
-              <div class="review-dates">
-                ${log.slice(-8).reverse().map(entry => {
-                  const cls = entry.result === 'correct' ? 'tag-correct' : 'tag-wrong';
-                  const emoji = entry.result === 'correct' ? '✓' : '✗';
-                  return `<span class="review-date-tag ${cls}">${entry.date} ${emoji}</span>`;
-                }).join('')}
-              </div>` : '<div class="review-dates"></div>'}
+            ${log.length > 0 ? `<div class="review-dates">${renderReviewLog(log, 'questions', q.id)}</div>` : '<div class="review-dates"></div>'}
           </div>
           <div class="card-actions">
             <button class="btn-correct" onclick="event.stopPropagation();markCorrect(${q.id})">答对了</button>
