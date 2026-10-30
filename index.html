@@ -2658,6 +2658,32 @@ function renderAnswerHtml(answer, answerImage, questionId) {
   </div>`;
 }
 
+function renderQuestionNote(id, note, table = 'questions') {
+  return `<div style="margin:10px 0;padding:10px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;font-size:12px;font-weight:600;color:#475569;">
+      <span>备注</span><button class="answer-edit-btn" onclick="editQuestionNote('${table}', ${id})">编辑</button>
+    </div>
+    <div style="font-size:13px;line-height:1.6;color:${note ? '#334155' : '#9ca3af'};white-space:pre-wrap;overflow-wrap:anywhere;">${note ? escapeHtml(note) : '暂无备注'}</div>
+  </div>`;
+}
+
+async function editQuestionNote(table, id) {
+  const collection = table === 'core_questions' ? cachedCoreQuestions : cachedQuestions;
+  const item = collection.find(q => q.id == id);
+  if (!item) return;
+  const note = prompt('编辑错题备注', item.note || '');
+  if (note === null) return;
+  try {
+    const res = await sb.from(table).update({ note: note.trim() }).eq('id', id);
+    if (res.error) throw res.error;
+    item.note = note.trim();
+    await refreshMainContent();
+    showToast('备注已保存');
+  } catch (err) {
+    showToast('备注保存失败: ' + (err.message || err.details || JSON.stringify(err)));
+  }
+}
+
 async function selectChapter(chapterId) {
   if (!coreLoaded) await reloadCoreQuestions();
   selectedChapterId = (selectedChapterId == chapterId) ? null : chapterId;
@@ -2775,6 +2801,7 @@ async function refreshMainContent() {
           <span class="drag-handle" style="position:absolute;top:4px;left:4px;background:rgba(255,255,255,0.85);border-radius:4px;padding:2px 4px;" title="拖动排序">⠿</span>
         </div>
         <div class="card-info">
+          ${renderQuestionNote(q.id, q.note, 'core_questions')}
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
             <span style="display:inline-block;padding:4px 12px;background:#fef3e2;color:#e67e22;border:1px solid #f0c78e;border-radius:4px;font-size:14px;font-weight:600;">
               ${escapeHtml(q.tag || '未分类')}
@@ -2842,6 +2869,7 @@ async function refreshMainContent() {
           <div class="card-date">📅 首次上传：${q.first_upload_date}</div>
           ${q.file_name ? `<div class="card-date" style="margin-top:4px;color:#888;">📄 ${escapeHtml(q.file_name)}</div>` : ''}
           ${renderAnswerHtml(q.answer, q.answer_image, q.id)}
+          ${renderQuestionNote(q.id, q.note)}
           <div class="progress-section">
             ${isCompleted ? '<span class="card-badge">✓ 已完成</span>' : ''}
             <div class="progress-header">
