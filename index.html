@@ -4031,10 +4031,10 @@ async function renderCalendar() {
 }
 
 function renderGoalOverviewTable(months, goalsData, subjOrder) {
-  const weekCount = 4; // 每科每月4个周目标
   // 各月第1周的全局周编号（相对周rel对应 monthWeekStart + rel - 1）
-  const monthWeekStart = { '7月': 3, '8月': 7, '9月': 11, '10月': 15, '11月': 19, '12月': 23 };
-  const monthWeekCount = { '7月': 4, '8月': 4, '9月': 4, '10月': 4, '11月': 4, '12月': 3 };
+  const monthWeekStart = { '7月': 3, '8月': 7, '9月': 11, '10月': 16, '11月': 20, '12月': 24 };
+  const monthWeekCount = { '7月': 4, '8月': 4, '9月': 5, '10月': 4, '11月': 4, '12月': 3 };
+  const weekCount = Math.max(...months.map(m => monthWeekCount[m.name] || 4));
 
   // 月份列文字颜色：7月最浅，逐月加深
   const monthColors = months.map((m, i) => {
