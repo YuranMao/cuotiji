@@ -1146,6 +1146,13 @@ body {
   <div class="modal">
     <h3 id="ebbModalTitle">添加背诵项</h3>
     <div class="form-group">
+      <label>模块</label>
+      <select id="ebbModuleSelect" onchange="syncEbbSubjectOptions()">
+        <option value="常规">常规复习</option>
+        <option value="冲刺">冲刺复习</option>
+      </select>
+    </div>
+    <div class="form-group">
       <label>科目</label>
       <select id="ebbSubjectSelect">
         <option value="专业课">专业课</option>
@@ -2941,18 +2948,34 @@ function updateMainHeader() {
 }
 
 // ==================== 艾宾浩斯遗忘表 ====================
+function getEbbSubject(item) {
+  return (item.subject || '专业课').replace(/^冲刺·/, '');
+}
+
+function syncEbbSubjectOptions(subject) {
+  const select = document.getElementById('ebbSubjectSelect');
+  const selected = subject || select.value;
+  const subjects = document.getElementById('ebbModuleSelect').value === '冲刺'
+    ? ['专业课', '英语', '政治'] : ['专业课', '单词', '政治'];
+  select.innerHTML = subjects.map(s => `<option value="${s}">${s}</option>`).join('');
+  select.value = subjects.includes(selected) ? selected : '专业课';
+}
+
 function showEbbModal(id, name, firstDate, subject) {
+  const isSprint = id ? (subject || '').startsWith('冲刺·') : ebbSubject === '冲刺';
+  document.getElementById('ebbModuleSelect').value = isSprint ? '冲刺' : '常规';
+  syncEbbSubjectOptions(id ? getEbbSubject({ subject }) : (isSprint ? '专业课' : ebbSubject));
   if (id) {
     document.getElementById('ebbModalTitle').textContent = '编辑背诵项';
     document.getElementById('ebbNameInput').value = name;
     document.getElementById('ebbDateInput').value = firstDate;
-    document.getElementById('ebbSubjectSelect').value = subject || '专业课';
+    document.getElementById('ebbSubjectSelect').value = getEbbSubject({ subject });
     document.getElementById('editEbbId').value = id;
   } else {
     document.getElementById('ebbModalTitle').textContent = '添加背诵项';
     document.getElementById('ebbNameInput').value = '';
     document.getElementById('ebbDateInput').value = new Date().toISOString().slice(0, 10);
-    document.getElementById('ebbSubjectSelect').value = ebbSubject;
+    document.getElementById('ebbSubjectSelect').value = isSprint ? '专业课' : ebbSubject;
     document.getElementById('editEbbId').value = '';
   }
   openModal('ebbModal');
@@ -2962,7 +2985,8 @@ function showEbbModal(id, name, firstDate, subject) {
 async function saveEbbItem() {
   const name = document.getElementById('ebbNameInput').value.trim();
   const firstDate = document.getElementById('ebbDateInput').value;
-  const subject = document.getElementById('ebbSubjectSelect').value;
+  const isSprint = document.getElementById('ebbModuleSelect').value === '冲刺';
+  const subject = (isSprint ? '冲刺·' : '') + document.getElementById('ebbSubjectSelect').value;
   const editId = document.getElementById('editEbbId').value;
   if (!name) { showToast('请输入背诵内容'); return; }
   try {
@@ -2976,14 +3000,14 @@ async function saveEbbItem() {
     if (editId) {
       // Try with subject first, fallback without
       res = await sb.from('ebbinghaus_items').update(payload).eq('id', editId);
-      if (res.error) {
+      if (res.error && !isSprint) {
         console.warn('update 带 subject 失败，重试无 subject:', res.error.message);
         delete payload.subject;
         res = await sb.from('ebbinghaus_items').update(payload).eq('id', editId);
       }
     } else {
       res = await sb.from('ebbinghaus_items').insert(payload);
-      if (res.error) {
+      if (res.error && !isSprint) {
         console.warn('insert 带 subject 失败，重试无 subject:', res.error.message);
         delete payload.subject;
         res = await sb.from('ebbinghaus_items').insert(payload);
@@ -3362,7 +3386,7 @@ function renderSentenceOutline() {
 }
 
 function renderSentenceAnalyses(container) {
-  const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;flex-wrap:wrap;">${['专业课', '单词', '政治', '长难句', '词组'].map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#4a90d9;color:#fff;border-color:#4a90d9;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><button onclick="startRecitation('sentence')" style="padding:6px 12px;border:1px solid #4a90d9;border-radius:6px;background:#fff;color:#4a90d9;cursor:pointer;font-size:12px;">开始背诵</button><button onclick="showSentenceSettings()" style="padding:6px 12px;border:1px solid #d9d9d9;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;">API 设置</button></div>`;
+  const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;flex-wrap:wrap;">${['专业课', '单词', '政治', '长难句', '词组', '冲刺'].map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#4a90d9;color:#fff;border-color:#4a90d9;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><button onclick="startRecitation('sentence')" style="padding:6px 12px;border:1px solid #4a90d9;border-radius:6px;background:#fff;color:#4a90d9;cursor:pointer;font-size:12px;">开始背诵</button><button onclick="showSentenceSettings()" style="padding:6px 12px;border:1px solid #d9d9d9;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;">API 设置</button></div>`;
   const cards = cachedSentenceAnalyses.map(item => {
     const tags = getSentenceTags(item).map(tag => `<span style="display:inline-block;margin:4px 5px 0 0;padding:3px 8px;background:#edf3fa;color:#345b80;border-radius:4px;font-size:12px;">${escapeHtml(tag)}</span>`).join('') || '<span style="color:#888;">未设置</span>';
     return `<article onclick="showSentenceDetail(${item.id})" style="width:100%;box-sizing:border-box;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:12px;background:#fff;cursor:pointer;"><div style="margin-bottom:10px;">${renderSentenceType(item)}</div><div style="display:block;width:100%;box-sizing:border-box;font-size:16px;line-height:1.7;font-weight:600;white-space:pre-wrap;word-break:normal;overflow-wrap:anywhere;">${escapeHtml(item.sentence)}</div><div style="margin-top:10px;"><b>知识点归类：</b>${tags}</div><div style="display:flex;gap:8px;margin-top:14px;" onclick="event.stopPropagation();"><button onclick="showSentenceModal(${item.id})" style="padding:5px 10px;border:1px solid #d9d9d9;border-radius:5px;background:#fff;cursor:pointer;">编辑</button><button onclick="deleteSentenceAnalysis(${item.id})" style="padding:5px 10px;border:1px solid #f1b5b5;border-radius:5px;background:#fff;color:#d33;cursor:pointer;">删除</button></div></article>`;
@@ -3371,13 +3395,13 @@ function renderSentenceAnalyses(container) {
 }
 
 function renderPhrasePairs(container) {
-  const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;flex-wrap:wrap;">${['专业课', '单词', '政治', '长难句', '词组'].map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#4a90d9;color:#fff;border-color:#4a90d9;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><button onclick="startRecitation('phrase')" style="padding:6px 12px;border:1px solid #4a90d9;border-radius:6px;background:#fff;color:#4a90d9;cursor:pointer;font-size:12px;">开始背诵</button></div>`;
+  const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;flex-wrap:wrap;">${['专业课', '单词', '政治', '长难句', '词组', '冲刺'].map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#4a90d9;color:#fff;border-color:#4a90d9;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><button onclick="startRecitation('phrase')" style="padding:6px 12px;border:1px solid #4a90d9;border-radius:6px;background:#fff;color:#4a90d9;cursor:pointer;font-size:12px;">开始背诵</button></div>`;
   const cards = cachedPhrasePairs.map(item => `<article style="width:100%;box-sizing:border-box;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:12px;background:#fff;"><div style="font-size:18px;font-weight:700;line-height:1.6;overflow-wrap:anywhere;">${escapeHtml(item.phrase)}</div><div style="margin-top:8px;color:#555;white-space:pre-wrap;">${escapeHtml(item.meaning || '暂无释义')}</div>${item.note ? `<div style="margin-top:8px;font-size:13px;color:#888;white-space:pre-wrap;">备注：${escapeHtml(item.note)}</div>` : ''}<div style="display:flex;gap:8px;margin-top:14px;"><button onclick="showPhraseModal(${item.id})" style="padding:5px 10px;border:1px solid #d9d9d9;border-radius:5px;background:#fff;cursor:pointer;">编辑</button><button onclick="deletePhrasePair(${item.id})" style="padding:5px 10px;border:1px solid #f1b5b5;border-radius:5px;background:#fff;color:#d33;cursor:pointer;">删除</button></div></article>`).join('');
   container.innerHTML = subTabs + `<div style="width:100%;max-width:none;box-sizing:border-box;margin:16px auto;">${cards || '<div class="empty-state"><div class="empty-icon">Aa</div><p>暂无词组固定搭配，点击右上角“+ 词组”添加</p></div>'}</div>`;
 }
 
 async function renderMindmaps(container) {
-  const subjects = ['专业课', '单词', '政治', '长难句', '词组'];
+  const subjects = ['专业课', '单词', '政治', '长难句', '词组', '冲刺'];
   const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;flex-wrap:wrap;">${subjects.map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#9b59b6;color:#fff;border-color:#9b59b6;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><span style="font-size:12px;color:#888;">输入 Mermaid mindmap 代码生成思维导图</span></div>`;
   const item = cachedMindmaps.find(m => m.id == selectedMindmapId);
   const chapters = `<div class="mindmap-chapters">${cachedMindmaps.map(m => `<button class="${m.id == selectedMindmapId ? 'active' : ''}" onclick="selectMindmap(${m.id})">${escapeHtml(m.name)}</button>`).join('')}</div>`;
@@ -3391,17 +3415,20 @@ function renderEbb() {
   if (ebbSubject === '政治') { renderMindmaps(container); return; }
   if (ebbSubject === '长难句') { renderSentenceAnalyses(container); return; }
   if (ebbSubject === '词组') { renderPhrasePairs(container); return; }
-  const subjects = ['专业课', '单词', '政治', '长难句', '词组'];
-  const subjectIcons = { '专业课': '📘', '单词': '📖', '政治': '📙', '长难句': 'Aa', '词组': '▣' };
-
-  const filteredItems = cachedEbbItems.filter(item => (item.subject || '专业课') === ebbSubject);
+  const subjects = ['专业课', '单词', '政治', '长难句', '词组', '冲刺'];
+  const subjectIcons = { '专业课': '📘', '单词': '📖', '政治': '📙', '长难句': 'Aa', '词组': '▣', '冲刺': '' };
+  const isSprint = ebbSubject === '冲刺';
+  const sprintColors = { '专业课': '#e8f5e9', '英语': '#e8f0fe', '政治': '#f3e8fa' };
+  const filteredItems = cachedEbbItems.filter(item => isSprint
+    ? (item.subject || '').startsWith('冲刺·')
+    : (item.subject || '专业课') === ebbSubject);
 
   // Subject sub-tabs
   const subTabs = `<div class="ebb-toolbar">
     <div style="display:flex;gap:4px;">
       ${subjects.map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#4a90d9;color:#fff;border-color:#4a90d9;' : 'background:#fff;color:#333;'}">${subjectIcons[s]} ${s}</button>`).join('')}
     </div>
-    <span style="font-size:12px;color:#888;">逾期自动顺延至今日，仅当天可记录</span>
+    <span style="font-size:12px;color:#888;">${isSprint ? '冲刺复习 · 专业课（浅绿） / 英语（浅蓝） / 政治（浅紫） · ' : ''}逾期自动顺延至今日，仅当天可记录</span>
   </div>`;
 
   if (filteredItems.length === 0) {
@@ -3420,21 +3447,25 @@ function renderEbb() {
   container.innerHTML = subTabs + `
     <div class="ebb-wrap" style="max-height:calc(100vh - 240px);overflow:auto;">
       <table class="ebb-table" style="min-width:720px;">
-        <thead><tr><th style="width:120px;">内容</th><th style="width:80px;">学习日</th>${headerCols}<th style="width:60px;"></th></tr></thead>
+        <thead><tr>${isSprint ? '<th style="width:75px;">学科</th>' : ''}<th style="width:120px;">内容</th><th style="width:80px;">学习日</th>${headerCols}<th style="width:60px;"></th></tr></thead>
         <tbody>
         ${filteredItems.map(item => {
           const schedule = getEbbDynamicSchedule(item);
-          return `<tr>
+          const itemSubject = getEbbSubject(item);
+          const itemIsEnglish = isSprint ? itemSubject === '英语' : isEnglish;
+          const itemIsMajor = isSprint ? itemSubject === '专业课' : ebbSubject === '专业课';
+          return `<tr${isSprint ? ` style="background:${sprintColors[itemSubject] || '#fff'};"` : ''}>
+            ${isSprint ? `<td style="font-weight:700;">${escapeHtml(itemSubject)}</td>` : ''}
             <td class="eb-name" title="${escapeHtml(item.name)}" ondblclick="editEbbInline(${item.id})">${escapeHtml(item.name)}</td>
             <td class="eb-date">${item.first_date}</td>
             ${schedule.map(slot => {
               const isFuture = slot.scheduled > today;
               const btnBaseStyle = 'font-size:11px;padding:3px 10px;border-radius:4px;cursor:pointer;white-space:nowrap;';
               // 专业课前2天(d1,d2)不可提前；英语完全不可提前
-              const canPreComplete = !isEnglish && !(ebbSubject === '专业课' && (slot.day === 1 || slot.day === 2));
+              const canPreComplete = !itemIsEnglish && !(itemIsMajor && (slot.day === 1 || slot.day === 2));
               if (slot.done) {
                 const reviewDate = slot.reviewDate ? slot.reviewDate.slice(5) : slot.scheduled.slice(5);
-                if (ebbSubject === '专业课' || isEnglish) {
+                if (itemIsMajor || itemIsEnglish || isSprint) {
                   return `<td class="ebb-done" style="padding:2px;vertical-align:middle;">
                     <div style="display:flex;flex-direction:column;align-items:stretch;gap:2px;width:100%;">
                     <span style="font-size:11px;color:#27ae60;font-weight:600;text-align:center;">✓ ${reviewDate}</span>
@@ -3954,9 +3985,9 @@ async function renderCalendar() {
 
         // Month goal summary (below month name)
         const goalSummary = goalSubjects.length > 0 ? goalSubjects.map(([s, v]) => {
-          return `<span style="display:inline-block;font-size:9px;line-height:1.4;border:1px dashed ${subjColors[s]};background:${subjColors[s]}18;border-radius:4px;padding:2px 6px;white-space:normal;word-break:break-all;">
-            <b style="color:${subjColors[s]};margin-right:2px;">${s}</b>${escapeHtml(v.goal)}
-          </span>`;
+          return `<div style="font-size:9px;line-height:1.4;padding:2px 0;white-space:normal;word-break:break-all;">
+            <b style="color:${subjColors[s]};margin-right:2px;">${s}</b>${v.goal.split(/;|\r?\n/).map(escapeHtml).join('<br>')}
+          </div>`;
         }).join('') : '';
 
         // Day cell renderer
@@ -4058,7 +4089,7 @@ function renderGoalOverviewTable(months, goalsData, subjOrder) {
     const name = `ov|${m.name}|${s}|goal`;
     const content = goalOverviewEdit
       ? `<textarea name="${name}" style="width:100%;min-height:32px;padding:2px 4px;border:1px solid #ddd;border-radius:3px;font-size:10px;resize:vertical;box-sizing:border-box;">${escapeHtml(val)}</textarea>`
-      : (escapeHtml(val) || '<span style="color:#ccc;">—</span>');
+      : (val.split(/;|\r?\n/).map(escapeHtml).join('<br>') || '<span style="color:#ccc;">—</span>');
     return `<td style="${cellStyle(color, 'background:#e9ecef;font-weight:700;text-align:center;')}">${content}</td>`;
   };
 
