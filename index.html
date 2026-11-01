@@ -3985,9 +3985,9 @@ async function renderCalendar() {
 
         // Month goal summary (below month name)
         const goalSummary = goalSubjects.length > 0 ? goalSubjects.map(([s, v]) => {
-          return `<div style="font-size:9px;line-height:1.4;border:1px dashed ${subjColors[s]};background:${subjColors[s]}18;border-radius:4px;padding:2px 6px;text-align:left;white-space:normal;word-break:break-all;">
-            <b style="color:${subjColors[s]};">${s}</b>
-            <div style="display:flex;flex-direction:column;gap:3px;margin-top:3px;">
+          return `<div style="display:flex;align-items:flex-start;gap:5px;font-size:9px;line-height:1.4;border:1px dashed ${subjColors[s]};background:${subjColors[s]}18;border-radius:4px;padding:2px 6px;text-align:left;white-space:normal;word-break:break-all;">
+            <b style="color:${subjColors[s]};flex-shrink:0;white-space:nowrap;padding-top:3px;">${s}</b>
+            <div style="display:flex;flex:1;min-width:0;flex-direction:column;gap:3px;">
               ${v.goal.split(/;|\r?\n/).map(part => part.trim()).filter(Boolean).map(part => `<div style="border:1px solid ${subjColors[s]}60;background:#ffffffb3;border-radius:3px;padding:2px 4px;text-align:left;">${escapeHtml(part)}</div>`).join('')}
             </div>
           </div>`;
