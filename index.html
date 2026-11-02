@@ -1488,6 +1488,7 @@ let scheduleDateRange = { start: '', end: '' };
 
 // ==================== Tab 切换 ====================
 function switchTab(tab) {
+  cancelKpPreview();
   currentTab = tab;
   document.querySelectorAll('.tab-nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel' + tab.charAt(0).toUpperCase() + tab.slice(1)));
@@ -2134,7 +2135,9 @@ async function markCorrect(id) {
     q.correct_count = newCorrect;
     q.review_log = newLog;
     await refreshMainContent();
-    showToast(newCorrect >= 5 ? '恭喜！已完成！' : '答对了（' + newCorrect + '/5）');
+    await refreshSidebar();
+    const streak = getQuestionMastery({ review_log: newLog }).streak;
+    showToast(streak >= 5 ? '恭喜！已掌握！' : '答对了（连续 ' + streak + '/5）');
   } catch (err) { showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err))); }
 }
 
@@ -2150,6 +2153,7 @@ async function markWrong(id) {
     q.wrong_count = newWrong;
     q.review_log = newLog;
     await refreshMainContent();
+    await refreshSidebar();
     showToast('已记录（答错 ' + newWrong + ' 次）');
   } catch (err) { showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err))); }
 }
@@ -2191,6 +2195,7 @@ async function deleteReviewEntry(table, id, index) {
 let dragData = null; // { type: 'chapter'|'kp'|'question'|'core', id, chapterId?, parentId? }
 
 function onDragStart(e, type, id, chapterId, parentId) {
+  cancelKpPreview();
   dragData = { type, id, chapterId, parentId };
   e.currentTarget.classList.add('dragging');
   e.dataTransfer.effectAllowed = 'move';
@@ -2520,6 +2525,7 @@ async function moveKpToChapter(kpId, fromChapterId) {
 
 // ==================== 重要例题库 ====================
 function selectCore(chapterId) {
+  cancelKpPreview();
   selectedCoreChapterId = chapterId;
   selectedKpId = null;
   updateMainHeader();
@@ -2592,7 +2598,9 @@ async function markCoreCorrect(id) {
     if (res.error) throw res.error;
     await reloadCoreQuestions();
     await refreshMainContent();
-    showToast(newCorrect >= 5 ? '恭喜！已完成！' : '答对了（' + newCorrect + '/5）');
+    await refreshSidebar();
+    const streak = getQuestionMastery({ review_log: newLog }).streak;
+    showToast(streak >= 5 ? '恭喜！已掌握！' : '答对了（连续 ' + streak + '/5）');
   } catch (err) { showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err))); }
 }
 
@@ -2607,12 +2615,22 @@ async function markCoreWrong(id) {
     if (res.error) throw res.error;
     await reloadCoreQuestions();
     await refreshMainContent();
+    await refreshSidebar();
     showToast('已记录（答错 ' + newWrong + ' 次）');
   } catch (err) { showToast('记录失败: ' + (err.message || err.details || JSON.stringify(err))); }
 }
 
 // ==================== 渲染：侧边栏 ====================
+function renderReviewBadge(questions) {
+  const s = aggregateReview(questions);
+  const complete = s.total > 0 && s.pending === 0;
+  const color = complete ? '#15803d' : s.pending >= 10 ? '#dc2626' : s.pending >= 3 ? '#ea580c' : '#64748b';
+  const text = complete ? '✓' : '待 ' + s.pending;
+  return `<span title="${complete ? '全部掌握' : '待复习 ' + s.pending + ' 题'}" style="flex-shrink:0;font-size:11px;font-weight:600;color:${color};background:${complete ? '#f0fdf4' : '#f8fafc'};border:1px solid currentColor;border-radius:4px;padding:1px 4px;">${text}</span>`;
+}
+
 async function refreshSidebar() {
+  cancelKpPreview();
   const container = document.getElementById('sidebarTree');
   if (!coreLoaded) { await reloadCoreQuestions(); }
 
@@ -2637,6 +2655,7 @@ async function refreshSidebar() {
           <span class="name">${escapeHtml(ch.name)}
             <button class="edit-btn" onclick="event.stopPropagation();showChapterModal(${ch.id}, '${escapeHtml(ch.name).replace(/'/g, "\\'")}')" title="重命名">✎</button>
           </span>
+          ${renderReviewBadge([...cachedQuestions.filter(q => childKps.some(kp => kp.id == q.knowledge_point_id)), ...cachedCoreQuestions.filter(q => q.chapter_id == ch.id)])}
           <span class="count">${totalQuestions}</span>
           <button class="del-chapter" onclick="event.stopPropagation();deleteChapter(${ch.id})">×</button>
         </div>
@@ -2650,11 +2669,16 @@ async function refreshSidebar() {
                    ondragover="onDragOverKp(event)"
                    ondragleave="onDragLeaveKp(event)"
                    ondrop="onDropKp(event, ${kp.id}, ${ch.id})"
+                   tabindex="0" role="button"
+                   onmouseenter="scheduleKpPreview(${kp.id})" onmouseleave="cancelKpPreview()"
+                   onfocus="if(event.target === this) scheduleKpPreview(${kp.id})" onblur="cancelKpPreview()"
+                   onkeydown="if(event.target === this && (event.key === 'Enter' || event.key === ' ')){event.preventDefault();selectKp(${kp.id});}"
                    onclick="event.stopPropagation();selectKp(${kp.id})">
                 <span class="drag-handle" title="拖动排序">⠿</span>
                 <span class="kp-name">${escapeHtml(kp.name)}
                   <button class="edit-btn kp-edit-btn" onclick="event.stopPropagation();showKpEditModal(${kp.id}, '${escapeHtml(kp.name).replace(/'/g, "\\'")}', ${ch.id})" title="重命名">✎</button>
                 </span>
+                ${renderReviewBadge(cachedQuestions.filter(q => q.knowledge_point_id == kp.id))}
                 <span class="kp-count">${kpCount}</span>
                 <button class="kp-move-btn" onclick="event.stopPropagation();moveKpToChapter(${kp.id}, ${ch.id})" title="转移到其他章节">↗</button>
                 <button class="del-kp" onclick="event.stopPropagation();deleteKp(${kp.id})">×</button>
@@ -2667,6 +2691,7 @@ async function refreshSidebar() {
                onclick="event.stopPropagation();selectCore(${ch.id})">
             <span class="kp-dot" style="color:#e67e22;">★</span>
             <span style="font-size:12px;">重要例题</span>
+            ${renderReviewBadge(cachedCoreQuestions.filter(q => q.chapter_id == ch.id))}
             <span class="kp-count">${cachedCoreQuestions.filter(q => q.chapter_id == ch.id).length}</span>
           </div>
         </div>
@@ -2724,7 +2749,97 @@ async function editQuestionNote(table, id) {
   }
 }
 
+function getQuestionMastery(question) {
+  const log = question.review_log || [];
+  let streak = 0;
+  for (let i = log.length - 1; i >= 0 && log[i].result === 'correct'; i--) streak++;
+  const correct = question.correct_count || 0;
+  const wrong = question.wrong_count || 0;
+  return { streak, correct, wrong, reviewed: log.length > 0 || correct + wrong > 0, mastered: streak >= 5 };
+}
+
+function aggregateReview(questions) {
+  const stats = { total: questions.length, mastered: 0, reviewing: 0, unreviewed: 0, correct: 0, wrong: 0 };
+  questions.forEach(question => {
+    const state = getQuestionMastery(question);
+    stats.correct += state.correct;
+    stats.wrong += state.wrong;
+    if (state.mastered) stats.mastered++;
+    else if (state.reviewed) stats.reviewing++;
+    else stats.unreviewed++;
+  });
+  stats.pending = stats.total - stats.mastered;
+  stats.attempts = stats.correct + stats.wrong;
+  stats.rate = stats.attempts ? Math.round(stats.correct / stats.attempts * 100) : null;
+  return stats;
+}
+
+function renderReviewSummary(questions) {
+  const s = aggregateReview(questions);
+  const cards = [['错题总数', s.total, '当前范围收录题量'], ['已掌握', s.mastered, '连续答对至少 5 次'], ['待复习', s.pending, '建议尽快消灭'], ['复习正确率', s.rate === null ? '—' : s.rate + '%', '答对次数 / 总复习次数'], ['累计复习次数', s.attempts, '每次答对或答错计 1 次']];
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin:18px 0;">${cards.map(([label, value, hint]) => `<div style="padding:14px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;"><div style="font-size:12px;color:#64748b;">${label}</div><strong style="display:block;margin-top:8px;font-size:24px;">${value}</strong><div style="font-size:11px;color:#64748b;margin-top:8px;">${hint}</div></div>`).join('')}</div>
+    <p style="font-size:12px;color:#64748b;line-height:1.8;">末尾连续答对至少 5 次即已掌握，答错后重新累计。待复习 = 复习中 + 未复习；正确率与累计次数按历史答对、答错次数统计，无记录时正确率显示 —。</p>
+    <div role="img" aria-label="已掌握 ${s.mastered}，复习中 ${s.reviewing}，未复习 ${s.unreviewed}" style="display:flex;height:22px;border-radius:6px;overflow:hidden;background:#e5e7eb;">${[[s.mastered, '#22c55e'], [s.reviewing, '#facc15'], [s.unreviewed, '#cbd5e1']].map(([count, color]) => `<span style="width:${s.total ? count / s.total * 100 : 0}%;background:${color};"></span>`).join('')}</div>
+    <p style="font-size:13px;color:#475569;"><span style="color:#15803d;">已掌握 ${s.mastered}</span> · <span style="color:#a16207;">复习中 ${s.reviewing}</span> · <span style="color:#64748b;">未复习 ${s.unreviewed}</span>${s.total ? ' · 掌握率 ' + Math.round(s.mastered / s.total * 100) + '%' : ' · 暂无错题'}</p>`;
+}
+
+function renderChapterOverview(chapterId) {
+  const chapter = cachedChapters.find(item => item.id == chapterId);
+  const groups = cachedKps.filter(kp => kp.chapter_id == chapterId).map(kp => ({ name: kp.name, questions: cachedQuestions.filter(q => q.knowledge_point_id == kp.id) }));
+  const coreQuestions = cachedCoreQuestions.filter(q => q.chapter_id == chapterId);
+  const questions = [...groups.flatMap(group => group.questions), ...coreQuestions];
+  const top = groups.map(group => ({ ...group, stats: aggregateReview(group.questions) })).sort((a, b) => b.stats.total - a.stats.total).slice(0, 5);
+  const maxCount = Math.max(1, ...groups.map(group => group.questions.length), coreQuestions.length);
+  return `<section style="max-width:920px;padding:22px 0;">
+    <h2 style="font-size:20px;margin:0 0 6px;">${escapeHtml(chapter?.name || '章节概况')}</h2>
+    <div style="font-size:13px;color:#64748b;">章节错题总体概况，包含普通错题和重要例题</div>
+    ${renderReviewSummary(questions)}
+    <h3 style="font-size:16px;margin-top:26px;">错题数 Top 5 知识点</h3>
+    <p style="font-size:12px;color:#64748b;">按收录错题数量排序；横条表示历史复习错误率（答错次数 / 累计复习次数）。</p>
+    ${top.length ? top.map(({ name, stats }) => `<div style="margin:14px 0;"><div style="display:flex;justify-content:space-between;gap:12px;font-size:13px;"><span>${escapeHtml(name)} · ${stats.total} 题</span><span>${stats.attempts ? Math.round(stats.wrong / stats.attempts * 100) + '% 错误率' : '暂无复习记录'}</span></div><div style="height:9px;background:#e5e7eb;border-radius:4px;margin-top:6px;overflow:hidden;"><div style="height:100%;background:#f97316;width:${stats.attempts ? stats.wrong / stats.attempts * 100 : 0}%;"></div></div></div>`).join('') : '<p style="color:#64748b;">暂无知识点</p>'}
+    <h3 style="font-size:16px;margin-top:26px;">错题分布诊断</h3>
+    <p style="font-size:12px;color:#64748b;">按各知识点实际收录题量展示，重要例题单独统计。</p>
+    ${[...groups, { name: '重要例题（单列）', questions: coreQuestions }].map(group => `<div style="margin:12px 0;font-size:13px;"><div>${escapeHtml(group.name)} · ${group.questions.length} 题${questions.length ? '（' + Math.round(group.questions.length / questions.length * 100) + '%）' : ''}</div><div style="height:8px;background:#eef2f6;margin-top:5px;"><div style="height:100%;width:${group.questions.length / maxCount * 100}%;background:#60a5fa;"></div></div></div>`).join('')}
+    <p style="font-size:13px;color:#64748b;line-height:1.8;">错误类型：未记录，暂无分类诊断数据。<br>难度：未记录，暂无难度分布数据。</p>
+  </section>`;
+}
+
+let kpPreviewTimer = null;
+let kpPreviewSnapshot = null;
+
+function cancelKpPreview() {
+  clearTimeout(kpPreviewTimer);
+  kpPreviewTimer = null;
+  if (!kpPreviewSnapshot) return;
+  const panel = document.getElementById('panelCuoti');
+  panel.replaceChildren(kpPreviewSnapshot.nodes);
+  panel.scrollTop = kpPreviewSnapshot.scrollTop;
+  kpPreviewSnapshot = null;
+}
+
+function scheduleKpPreview(kpId) {
+  cancelKpPreview();
+  if (currentTab !== 'cuoti' || dragData || !window.matchMedia('(hover: hover)').matches) return;
+  kpPreviewTimer = setTimeout(() => {
+    kpPreviewTimer = null;
+    if (currentTab !== 'cuoti' || dragData) return;
+    const kp = cachedKps.find(item => item.id == kpId);
+    if (!kp) return;
+    const panel = document.getElementById('panelCuoti');
+    const nodes = document.createDocumentFragment();
+    const scrollTop = panel.scrollTop;
+    while (panel.firstChild) nodes.appendChild(panel.firstChild);
+    kpPreviewSnapshot = { nodes, scrollTop };
+    panel.innerHTML = `<section style="max-width:920px;padding:22px 0;"><h2>${escapeHtml(kp.name)}</h2><p style="font-size:13px;color:#64748b;">知识点预览 · 移开鼠标或移出焦点后返回</p>${renderReviewSummary(cachedQuestions.filter(q => q.knowledge_point_id == kpId))}</section>`;
+  }, 200);
+}
+
+document.addEventListener('click', event => {
+  if (event.target.closest('#sidebarTree')) cancelKpPreview();
+}, true);
+
 async function selectChapter(chapterId) {
+  cancelKpPreview();
   if (!coreLoaded) await reloadCoreQuestions();
   selectedChapterId = (selectedChapterId == chapterId) ? null : chapterId;
   selectedKpId = null;
@@ -2736,29 +2851,11 @@ async function selectChapter(chapterId) {
     container.innerHTML = '<div class="empty-state"><div class="empty-icon">📂</div><p>请选择具体知识点查看错题</p></div>';
     return;
   }
-  const chapter = cachedChapters.find(item => item.id == selectedChapterId);
-  const kpIds = cachedKps.filter(kp => kp.chapter_id == selectedChapterId).map(kp => kp.id);
-  const questions = cachedQuestions.filter(q => kpIds.includes(q.knowledge_point_id));
-  const coreQuestions = cachedCoreQuestions.filter(q => q.chapter_id == selectedChapterId);
-  const allQuestions = [...questions, ...coreQuestions];
-  const correct = allQuestions.reduce((sum, q) => sum + (q.correct_count || 0), 0);
-  const wrong = allQuestions.reduce((sum, q) => sum + (q.wrong_count || 0), 0);
-  const attempts = correct + wrong;
-  const rate = attempts ? Math.round(correct / attempts * 100) : 0;
-  container.innerHTML = `<section style="max-width:760px;padding:22px 0;">
-    <h2 style="font-size:20px;margin:0 0 6px;">${escapeHtml(chapter?.name || '章节概况')}</h2>
-    <div style="font-size:13px;color:#777;margin-bottom:20px;">章节错题总体概况，包含普通错题和重要例题</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;">
-      <div style="padding:14px;border:1px solid #e5e7eb;border-radius:6px;"><div style="font-size:12px;color:#777;">错题总数</div><strong style="display:block;margin-top:6px;font-size:22px;">${allQuestions.length}</strong></div>
-      <div style="padding:14px;border:1px solid #e5e7eb;border-radius:6px;"><div style="font-size:12px;color:#777;">累计答题</div><strong style="display:block;margin-top:6px;font-size:22px;">${attempts}</strong></div>
-      <div style="padding:14px;border:1px solid #e5e7eb;border-radius:6px;"><div style="font-size:12px;color:#777;">答对次数</div><strong style="display:block;margin-top:6px;font-size:22px;color:#16a34a;">${correct}</strong></div>
-      <div style="padding:14px;border:1px solid #e5e7eb;border-radius:6px;"><div style="font-size:12px;color:#777;">答错次数</div><strong style="display:block;margin-top:6px;font-size:22px;color:#e74c3c;">${wrong}</strong></div>
-      <div style="padding:14px;border:1px solid #e5e7eb;border-radius:6px;"><div style="font-size:12px;color:#777;">总体正确率</div><strong style="display:block;margin-top:6px;font-size:22px;color:#3b82f6;">${rate}%</strong></div>
-    </div>
-  </section>`;
+  await refreshMainContent();
 }
 
 async function selectKp(kpId) {
+  cancelKpPreview();
   selectedKpId = kpId;
   selectedCoreChapterId = null;
   const kp = cachedKps.find(k => k.id === kpId);
@@ -2804,6 +2901,7 @@ function renderKpNote(kpId, editing = false) {
 }
 
 async function refreshMainContent() {
+  cancelKpPreview();
   updateMainHeader();
 
   // --- Core Questions View ---
@@ -2826,8 +2924,9 @@ async function refreshMainContent() {
       const correct = q.correct_count || 0;
       const wrong = q.wrong_count || 0;
       const total = correct + wrong;
-      const pct = Math.min((correct / 5) * 100, 100);
-      const isCompleted = correct >= 5;
+      const streak = getQuestionMastery(q).streak;
+      const pct = Math.min((streak / 5) * 100, 100);
+      const isCompleted = getQuestionMastery(q).mastered;
       const log = q.review_log || [];
       return `
       <div class="question-card" style="border-left:3px solid #e67e22;" data-id="${q.id}"
@@ -2850,9 +2949,9 @@ async function refreshMainContent() {
             <button style="font-size:12px;color:#e67e22;cursor:pointer;padding:2px 6px;border:1px solid #f0c78e;background:#fff;border-radius:4px;" onclick="event.stopPropagation();moveCoreQToChapter(${q.id}, ${selectedCoreChapterId})" title="转移到其他章节">↗</button>
           </div>
           <div class="progress-section">
-            ${isCompleted ? '<span class="card-badge">✓ 已完成</span>' : ''}
+            ${isCompleted ? '<span class="card-badge">✓ 已掌握</span>' : ''}
             <div class="progress-header">
-              <span class="review-label">答对 ${correct} / 5${total > 0 ? '（共答 ' + total + ' 次）' : ''}</span>
+              <span class="review-label">连续答对 ${streak} / 5${total > 0 ? '（共答 ' + total + ' 次）' : ''}</span>
             </div>
             <div class="progress-bar-wrap">
               <div class="progress-bar-fill ${isCompleted ? 'full' : ''}"
@@ -2872,7 +2971,13 @@ async function refreshMainContent() {
   }
 
   // --- Regular Questions View ---
-  if (!selectedKpId) return;
+  if (!selectedKpId) {
+    if (selectedChapterId) {
+      if (!coreLoaded) await reloadCoreQuestions();
+      document.getElementById('panelCuoti').innerHTML = renderChapterOverview(selectedChapterId);
+    }
+    return;
+  }
 
   const filtered = cachedQuestions
     .filter(q => q.knowledge_point_id == selectedKpId)
@@ -2891,8 +2996,9 @@ async function refreshMainContent() {
     const correct = q.correct_count || 0;
     const wrong = q.wrong_count || 0;
     const total = correct + wrong;
-    const pct = Math.min((correct / 5) * 100, 100);
-    const isCompleted = correct >= 5;
+    const streak = getQuestionMastery(q).streak;
+    const pct = Math.min((streak / 5) * 100, 100);
+    const isCompleted = getQuestionMastery(q).mastered;
     const log = q.review_log || [];
     return `
       <div class="question-card" data-id="${q.id}"
@@ -2911,9 +3017,9 @@ async function refreshMainContent() {
           ${renderAnswerHtml(q.answer, q.answer_image, q.id)}
           ${renderQuestionNote(q.id, q.note)}
           <div class="progress-section">
-            ${isCompleted ? '<span class="card-badge">✓ 已完成</span>' : ''}
+            ${isCompleted ? '<span class="card-badge">✓ 已掌握</span>' : ''}
             <div class="progress-header">
-              <span class="review-label">答对 ${correct} / 5${total > 0 ? '（共答 ' + total + ' 次）' : ''}</span>
+              <span class="review-label">连续答对 ${streak} / 5${total > 0 ? '（共答 ' + total + ' 次）' : ''}</span>
             </div>
             <div class="progress-bar-wrap">
               <div class="progress-bar-fill ${isCompleted ? 'full' : ''}"
