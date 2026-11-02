@@ -73,6 +73,19 @@ create table if not exists phrase_pairs (
   updated_at timestamptz default now()
 );
 
+create table if not exists vocab_spectrum_entries (
+  id bigserial primary key,
+  word text not null,
+  entry_type text not null check (entry_type in ('meaning', 'usage')),
+  detail text not null,
+  example text default '',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists vocab_spectrum_entries_word_idx
+  on vocab_spectrum_entries (lower(word));
+
 create table if not exists timeline_events (
   id bigserial primary key,
   subject text not null,
@@ -140,6 +153,7 @@ alter table daily_schedule enable row level security;
 alter table political_mindmaps enable row level security;
 alter table sentence_analyses enable row level security;
 alter table phrase_pairs enable row level security;
+alter table vocab_spectrum_entries enable row level security;
 
 -- 允许 anon key 全权限操作（个人应用）
 do $$
@@ -176,5 +190,8 @@ begin
   end if;
   if not exists (select 1 from pg_policies where policyname='Allow all on phrase_pairs') then
     create policy "Allow all on phrase_pairs" on phrase_pairs for all using (true);
+  end if;
+  if not exists (select 1 from pg_policies where policyname='Allow all on vocab_spectrum_entries') then
+    create policy "Allow all on vocab_spectrum_entries" on vocab_spectrum_entries for all using (true);
   end if;
 end $$;
