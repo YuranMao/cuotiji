@@ -795,17 +795,59 @@ body {
   top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0,0,0,.9);
   z-index: 2000;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
+  flex-direction: column;
+  color: #fff;
+  touch-action: pan-y pinch-zoom;
 }
 .img-preview-overlay.show { display: flex; }
+.img-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top));
+}
+.img-preview-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+}
 .img-preview-overlay img {
-  max-width: 92vw;
-  max-height: 90vh;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
   border-radius: 4px;
 }
+.img-preview-controls {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  background: #171717;
+  text-align: center;
+}
+.img-preview-controls[hidden] { display: none; }
+.img-preview-actions { display: flex; justify-content: center; gap: 10px; margin-top: 10px; }
+.img-preview-overlay button {
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid #777;
+  border-radius: 6px;
+  background: #333;
+  color: #fff;
+  cursor: pointer;
+}
+.img-preview-overlay button:disabled { opacity: .4; cursor: default; }
+#imgPreviewCorrect { background: #166534; }
+#imgPreviewWrong { background: #991b1b; }
+#imgPreviewProgress { width: min(360px, 100%); height: 8px; display: block; margin: 8px auto 0; }
+#imgPreviewStatus { font-size: 13px; line-height: 1.6; }
 
 .toast {
   position: fixed;
@@ -1390,8 +1432,26 @@ body {
 </div>
 
 <!-- 图片预览 -->
-<div class="img-preview-overlay" id="imgPreview" onclick="closeImgPreview()">
-  <img id="imgPreviewSrc" src="">
+<div class="img-preview-overlay" id="imgPreview" role="dialog" aria-modal="true" aria-label="图片预览" onclick="if (event.target === this || event.target.id === 'imgPreviewStage') closeImgPreview()">
+  <div class="img-preview-header">
+    <span id="imgPreviewIndex"></span>
+    <button id="imgPreviewClose" onclick="closeImgPreview()" aria-label="关闭预览">关闭 ×</button>
+  </div>
+  <div class="img-preview-stage" id="imgPreviewStage">
+    <img id="imgPreviewSrc" src="" alt="图片预览" draggable="false">
+  </div>
+  <div class="img-preview-controls" id="imgPreviewControls" hidden>
+    <div id="imgPreviewStatus" aria-live="polite"></div>
+    <progress id="imgPreviewProgress" max="5" value="0" aria-label="连续答对进度"></progress>
+    <div class="img-preview-actions">
+      <button id="imgPreviewPrev" onclick="navigateImgPreview(-1)">上一题</button>
+      <button id="imgPreviewNext" onclick="navigateImgPreview(1)">下一题</button>
+    </div>
+    <div class="img-preview-actions">
+      <button id="imgPreviewCorrect" onclick="recordImgPreview(true)">答对了</button>
+      <button id="imgPreviewWrong" onclick="recordImgPreview(false)">答错了</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1754,11 +1814,125 @@ async function editQuestionAnswer(id) {
   openModal('questionModal');
 }
 
-function closeImgPreview() { document.getElementById('imgPreview').classList.remove('show'); }
-function previewImage(src) {
-  document.getElementById('imgPreviewSrc').src = src;
-  document.getElementById('imgPreview').classList.add('show');
+let imgPreviewState = null;
+let imgPreviewSaving = false;
+let imgPreviewTouch = null;
+let imgPreviewReturnFocus = null;
+let imgPreviewBodyOverflow = '';
+
+function closeImgPreview() {
+  document.getElementById('imgPreview').classList.remove('show');
+  imgPreviewState = null;
+  imgPreviewTouch = null;
+  document.body.style.overflow = imgPreviewBodyOverflow;
+  if (imgPreviewReturnFocus?.isConnected) imgPreviewReturnFocus.focus();
 }
+
+function previewImage(src, id = null, source = null) {
+  const overlay = document.getElementById('imgPreview');
+  if (!overlay.classList.contains('show')) {
+    imgPreviewReturnFocus = document.activeElement;
+    imgPreviewBodyOverflow = document.body.style.overflow;
+  }
+  imgPreviewState = null;
+  imgPreviewTouch = null;
+  if (source === 'core' || source === 'question') {
+    const questions = source === 'core'
+      ? cachedCoreQuestions.filter(q => q.chapter_id == selectedCoreChapterId)
+      : cachedQuestions.filter(q => q.knowledge_point_id == selectedKpId);
+    const ids = questions.sort((a, b) => (a.sort_order || a.id) - (b.sort_order || b.id)).map(q => q.id);
+    const index = ids.findIndex(item => item == id);
+    if (index >= 0) imgPreviewState = { source, ids, index };
+  }
+  document.getElementById('imgPreviewSrc').src = src;
+  renderImgPreview();
+  overlay.classList.add('show');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('imgPreviewClose').focus();
+}
+
+function renderImgPreview() {
+  const state = imgPreviewState;
+  document.getElementById('imgPreviewControls').hidden = !state;
+  document.getElementById('imgPreviewIndex').textContent = state
+    ? `${state.source === 'core' ? '重要例题' : '错题'} · ${state.index + 1} / ${state.ids.length}` : '图片预览';
+  if (!state) return;
+  const collection = state.source === 'core' ? cachedCoreQuestions : cachedQuestions;
+  const question = collection.find(q => q.id == state.ids[state.index]);
+  if (question) document.getElementById('imgPreviewSrc').src = question.image_data;
+  document.getElementById('imgPreviewPrev').disabled = imgPreviewSaving || state.index === 0;
+  document.getElementById('imgPreviewNext').disabled = imgPreviewSaving || state.index === state.ids.length - 1;
+  document.getElementById('imgPreviewCorrect').disabled = imgPreviewSaving || !question;
+  document.getElementById('imgPreviewWrong').disabled = imgPreviewSaving || !question;
+  if (!question) {
+    document.getElementById('imgPreviewStatus').textContent = '题目已不存在';
+    document.getElementById('imgPreviewProgress').value = 0;
+    return;
+  }
+  const mastery = getQuestionMastery(question);
+  const last = (question.review_log || []).slice(-1)[0];
+  document.getElementById('imgPreviewStatus').textContent =
+    `连续答对 ${mastery.streak} / 5${mastery.mastered ? ' · 已掌握' : ''} · 答对 ${mastery.correct} 次 / 答错 ${mastery.wrong} 次` +
+    (imgPreviewSaving ? ' · 保存中…' : last ? ` · 最近记录：${last.result === 'correct' ? '答对' : '答错'}` : ' · 尚无记录');
+  document.getElementById('imgPreviewProgress').value = Math.min(mastery.streak, 5);
+}
+
+function navigateImgPreview(direction) {
+  const state = imgPreviewState;
+  if (!state || imgPreviewSaving) return;
+  const next = state.index + direction;
+  if (next < 0 || next >= state.ids.length) return;
+  state.index = next;
+  renderImgPreview();
+}
+
+async function recordImgPreview(correct) {
+  const state = imgPreviewState;
+  if (!state || imgPreviewSaving) return;
+  const id = state.ids[state.index];
+  const collection = state.source === 'core' ? cachedCoreQuestions : cachedQuestions;
+  if (!collection.some(q => q.id == id)) return;
+  imgPreviewSaving = true;
+  renderImgPreview();
+  try {
+    const mark = state.source === 'core'
+      ? (correct ? markCoreCorrect : markCoreWrong)
+      : (correct ? markCorrect : markWrong);
+    await mark(id);
+  } finally {
+    imgPreviewSaving = false;
+    renderImgPreview();
+  }
+}
+
+document.addEventListener('keydown', event => {
+  if (!document.getElementById('imgPreview').classList.contains('show')) return;
+  if (event.key === 'Escape') closeImgPreview();
+  else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    event.preventDefault();
+    navigateImgPreview(event.key === 'ArrowLeft' ? -1 : 1);
+  }
+});
+
+const imgPreviewStage = document.getElementById('imgPreviewStage');
+imgPreviewStage.addEventListener('touchstart', event => {
+  imgPreviewTouch = event.touches.length === 1 && imgPreviewState && !imgPreviewSaving
+    && (!window.visualViewport || window.visualViewport.scale <= 1)
+    ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null;
+}, { passive: true });
+imgPreviewStage.addEventListener('touchmove', event => {
+  if (!imgPreviewTouch) return;
+  if (event.touches.length !== 1 || Math.abs(event.touches[0].clientY - imgPreviewTouch.y) > 24) imgPreviewTouch = null;
+}, { passive: true });
+imgPreviewStage.addEventListener('touchend', event => {
+  const start = imgPreviewTouch;
+  imgPreviewTouch = null;
+  if (!start || event.touches.length || event.changedTouches.length !== 1) return;
+  const dx = event.changedTouches[0].clientX - start.x;
+  const dy = event.changedTouches[0].clientY - start.y;
+  if (Math.abs(dx) >= 50 && Math.abs(dx) > Math.abs(dy) * 1.5) navigateImgPreview(dx < 0 ? 1 : -1);
+}, { passive: true });
+imgPreviewStage.addEventListener('touchcancel', () => { imgPreviewTouch = null; }, { passive: true });
 
 function handleCoreImageSelect(e) {
   const file = e.target.files[0];
@@ -2935,7 +3109,7 @@ async function refreshMainContent() {
            ondragover="onDragOverCard(event)"
            ondragleave="onDragLeaveCard(event)"
            ondrop="onDropCard(event, ${q.id}, 'core', ${selectedCoreChapterId})">
-        <div class="card-img-wrap" onclick="previewImage(this.querySelector('img').src)" style="position:relative;">
+        <div class="card-img-wrap" onclick="previewImage(this.querySelector('img').src, ${q.id}, 'core')" style="position:relative;">
           <img src="${q.image_data}" alt="重要例题" loading="lazy" draggable="false">
           <span class="drag-handle" style="position:absolute;top:4px;left:4px;background:rgba(255,255,255,0.85);border-radius:4px;padding:2px 4px;" title="拖动排序">⠿</span>
         </div>
@@ -3007,7 +3181,7 @@ async function refreshMainContent() {
            ondragover="onDragOverCard(event)"
            ondragleave="onDragLeaveCard(event)"
            ondrop="onDropCard(event, ${q.id}, 'question', ${selectedKpId})">
-        <div class="card-img-wrap" onclick="previewImage(this.querySelector('img').src)" style="position:relative;">
+        <div class="card-img-wrap" onclick="previewImage(this.querySelector('img').src, ${q.id}, 'question')" style="position:relative;">
           <img src="${q.image_data}" alt="错题" loading="lazy" draggable="false">
           <span class="drag-handle" style="position:absolute;top:4px;left:4px;background:rgba(255,255,255,0.85);border-radius:4px;padding:2px 4px;" title="拖动排序">⠿</span>
         </div>
