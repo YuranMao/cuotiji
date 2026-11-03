@@ -3791,6 +3791,7 @@ function renderEbb() {
       ? (item.subject || '').startsWith('冲刺·')
       : (item.subject || '专业课') === ebbSubject;
     if (!matchesSubject) return false;
+    if (!isSprint) return true;
     const addedDate = item.created_at ? formatDate(new Date(item.created_at)) : item.first_date;
     return addedDate === today || getEbbDynamicSchedule(item).some(slot => !slot.done && slot.scheduled <= today);
   });
@@ -3800,11 +3801,11 @@ function renderEbb() {
     <div style="display:flex;gap:4px;">
       ${subjects.map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#4a90d9;color:#fff;border-color:#4a90d9;' : 'background:#fff;color:#333;'}">${subjectIcons[s]} ${s}</button>`).join('')}
     </div>
-    <span style="font-size:12px;color:#888;">${isSprint ? '冲刺复习 · 专业课（浅绿） / 英语（浅蓝） / 政治（浅紫） · ' : ''}仅显示今日待复习及今日新增项 · 逾期自动顺延至今日</span>
+    <span style="font-size:12px;color:#888;">${isSprint ? '冲刺复习 · 专业课（浅绿） / 英语（浅蓝） / 政治（浅紫） · 仅显示今日待复习及今日新增项 · 逾期自动顺延至今日' : '逾期自动顺延至今日，仅当天可记录'}</span>
   </div>`;
 
   if (filteredItems.length === 0) {
-    container.innerHTML = subTabs + '<div class="empty-state"><p>今日暂无待复习或新增的背诵项</p></div>';
+    container.innerHTML = subTabs + `<div class="empty-state"><p>${isSprint ? '今日暂无待复习或新增的背诵项' : '暂无背诵内容'}</p></div>`;
     return;
   }
 
