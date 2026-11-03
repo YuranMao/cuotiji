@@ -3832,7 +3832,7 @@ function renderEbb() {
               if (slot.done) {
                 const reviewDate = slot.reviewDate ? slot.reviewDate.slice(5) : slot.scheduled.slice(5);
                 if (itemIsMajor || itemIsEnglish || isSprint) {
-                  return `<td class="ebb-done" style="padding:2px;vertical-align:middle;">
+                  return `<td class="ebb-done" style="padding:2px;vertical-align:middle;${isSprint ? `background:${sprintColors[itemSubject] || '#fff'};` : ''}">
                     <div style="display:flex;flex-direction:column;align-items:stretch;gap:2px;width:100%;">
                     <span style="font-size:11px;color:#27ae60;font-weight:600;text-align:center;">✓ ${reviewDate}</span>
                     <textarea id="ebbNote_${item.id}_${slot.day}"
