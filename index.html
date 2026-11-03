@@ -2795,14 +2795,6 @@ async function markCoreWrong(id) {
 }
 
 // ==================== 渲染：侧边栏 ====================
-function renderReviewBadge(questions) {
-  const s = aggregateReview(questions);
-  const complete = s.total > 0 && s.pending === 0;
-  const color = complete ? '#15803d' : s.pending >= 10 ? '#dc2626' : s.pending >= 3 ? '#ea580c' : '#64748b';
-  const text = complete ? '✓' : '待 ' + s.pending;
-  return `<span title="${complete ? '全部掌握' : '待复习 ' + s.pending + ' 题'}" style="flex-shrink:0;font-size:11px;font-weight:600;color:${color};background:${complete ? '#f0fdf4' : '#f8fafc'};border:1px solid currentColor;border-radius:4px;padding:1px 4px;">${text}</span>`;
-}
-
 async function refreshSidebar() {
   cancelKpPreview();
   const container = document.getElementById('sidebarTree');
@@ -2829,7 +2821,6 @@ async function refreshSidebar() {
           <span class="name">${escapeHtml(ch.name)}
             <button class="edit-btn" onclick="event.stopPropagation();showChapterModal(${ch.id}, '${escapeHtml(ch.name).replace(/'/g, "\\'")}')" title="重命名">✎</button>
           </span>
-          ${renderReviewBadge([...cachedQuestions.filter(q => childKps.some(kp => kp.id == q.knowledge_point_id)), ...cachedCoreQuestions.filter(q => q.chapter_id == ch.id)])}
           <span class="count">${totalQuestions}</span>
           <button class="del-chapter" onclick="event.stopPropagation();deleteChapter(${ch.id})">×</button>
         </div>
@@ -2852,7 +2843,6 @@ async function refreshSidebar() {
                 <span class="kp-name">${escapeHtml(kp.name)}
                   <button class="edit-btn kp-edit-btn" onclick="event.stopPropagation();showKpEditModal(${kp.id}, '${escapeHtml(kp.name).replace(/'/g, "\\'")}', ${ch.id})" title="重命名">✎</button>
                 </span>
-                ${renderReviewBadge(cachedQuestions.filter(q => q.knowledge_point_id == kp.id))}
                 <span class="kp-count">${kpCount}</span>
                 <button class="kp-move-btn" onclick="event.stopPropagation();moveKpToChapter(${kp.id}, ${ch.id})" title="转移到其他章节">↗</button>
                 <button class="del-kp" onclick="event.stopPropagation();deleteKp(${kp.id})">×</button>
@@ -2865,7 +2855,6 @@ async function refreshSidebar() {
                onclick="event.stopPropagation();selectCore(${ch.id})">
             <span class="kp-dot" style="color:#e67e22;">★</span>
             <span style="font-size:12px;">重要例题</span>
-            ${renderReviewBadge(cachedCoreQuestions.filter(q => q.chapter_id == ch.id))}
             <span class="kp-count">${cachedCoreQuestions.filter(q => q.chapter_id == ch.id).length}</span>
           </div>
         </div>
