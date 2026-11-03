@@ -3359,7 +3359,7 @@ function formatDate(d) {
 }
 
 // 动态计算每个复习轮次的应复习日期（逾期自动后延到今日）
-function getEbbDynamicSchedule(item) {
+function getEbbDynamicSchedule(item, rollOverdue = true) {
   let reviews = item.reviews || [];
   reviews = reviews.map(r => typeof r === 'string' ? { day: parseInt(r, 10) || 0, date: r } : r);
   const firstDate = item.first_date;
@@ -3389,7 +3389,7 @@ function getEbbDynamicSchedule(item) {
     }
 
     // 逾期自动后延到今日
-    if (scheduled < today) scheduled = today;
+    if (rollOverdue && scheduled < today) scheduled = today;
 
     const review = reviews.find(r => r.day === interval);
     result.push({
@@ -3801,11 +3801,11 @@ function renderEbb() {
     <div style="display:flex;gap:4px;">
       ${subjects.map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#4a90d9;color:#fff;border-color:#4a90d9;' : 'background:#fff;color:#333;'}">${subjectIcons[s]} ${s}</button>`).join('')}
     </div>
-    <span style="font-size:12px;color:#888;">${isSprint ? '冲刺复习 · 专业课（浅绿） / 英语（浅蓝） / 政治（浅紫） · 仅显示今日待复习及今日新增项 · 逾期自动顺延至今日' : '逾期自动顺延至今日，仅当天可记录'}</span>
+    <span style="font-size:12px;color:#888;">${isSprint ? '冲刺复习 · 专业课（浅绿） / 英语（浅蓝） / 政治（浅紫） · 今日新学：今日新增优先归组 · 今日复习：今日到期且无逾期 · 历史遗留：原始排期逾期未完成 · 逾期自动顺延至今日' : '逾期自动顺延至今日，仅当天可记录'}</span>
   </div>`;
 
-  if (filteredItems.length === 0) {
-    container.innerHTML = subTabs + `<div class="empty-state"><p>${isSprint ? '今日暂无待复习或新增的背诵项' : '暂无背诵内容'}</p></div>`;
+  if (!isSprint && filteredItems.length === 0) {
+    container.innerHTML = subTabs + '<div class="empty-state"><p>暂无背诵内容</p></div>';
     return;
   }
 
@@ -3816,12 +3816,7 @@ function renderEbb() {
     return `<th title="${label}">${i+1}<br><small>${label}</small></th>`;
   }).join('');
 
-  container.innerHTML = subTabs + `
-    <div class="ebb-wrap" style="max-height:calc(100vh - 240px);overflow:auto;">
-      <table class="ebb-table" style="min-width:720px;">
-        <thead><tr>${isSprint ? '<th style="width:75px;">学科</th>' : ''}<th style="width:120px;">内容</th><th style="width:80px;">学习日</th>${headerCols}<th style="width:60px;"></th></tr></thead>
-        <tbody>
-        ${filteredItems.map(item => {
+  const renderItemRow = item => {
           const schedule = getEbbDynamicSchedule(item);
           const itemSubject = getEbbSubject(item);
           const itemIsEnglish = isSprint ? itemSubject === '英语' : isEnglish;
@@ -3873,8 +3868,32 @@ function renderEbb() {
             }).join('')}
             <td><div class="ebb-actions"><button onclick="showEbbModal(${item.id}, '${escapeHtml(item.name).replace(/'/g, "\\'")}', '${item.first_date}', '${(item.subject || '专业课').replace(/'/g, "\\'")}')">编辑</button><button class="eb-del" onclick="deleteEbbItem(${item.id})">删除</button></div></td>
           </tr>`;
-        }).join('')}
-        </tbody>
+  };
+  let bodyRows;
+  if (isSprint) {
+    const groups = [
+      { title: '今日新学', items: [] },
+      { title: '今日复习', items: [] },
+      { title: '历史遗留', items: [] }
+    ];
+    filteredItems.forEach(item => {
+      const addedDate = item.created_at ? formatDate(new Date(item.created_at)) : item.first_date;
+      const groupIndex = addedDate === today ? 0
+        : getEbbDynamicSchedule(item, false).some(slot => !slot.done && slot.scheduled < today) ? 2 : 1;
+      groups[groupIndex].items.push(item);
+    });
+    bodyRows = groups.map(group => `<tr><th colspan="${intervals.length + 4}" style="text-align:left;padding:8px 12px;background:#f5f7fa;">${group.title}（${group.items.length}）</th></tr>`
+      + (group.items.length ? group.items.map(renderItemRow).join('')
+        : `<tr><td colspan="${intervals.length + 4}" style="text-align:center;color:#999;padding:10px;">暂无项</td></tr>`)).join('');
+  } else {
+    bodyRows = filteredItems.map(renderItemRow).join('');
+  }
+
+  container.innerHTML = subTabs + `
+    <div class="ebb-wrap" style="max-height:calc(100vh - 240px);overflow:auto;">
+      <table class="ebb-table" style="min-width:720px;">
+        <thead><tr>${isSprint ? '<th style="width:75px;">学科</th>' : ''}<th style="width:120px;">内容</th><th style="width:80px;">学习日</th>${headerCols}<th style="width:60px;"></th></tr></thead>
+        <tbody>${bodyRows}</tbody>
       </table>
     </div>`;
   // Auto-resize existing note textareas and equalize per row
