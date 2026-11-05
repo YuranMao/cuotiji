@@ -1792,11 +1792,12 @@ function handleAnswerImageSelect(e) {
   reader.readAsDataURL(file);
 }
 
-async function editQuestionAnswer(id) {
-  const q = cachedQuestions.find(item => item.id == id);
+async function editQuestionAnswer(id, table = 'questions') {
+  const collection = table === 'core_questions' ? cachedCoreQuestions : cachedQuestions;
+  const q = collection.find(item => item.id == id);
   if (!q) return;
   selectedAnswerImageData = null;
-  document.getElementById('editQuestionId').value = id;
+  document.getElementById('editQuestionId').value = table + ':' + id;
   document.getElementById('qAnswerInput').value = q.answer || '';
   const area = document.getElementById('answerImageUploadArea');
   area.classList.remove('has-image');
@@ -2208,10 +2209,12 @@ async function saveQuestion() {
         try { answerImage = await uploadImageToStorage(answerImage, 'answers'); }
         catch (e) { console.warn('答案图片上传 Storage 失败，回退 base64 存储:', e.message); }
       }
+      const [table, id] = editId.includes(':') ? editId.split(':') : ['questions', editId];
       const answer = document.getElementById('qAnswerInput').value.trim();
-      const res = await sb.from('questions').update({ answer, answer_image: answerImage }).eq('id', editId);
+      const res = await sb.from(table).update({ answer, answer_image: answerImage }).eq('id', id);
       if (res.error) throw res.error;
-      const q = cachedQuestions.find(item => item.id == editId);
+      const collection = table === 'core_questions' ? cachedCoreQuestions : cachedQuestions;
+      const q = collection.find(item => item.id == id);
       if (q) { q.answer = answer; q.answer_image = answerImage; }
       closeModal('questionModal');
       await refreshMainContent();
@@ -2607,6 +2610,99 @@ async function moveQuestionToKp(qId, fromKpId) {
   modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
 }
 
+// ---- 普通错题与重要例题互转 ----
+function showQuestionConversionModal(title, targetHtml, onConfirm) {
+  const selectId = 'questionConversionTarget';
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay show';
+  modal.innerHTML = `<div class="modal"><h3>${title}</h3><div class="form-group"><label>目标位置</label><select id="${selectId}" style="width:100%;padding:10px;border:1px solid #d9d9d9;border-radius:8px;font-size:14px;">${targetHtml}</select></div><div class="modal-btns"><button class="btn-cancel">取消</button><button class="btn-confirm">迁移</button></div></div>`;
+  document.body.appendChild(modal);
+  modal.querySelector('.btn-cancel').onclick = () => modal.remove();
+  modal.querySelector('.btn-confirm').onclick = async () => {
+    const targetId = Number(modal.querySelector('#' + selectId).value);
+    if (!targetId) { showToast('请选择目标位置'); return; }
+    modal.remove();
+    await onConfirm(targetId);
+  };
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+function questionToCorePayload(q, chapterId) {
+  return {
+    chapter_id: chapterId, name: q.file_name || null, image_data: q.image_data,
+    answer: q.answer || '', answer_image: q.answer_image || '',
+    tag: '', note: q.note || '', sort_order: 0,
+    correct_count: q.correct_count || 0, wrong_count: q.wrong_count || 0,
+    review_log: q.review_log || []
+  };
+}
+
+function coreToQuestionPayload(q, kpId) {
+  return {
+    knowledge_point_id: kpId, image_data: q.image_data, answer: q.answer || '', answer_image: q.answer_image || '',
+    note: q.note || '', first_upload_date: formatDate(new Date()), file_name: q.name || q.tag || '',
+    sort_order: 0, correct_count: q.correct_count || 0, wrong_count: q.wrong_count || 0,
+    review_log: q.review_log || []
+  };
+}
+
+async function convertQuestionToCore(qId) {
+  const q = cachedQuestions.find(item => item.id == qId);
+  if (!q) return;
+  const chapters = cachedChapters.slice().sort((a, b) => (a.sort_order || a.id) - (b.sort_order || b.id));
+  if (!chapters.length) { showToast('请先创建章节'); return; }
+  showQuestionConversionModal('转为重要例题', chapters.map(ch => `<option value="${ch.id}" ${ch.id == selectedChapterId ? 'selected' : ''}>${escapeHtml(ch.name)}</option>`).join(''), async chapterId => {
+    try {
+      const inserted = await sb.from('core_questions').insert(questionToCorePayload(q, chapterId)).select('id').single();
+      if (inserted.error) throw inserted.error;
+      const removed = await sb.from('questions').delete().eq('id', qId);
+      if (removed.error) {
+        const rollback = await sb.from('core_questions').delete().eq('id', inserted.data.id);
+        if (rollback.error) console.error('Conversion rollback failed', rollback.error);
+        throw removed.error;
+      }
+      await Promise.all([reloadQuestions(), reloadCoreQuestions()]);
+      selectedCoreChapterId = chapterId;
+      selectedChapterId = chapterId;
+      selectedKpId = null;
+      updateMainHeader();
+      await refreshMainContent();
+      await refreshSidebar();
+      showToast('已迁移为重要例题');
+    } catch (err) { showToast('迁移失败: ' + (err.message || err)); }
+  });
+}
+
+async function convertCoreToQuestion(qId) {
+  const q = cachedCoreQuestions.find(item => item.id == qId);
+  if (!q) return;
+  const kps = cachedKps.slice().sort((a, b) => (a.sort_order || a.id) - (b.sort_order || b.id));
+  if (!kps.length) { showToast('请先创建知识点'); return; }
+  showQuestionConversionModal('转为知识点错题', kps.map(kp => {
+    const chapter = cachedChapters.find(ch => ch.id == kp.chapter_id);
+    return `<option value="${kp.id}" ${kp.chapter_id == selectedCoreChapterId ? 'selected' : ''}>${escapeHtml(chapter?.name || '未分类')} / ${escapeHtml(kp.name)}</option>`;
+  }).join(''), async kpId => {
+    try {
+      const inserted = await sb.from('questions').insert(coreToQuestionPayload(q, kpId)).select('id').single();
+      if (inserted.error) throw inserted.error;
+      const removed = await sb.from('core_questions').delete().eq('id', qId);
+      if (removed.error) {
+        const rollback = await sb.from('questions').delete().eq('id', inserted.data.id);
+        if (rollback.error) console.error('Conversion rollback failed', rollback.error);
+        throw removed.error;
+      }
+      await Promise.all([reloadQuestions(), reloadCoreQuestions()]);
+      selectedChapterId = cachedKps.find(kp => kp.id == kpId)?.chapter_id || selectedChapterId;
+      selectedKpId = kpId;
+      selectedCoreChapterId = null;
+      updateMainHeader();
+      await refreshMainContent();
+      await refreshSidebar();
+      showToast('已迁移到知识点错题');
+    } catch (err) { showToast('迁移失败: ' + (err.message || err)); }
+  });
+}
+
 // ---- 重要例题迁移到其他章节 ----
 async function moveCoreQToChapter(qId, fromChapterId) {
   const otherChapters = cachedChapters.filter(c => c.id != fromChapterId);
@@ -2875,11 +2971,12 @@ function revealAnswer(element) {
   }
 }
 
-function renderAnswerHtml(answer, answerImage, questionId) {
+function renderAnswerHtml(answer, answerImage, questionId, table = 'questions') {
   const text = answer ? escapeHtml(answer) : '未填写文字答案';
   const image = answerImage ? `<img src="${escapeHtml(answerImage)}" alt="答案图片" class="answer-image" onclick="event.stopPropagation();previewImage(this.src)">` : '';
+  const editAction = `editQuestionAnswer(${questionId}, '${table}')`;
   return `<div class="answer-section" onclick="event.stopPropagation();revealAnswer(this)" title="点击显示答案">
-    <div class="answer-title">答案 <button class="answer-edit-btn" onclick="event.stopPropagation();editQuestionAnswer(${questionId})">编辑</button></div>
+    <div class="answer-title">答案 <button class="answer-edit-btn" onclick="event.stopPropagation();${editAction}">编辑</button></div>
     <div class="answer-content">${text}</div>
     ${image}
     <div class="answer-mask">点击显示答案</div>
@@ -3103,6 +3200,7 @@ async function refreshMainContent() {
           <span class="drag-handle" style="position:absolute;top:4px;left:4px;background:rgba(255,255,255,0.85);border-radius:4px;padding:2px 4px;" title="拖动排序">⠿</span>
         </div>
         <div class="card-info">
+          ${renderAnswerHtml(q.answer, q.answer_image, q.id, 'core_questions')}
           ${renderQuestionNote(q.id, q.note, 'core_questions')}
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
             <span style="display:inline-block;padding:4px 12px;background:#fef3e2;color:#e67e22;border:1px solid #f0c78e;border-radius:4px;font-size:14px;font-weight:600;">
@@ -3126,6 +3224,7 @@ async function refreshMainContent() {
             <button class="btn-correct" onclick="event.stopPropagation();markCoreCorrect(${q.id})">答对了</button>
             <button class="btn-wrong" onclick="event.stopPropagation();markCoreWrong(${q.id})">还不会</button>
             <button class="btn-delete" onclick="event.stopPropagation();deleteCoreQuestion(${q.id})">删除</button>
+            <button class="btn-delete" style="color:#2563eb;border-color:#93c5fd;" onclick="event.stopPropagation();convertCoreToQuestion(${q.id})" title="转为知识点错题">⇩</button>
           </div>
         </div>
       </div>`;
@@ -3195,6 +3294,7 @@ async function refreshMainContent() {
             <button class="btn-wrong" onclick="event.stopPropagation();markWrong(${q.id})">还不会</button>
             <button class="btn-delete" onclick="event.stopPropagation();deleteQuestion(${q.id})">删除</button>
             <button class="btn-delete" style="color:#e67e22;border-color:#f0c78e;" onclick="event.stopPropagation();moveQuestionToKp(${q.id}, ${selectedKpId})" title="转移到其他知识点">↗</button>
+            <button class="btn-delete" style="color:#7c3aed;border-color:#c4b5fd;" onclick="event.stopPropagation();convertQuestionToCore(${q.id})" title="转为重要例题">★</button>
           </div>
         </div>
       </div>`;

@@ -117,6 +117,8 @@ alter table questions add column if not exists answer text default '';
 alter table questions add column if not exists answer_image text default '';
 alter table questions add column if not exists note text default '';
 alter table core_questions add column if not exists note text default '';
+alter table core_questions add column if not exists answer text default '';
+alter table core_questions add column if not exists answer_image text default '';
 
 -- 如果 core_questions 表已存在，执行以下 alter 来升级：
 -- alter table core_questions alter column name drop not null;
