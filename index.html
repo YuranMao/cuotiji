@@ -2631,7 +2631,7 @@ function questionToCorePayload(q, chapterId) {
   return {
     chapter_id: chapterId, name: q.file_name || null, image_data: q.image_data,
     answer: q.answer || '', answer_image: q.answer_image || '',
-    tag: '', note: q.note || '', sort_order: 0,
+    tag: q.note || '', note: '', sort_order: 0,
     correct_count: q.correct_count || 0, wrong_count: q.wrong_count || 0,
     review_log: q.review_log || []
   };
@@ -2640,7 +2640,7 @@ function questionToCorePayload(q, chapterId) {
 function coreToQuestionPayload(q, kpId) {
   return {
     knowledge_point_id: kpId, image_data: q.image_data, answer: q.answer || '', answer_image: q.answer_image || '',
-    note: q.note || '', first_upload_date: formatDate(new Date()), file_name: q.name || q.tag || '',
+    note: q.tag || '', first_upload_date: formatDate(new Date()), file_name: q.name || '',
     sort_order: 0, correct_count: q.correct_count || 0, wrong_count: q.wrong_count || 0,
     review_log: q.review_log || []
   };
