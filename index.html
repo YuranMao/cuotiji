@@ -2630,7 +2630,7 @@ function showQuestionConversionModal(title, targetHtml, onConfirm) {
 
 function questionToCorePayload(q, chapterId) {
   return {
-    chapter_id: chapterId, name: q.file_name || null, image_data: q.image_data,
+    chapter_id: chapterId, image_data: q.image_data,
     answer: q.answer || '', answer_image: q.answer_image || '',
     tag: q.note || '', note: '', sort_order: 0,
     correct_count: q.correct_count || 0, wrong_count: q.wrong_count || 0,
