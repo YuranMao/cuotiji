@@ -3949,8 +3949,8 @@ function renderEbb() {
             ${schedule.map(slot => {
               const isFuture = slot.scheduled > today;
               const btnBaseStyle = 'font-size:11px;padding:3px 10px;border-radius:4px;cursor:pointer;white-space:nowrap;';
-              // 专业课前2天(d1,d2)不可提前；英语完全不可提前
-              const canPreComplete = !itemIsEnglish && !(itemIsMajor && (slot.day === 1 || slot.day === 2));
+              // 冲刺允许提前记录；常规专业课前两轮和单词保持限制。
+              const canPreComplete = isSprint || (!itemIsEnglish && !(itemIsMajor && (slot.day === 1 || slot.day === 2)));
               if (slot.done) {
                 const reviewDate = slot.reviewDate ? slot.reviewDate.slice(5) : slot.scheduled.slice(5);
                 if (itemIsMajor || itemIsEnglish || isSprint) {
