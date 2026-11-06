@@ -3648,7 +3648,7 @@ async function deleteVocabSpectrumEntry(id) {
 }
 
 function renderVocabSpectrum(container) {
-  const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;flex-wrap:wrap;">${['专业课', '单词', '政治', '长难句', '词组', '冲刺'].map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#4a90d9;color:#fff;border-color:#4a90d9;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><span style="font-size:12px;color:#888;">以单词为根节点，释义和用法持续归档</span></div>`;
+  const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;flex-wrap:wrap;">${['冲刺', '专业课', '单词', '政治', '长难句', '词组'].map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#4a90d9;color:#fff;border-color:#4a90d9;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><span style="font-size:12px;color:#888;">以单词为根节点，释义和用法持续归档</span></div>`;
   const groups = new Map();
   cachedVocabSpectrum.forEach(entry => {
     const key = entry.word.trim().toLocaleLowerCase();
@@ -3872,7 +3872,7 @@ function renderSentenceOutline() {
 }
 
 function renderSentenceAnalyses(container) {
-  const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;flex-wrap:wrap;">${['专业课', '单词', '政治', '长难句', '词组', '冲刺'].map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#4a90d9;color:#fff;border-color:#4a90d9;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><button onclick="startRecitation('sentence')" style="padding:6px 12px;border:1px solid #4a90d9;border-radius:6px;background:#fff;color:#4a90d9;cursor:pointer;font-size:12px;">开始背诵</button><button onclick="showSentenceSettings()" style="padding:6px 12px;border:1px solid #d9d9d9;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;">API 设置</button></div>`;
+  const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;flex-wrap:wrap;">${['冲刺', '专业课', '单词', '政治', '长难句', '词组'].map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#4a90d9;color:#fff;border-color:#4a90d9;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><button onclick="startRecitation('sentence')" style="padding:6px 12px;border:1px solid #4a90d9;border-radius:6px;background:#fff;color:#4a90d9;cursor:pointer;font-size:12px;">开始背诵</button><button onclick="showSentenceSettings()" style="padding:6px 12px;border:1px solid #d9d9d9;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;">API 设置</button></div>`;
   const cards = cachedSentenceAnalyses.map(item => {
     const tags = getSentenceTags(item).map(tag => `<span style="display:inline-block;margin:4px 5px 0 0;padding:3px 8px;background:#edf3fa;color:#345b80;border-radius:4px;font-size:12px;">${escapeHtml(tag)}</span>`).join('') || '<span style="color:#888;">未设置</span>';
     return `<article onclick="showSentenceDetail(${item.id})" style="width:100%;box-sizing:border-box;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:12px;background:#fff;cursor:pointer;"><div style="margin-bottom:10px;">${renderSentenceType(item)}</div><div style="display:block;width:100%;box-sizing:border-box;font-size:16px;line-height:1.7;font-weight:600;white-space:pre-wrap;word-break:normal;overflow-wrap:anywhere;">${escapeHtml(item.sentence)}</div><div style="margin-top:10px;"><b>知识点归类：</b>${tags}</div><div style="display:flex;gap:8px;margin-top:14px;" onclick="event.stopPropagation();"><button onclick="showSentenceModal(${item.id})" style="padding:5px 10px;border:1px solid #d9d9d9;border-radius:5px;background:#fff;cursor:pointer;">编辑</button><button onclick="deleteSentenceAnalysis(${item.id})" style="padding:5px 10px;border:1px solid #f1b5b5;border-radius:5px;background:#fff;color:#d33;cursor:pointer;">删除</button></div></article>`;
@@ -3881,13 +3881,13 @@ function renderSentenceAnalyses(container) {
 }
 
 function renderPhrasePairs(container) {
-  const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;flex-wrap:wrap;">${['专业课', '单词', '政治', '长难句', '词组', '冲刺'].map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#4a90d9;color:#fff;border-color:#4a90d9;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><button onclick="startRecitation('phrase')" style="padding:6px 12px;border:1px solid #4a90d9;border-radius:6px;background:#fff;color:#4a90d9;cursor:pointer;font-size:12px;">开始背诵</button></div>`;
+  const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;flex-wrap:wrap;">${['冲刺', '专业课', '单词', '政治', '长难句', '词组'].map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#4a90d9;color:#fff;border-color:#4a90d9;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><button onclick="startRecitation('phrase')" style="padding:6px 12px;border:1px solid #4a90d9;border-radius:6px;background:#fff;color:#4a90d9;cursor:pointer;font-size:12px;">开始背诵</button></div>`;
   const cards = cachedPhrasePairs.map(item => `<article style="width:100%;box-sizing:border-box;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:12px;background:#fff;"><div style="font-size:18px;font-weight:700;line-height:1.6;overflow-wrap:anywhere;">${escapeHtml(item.phrase)}</div><div style="margin-top:8px;color:#555;white-space:pre-wrap;">${escapeHtml(item.meaning || '暂无释义')}</div>${item.note ? `<div style="margin-top:8px;font-size:13px;color:#888;white-space:pre-wrap;">备注：${escapeHtml(item.note)}</div>` : ''}<div style="display:flex;gap:8px;margin-top:14px;"><button onclick="showPhraseModal(${item.id})" style="padding:5px 10px;border:1px solid #d9d9d9;border-radius:5px;background:#fff;cursor:pointer;">编辑</button><button onclick="deletePhrasePair(${item.id})" style="padding:5px 10px;border:1px solid #f1b5b5;border-radius:5px;background:#fff;color:#d33;cursor:pointer;">删除</button></div></article>`).join('');
   container.innerHTML = subTabs + `<div style="width:100%;max-width:none;box-sizing:border-box;margin:16px auto;">${cards || '<div class="empty-state"><div class="empty-icon">Aa</div><p>暂无词组固定搭配，点击右上角“+ 词组”添加</p></div>'}</div>`;
 }
 
 async function renderMindmaps(container) {
-  const subjects = ['专业课', '单词', '政治', '长难句', '词组', '冲刺'];
+  const subjects = ['冲刺', '专业课', '单词', '政治', '长难句', '词组'];
   const subTabs = `<div class="ebb-toolbar"><div style="display:flex;gap:4px;flex-wrap:wrap;">${subjects.map(s => `<button onclick="setEbbSubject('${s}')" style="padding:6px 14px;border-radius:6px;border:1px solid #d9d9d9;cursor:pointer;font-size:12px;${ebbSubject === s ? 'background:#9b59b6;color:#fff;border-color:#9b59b6;' : 'background:#fff;color:#333;'}">${s}</button>`).join('')}</div><span style="font-size:12px;color:#888;">输入 Mermaid mindmap 代码生成思维导图</span></div>`;
   const item = cachedMindmaps.find(m => m.id == selectedMindmapId);
   const chapters = `<div class="mindmap-chapters">${cachedMindmaps.map(m => `<button class="${m.id == selectedMindmapId ? 'active' : ''}" onclick="selectMindmap(${m.id})">${escapeHtml(m.name)}</button>`).join('')}</div>`;
@@ -3902,7 +3902,7 @@ function renderEbb() {
   if (ebbSubject === '长难句') { renderSentenceAnalyses(container); return; }
   if (ebbSubject === '词组') { renderPhrasePairs(container); return; }
   if (ebbSubject === '词谱') { renderVocabSpectrum(container); return; }
-  const subjects = ['专业课', '单词', '政治', '长难句', '词组', '词谱', '冲刺'];
+  const subjects = ['冲刺', '专业课', '单词', '政治', '长难句', '词组', '词谱'];
   const subjectIcons = { '专业课': '📘', '单词': '📖', '政治': '📙', '长难句': 'Aa', '词组': '▣', '词谱': 'Aa', '冲刺': '' };
   const isSprint = ebbSubject === '冲刺';
   const sprintColors = { '专业课': '#e8f5e9', '英语': '#e8f0fe', '政治': '#f3e8fa' };
@@ -4006,6 +4006,12 @@ function renderEbb() {
     bodyRows = groups.map(group => `<tr><th colspan="${intervals.length + 4}" style="text-align:left;padding:8px 12px;background:#f5f7fa;">${group.title}（${group.items.length}）</th></tr>`
       + (group.items.length ? group.items.map(renderItemRow).join('')
         : `<tr><td colspan="${intervals.length + 4}" style="text-align:center;color:#999;padding:10px;">暂无项</td></tr>`)).join('');
+    const visibleIds = new Set(filteredItems.map(item => item.id));
+    const historyItems = cachedEbbItems.filter(item => (item.subject || '').startsWith('冲刺·') && !visibleIds.has(item.id));
+    bodyRows += `<tr><th colspan="${intervals.length + 4}" style="text-align:left;padding:8px 12px;background:#f5f7fa;"><button type="button" aria-expanded="false" onclick="const expanded = this.getAttribute('aria-expanded') !== 'true'; this.setAttribute('aria-expanded', String(expanded)); this.querySelector('span').textContent = expanded ? '收起' : '展开'; document.querySelectorAll('#panelEbb .sprint-history-row').forEach(row => row.hidden = !expanded);" style="border:0;background:none;font:inherit;cursor:pointer;color:inherit;">历史记录（${historyItems.length}） · <span>展开</span></button></th></tr>`;
+    bodyRows += historyItems.length
+      ? historyItems.map(item => renderItemRow(item).replace('<tr', '<tr hidden class="sprint-history-row"')).join('')
+      : `<tr hidden class="sprint-history-row"><td colspan="${intervals.length + 4}" style="text-align:center;color:#999;padding:10px;">暂无项</td></tr>`;
   } else {
     bodyRows = filteredItems.map(renderItemRow).join('');
   }
