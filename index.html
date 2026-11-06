@@ -1538,7 +1538,7 @@ let recitationIndex = 0;
 let recitationType = '';
 let ebbLoaded = false;
 let tlLoaded = false;
-let ebbSubject = '专业课';
+let ebbSubject = '冲刺';
 let cachedCoreQuestions = [];
 let coreLoaded = false;
 let cachedSchedule = [];
@@ -1549,6 +1549,7 @@ let scheduleDateRange = { start: '', end: '' };
 // ==================== Tab 切换 ====================
 function switchTab(tab) {
   cancelKpPreview();
+  if (tab === 'ebb' && currentTab !== 'ebb') ebbSubject = '冲刺';
   currentTab = tab;
   document.querySelectorAll('.tab-nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel' + tab.charAt(0).toUpperCase() + tab.slice(1)));
