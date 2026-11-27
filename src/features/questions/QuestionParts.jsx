@@ -7,12 +7,120 @@ export function ReviewSummary({ questions }) {
   return <><div className="question-summary">{[['错题总数', s.total, '当前范围收录题量'], ['已掌握', s.mastered, '连续答对至少 5 次'], ['待复习', s.pending, '复习中 + 未复习'], ['复习正确率', s.rate === null ? '—' : `${s.rate}%`, '答对次数 / 总复习次数'], ['累计复习次数', s.attempts, '每次答对或答错计 1 次']].map(([label, value, hint]) => <div key={label}><small>{label}</small><strong>{value}</strong><small>{hint}</small></div>)}</div><p className="question-hint">末尾连续答对至少 5 次即已掌握，答错后重新累计。正确率与累计次数按历史答对、答错次数统计。</p><div className="question-stats-bar" role="img" aria-label={`已掌握 ${s.mastered}，复习中 ${s.reviewing}，未复习 ${s.unreviewed}`}>{[[s.mastered, '#22c55e'], [s.reviewing, '#facc15'], [s.unreviewed, '#cbd5e1']].map(([count, color], i) => <span key={i} style={{ width: `${s.total ? count / s.total * 100 : 0}%`, background: color }} />)}</div><p className="question-hint">已掌握 {s.mastered} · 复习中 {s.reviewing} · 未复习 {s.unreviewed}{s.total ? ` · 掌握率 ${Math.round(s.mastered / s.total * 100)}%` : ' · 暂无错题'}</p></>;
 }
 
+const reviewStatuses = [
+  { key: 'unreviewed', label: '未复习', color: '#cbd5e1' },
+  { key: 'reviewing', label: '复习中', color: '#facc15' },
+  { key: 'mastered', label: '已掌握', color: '#22c55e' },
+];
+
+export function ReviewProgress({ questions }) {
+  const stats = aggregate(questions);
+  return <div className="review-progress">
+    <div className="review-progress-track" role="img" aria-label={`共 ${stats.total} 题，未复习 ${stats.unreviewed} 题，复习中 ${stats.reviewing} 题，已掌握 ${stats.mastered} 题`} style={{ display: 'flex' }}>
+      {reviewStatuses.map(status => <span key={status.key} style={{ width: `${stats.total ? stats[status.key] / stats.total * 100 : 0}%`, background: status.color }} />)}
+    </div>
+    <ul className="chart-legend">{reviewStatuses.map(status => <li key={status.key}><span className="chart-legend-swatch" aria-hidden="true" style={{ background: status.color }} />{status.label} {stats[status.key]} 题</li>)}</ul>
+    {!stats.total && <p className="analytics-empty">暂无错题</p>}
+  </div>;
+}
+
+function ChapterSources({ chapterId }) {
+  const storageKey = `cuoti:chapter-sources:${chapterId}`;
+  const [load] = useState(() => {
+    try {
+      const items = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      if (!Array.isArray(items) || items.some(item => !item || typeof item.id !== 'string' || typeof item.name !== 'string' || typeof item.done !== 'boolean')) throw new Error();
+      return { items, error: '' };
+    } catch { return { items: [], error: '来源记录读取失败，请检查浏览器存储后重试。' }; }
+  });
+  const [items, setItems] = useState(load.items);
+  const [name, setName] = useState('');
+  const [error, setError] = useState(load.error);
+  function save(next) {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(next));
+      setItems(next);
+      setError('');
+      return true;
+    } catch { setError('保存失败，浏览器存储不可用或空间不足，本次修改未保存。'); return false; }
+  }
+  return <aside className="analytics-panel chapter-sources">
+    <div className="sources-heading"><h3>来源记录</h3><span>{items.filter(item => item.done).length} / {items.length} 已整理</span></div>
+    <p className="question-hint">一本书、一本习题册，整理完就打个钩。</p>
+    <form className="source-form" onSubmit={e => { e.preventDefault(); if (name.trim() && save([...items, { id: crypto.randomUUID(), name: name.trim(), done: false }])) setName(''); }}>
+      <input aria-label="来源名称" placeholder="输入书名或习题册名称" maxLength={160} value={name} onChange={e => setName(e.target.value)} disabled={!!load.error} />
+      <button type="submit" disabled={!name.trim() || !!load.error}>添加来源</button>
+    </form>
+    {error && <p className="source-error" role="alert">{error}</p>}
+    <ul className="source-list">{items.map(item => <li key={item.id} className={item.done ? 'is-done' : ''}>
+      <label><input type="checkbox" checked={item.done} onChange={() => save(items.map(row => row.id === item.id ? { ...row, done: !row.done } : row))} /><span>{item.name}</span></label>
+      <button type="button" aria-label={`删除来源：${item.name}`} onClick={() => save(items.filter(row => row.id !== item.id))}>×</button>
+    </li>)}</ul>
+    {!items.length && !error && <div className="sources-empty"><strong>从第一本书开始</strong><p>添加错题来源，记录你的整理进度。</p></div>}
+    <p className="sources-storage">按章节保存于当前浏览器</p>
+  </aside>;
+}
+
+const distributionColors = ['#5579df', '#59b9a4', '#e9b35d', '#a18ade', '#e58b9d', '#64a9d1', '#97b766', '#c69c77'];
+
 export function ChapterOverview({ chapter, kps, questions, cores }) {
-  const groups = kps.filter(k => k.chapter_id === chapter.id).map(k => ({ name: k.name, questions: questions.filter(q => q.knowledge_point_id === k.id) }));
+  const groups = kps.filter(k => k.chapter_id === chapter.id).map(k => {
+    const items = questions.filter(q => q.knowledge_point_id === k.id);
+    return { id: `kp-${k.id}`, name: k.name, questions: items, stats: aggregate(items) };
+  });
   const core = cores.filter(q => q.chapter_id === chapter.id);
   const all = [...groups.flatMap(g => g.questions), ...core];
-  const max = Math.max(1, core.length, ...groups.map(g => g.questions.length));
-  return <section className="chapter-overview"><h2>{chapter.name}</h2><p className="question-hint">章节错题总体概况，包含普通错题和重要例题</p><ReviewSummary questions={all} /><h3>错题数 Top 5 知识点</h3><p className="question-hint">按收录题量排序，横条表示历史复习错误率。</p>{[...groups].sort((a, b) => b.questions.length - a.questions.length).slice(0, 5).map(g => { const s = aggregate(g.questions); return <div className="question-chart-row" key={g.name}><div>{g.name} · {s.total} 题 <span>{s.attempts ? `${Math.round(s.wrong / s.attempts * 100)}% 错误率` : '暂无复习记录'}</span></div><div className="question-chart-track"><span style={{ width: `${s.attempts ? s.wrong / s.attempts * 100 : 0}%`, background: '#f97316' }} /></div></div>; })}<h3>错题分布诊断</h3>{[...groups, { name: '重要例题（单列）', questions: core }].map(g => <div className="question-chart-row" key={g.name}>{g.name} · {g.questions.length} 题 {all.length ? `（${Math.round(g.questions.length / all.length * 100)}%）` : ''}<div className="question-chart-track"><span style={{ width: `${g.questions.length / max * 100}%`, background: '#60a5fa' }} /></div></div>)}<p className="question-hint">错误类型：未记录，暂无分类诊断数据。<br />难度：未记录，暂无难度分布数据。</p></section>;
+  const stats = aggregate(all);
+  const distribution = [...groups, { id: 'core', name: '重要例题', stats: aggregate(core) }].filter(g => g.stats.total > 0);
+  const ranked = [...groups].sort((a, b) => {
+    if (!a.stats.attempts) return b.stats.attempts ? 1 : 0;
+    if (!b.stats.attempts) return -1;
+    return b.stats.correct / b.stats.attempts - a.stats.correct / a.stats.attempts || b.stats.attempts - a.stats.attempts;
+  });
+  let offset = 0;
+  const slices = distribution.map((g, index) => {
+    const start = offset;
+    offset += g.stats.total / stats.total * 100;
+    return { ...g, color: distributionColors[index % distributionColors.length], start, end: offset };
+  });
+  return <section className="chapter-overview">
+    <h2>{chapter.name}</h2>
+    <p className="question-hint overview-subtitle">章节复习概况 · 从知识点到每一本书</p>
+    <div className="chapter-dashboard">
+      <section className="analytics-panel overview-summary">
+        <h3>总体信息</h3>
+        <ReviewSummary questions={all} />
+      </section>
+      <div className="chapter-charts">
+        <section className="analytics-panel accuracy-panel">
+          <h3>知识点正确率</h3>
+          <p className="question-hint">随复习记录更新，按正确率从高到低排列</p>
+          {ranked.length ? <div className="accuracy-chart">
+            <div className="accuracy-axis" aria-hidden="true">{[100, 75, 50, 25, 0].map(value => <span key={value}>{value}%</span>)}</div>
+            <div className="accuracy-scroll"><div className="accuracy-columns" style={{ minWidth: `${ranked.length * 66}px` }}>
+              {ranked.map(g => {
+                const rate = g.stats.attempts ? g.stats.correct / g.stats.attempts * 100 : null;
+                return <div className="accuracy-column" key={g.id} title={`${g.name}：${rate === null ? '暂无复习记录' : `正确率 ${rate.toFixed(1)}%，答对 ${g.stats.correct} / 复习 ${g.stats.attempts} 次`}`}>
+                  <div className="accuracy-bar-area"><div className={`accuracy-bar ${rate === null ? 'no-record' : ''}`} style={{ height: `${rate || 0}%` }}><span>{rate === null ? '—' : `${Math.round(rate)}%`}</span></div></div>
+                  <span className="accuracy-label">{g.name}</span>
+                </div>;
+              })}
+            </div></div>
+          </div> : <p className="analytics-empty">添加知识点后显示正确率图表。</p>}
+          <p className="chart-footnote">正确率 = 答对次数 / 复习次数；— 表示暂无记录</p>
+        </section>
+        <section className="analytics-panel distribution-panel">
+          <h3>错题数量分布</h3>
+          <p className="question-hint">按知识点统计收录题量</p>
+          {stats.total ? <>
+            <div className="question-pie" role="img" aria-label={slices.map(g => `${g.name} ${g.stats.total} 题，占 ${(g.stats.total / stats.total * 100).toFixed(1)}%`).join('；')} style={{ background: `conic-gradient(${slices.map(g => `${g.color} ${g.start}% ${g.end}%`).join(',')})` }} />
+            <ul className="pie-legend">{slices.map(g => <li key={g.id} title={`${g.name}：${g.stats.total} 题，占 ${(g.stats.total / stats.total * 100).toFixed(1)}%`}><span className="chart-legend-swatch" style={{ background: g.color }} /><span>{g.name}</span><strong>{g.stats.total}</strong></li>)}</ul>
+          </> : <div className="pie-empty"><div className="question-pie" /><p className="analytics-empty">暂无错题</p></div>}
+        </section>
+      </div>
+      <ChapterSources key={chapter.id} chapterId={chapter.id} />
+    </div>
+  </section>;
 }
 
 export function KnowledgeNote({ kp, save, busy }) {

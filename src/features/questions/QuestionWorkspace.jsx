@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { sb, uploadImage } from '../../lib/supabase';
 import { Modal, Field } from '../../components/ui';
 import { aggregate, coreToQuestionPayload, mastery, ordered, questionToCorePayload, utcDate } from './questionModel';
-import { ChapterOverview, ImagePreview, KnowledgeNote, QuestionCard, ReviewSummary } from './QuestionParts';
+import { ChapterOverview, ImagePreview, KnowledgeNote, QuestionCard, ReviewProgress } from './QuestionParts';
 import { readQuestionCache, saveQuestionCache } from './questionCache';
 import './questions.css';
 
@@ -33,9 +33,9 @@ export default function QuestionWorkspace({ notify }) {
   const [modal, setModal] = useState(null);
   const closeModal = useCallback(() => { if (!lock.current) setModal(null); }, []);
   const [preview, setPreview] = useState(null);
-  const [hoverKp, setHoverKp] = useState(null);
-  const hoverTimer = useRef(null);
   const drag = useRef(null);
+  const contentRef = useRef(null);
+  useEffect(() => { contentRef.current?.scrollTo({ top: 0 }); }, [selection.chapter, selection.kp, selection.core]);
   const chapters = ordered(data.chapters), kps = ordered(data.knowledge_points);
   const chapter = chapters.find(c => c.id === selection.chapter);
   const kp = kps.find(k => k.id === selection.kp);
@@ -58,11 +58,14 @@ export default function QuestionWorkspace({ notify }) {
       setOffline(true);
     }
   }, []);
-  useEffect(() => { let active = true; reload().catch(err => { if (active) { setError(err.message); notify?.(`加载失败: ${err.message}`); } }).finally(() => { if (active) setLoading(false); }); return () => { active = false; clearTimeout(hoverTimer.current); }; }, [reload]);
+  useEffect(() => { let active = true; reload().catch(err => { if (active) { setError(err.message); notify?.(`加载失败: ${err.message}`); } }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [reload]);
   useEffect(() => { if (!loading && !offline) void saveQuestionCache(data); }, [data, loading, offline]);
-  function cancelHover() { clearTimeout(hoverTimer.current); setHoverKp(null); }
-  function scheduleHover(id) { cancelHover(); if (!drag.current && window.matchMedia('(hover: hover)').matches) hoverTimer.current = setTimeout(() => setHoverKp(id), 200); }
-  function choose(next) { cancelHover(); setSelection(next); }
+  useEffect(() => {
+    const home = () => { setSelection({ chapter: null, kp: null, core: false }); setSidebarOpen(false); };
+    window.addEventListener('cuoti:home', home);
+    return () => window.removeEventListener('cuoti:home', home);
+  }, []);
+  function choose(next) { setSelection(next); setSidebarOpen(false); }
   async function run(action, message) {
     if (lock.current) return false;
     lock.current = true;
@@ -168,7 +171,7 @@ export default function QuestionWorkspace({ notify }) {
     if (ok) setModal(null);
   }
   function dragProps(t, item, parent) {
-    return { draggable: !busy, onDragStart: e => { if (e.target.closest('button,input,textarea,select')) { e.preventDefault(); return; } cancelHover(); drag.current = { t, id: item.id, parent }; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(item.id)); e.currentTarget.classList.add('dragging'); }, onDragEnd: e => { drag.current = null; e.currentTarget.classList.remove('dragging'); }, onDragOver: e => { if (drag.current?.t === t && drag.current.parent === parent) { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add('drag-over-kp'); } }, onDragLeave: e => e.currentTarget.classList.remove('drag-over-kp'), onDrop: e => {
+    return { draggable: !busy, onDragStart: e => { if (e.target.closest('button,input,textarea,select')) { e.preventDefault(); return; } drag.current = { t, id: item.id, parent }; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(item.id)); e.currentTarget.classList.add('dragging'); }, onDragEnd: e => { drag.current = null; e.currentTarget.classList.remove('dragging'); }, onDragOver: e => { if (drag.current?.t === t && drag.current.parent === parent) { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add('drag-over-kp'); } }, onDragLeave: e => e.currentTarget.classList.remove('drag-over-kp'), onDrop: e => {
       e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove('drag-over-kp');
       const source = drag.current; drag.current = null;
       if (!source || source.t !== t || source.parent !== parent || source.id === item.id) return;
@@ -184,12 +187,81 @@ export default function QuestionWorkspace({ notify }) {
   }
   const modalUpdate = payload => setModal(m => ({ ...m, ...payload }));
   const stats = aggregate(visible);
-  const hover = kps.find(k => k.id === hoverKp);
-  const stop = fn => e => { e.stopPropagation(); cancelHover(); fn(); };
+  const stop = fn => e => { e.stopPropagation(); fn(); };
+  const chapterKps = chapter ? kps.filter(k => k.chapter_id === chapter.id) : [];
   const transferModal = modal && ['move', 'kpMove', 'convert'].includes(modal.kind);
   const modalKps = transferModal ? kps.filter(k => k.chapter_id === Number(modal.chapter) && !(modal.kind === 'move' && !modal.core && k.id === modal.item.knowledge_point_id)) : [];
 
-  return <div className="question-workspace"><div className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`} onClick={() => setSidebarOpen(false)} /><div className="body-row"><aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}><div className="sidebar-actions"><button disabled={busy} onClick={() => directory('chapter')}>+ 章节</button><button disabled={busy} onClick={() => directory('kp')}>+ 知识点</button></div><div className="sidebar-tree">{chapters.map(ch => { const children = kps.filter(k => k.chapter_id === ch.id); const total = data.questions.filter(q => children.some(k => k.id === q.knowledge_point_id)).length + data.core_questions.filter(q => q.chapter_id === ch.id).length; return <div className="tree-chapter" key={ch.id}><div className={`chapter-header ${selection.chapter === ch.id ? 'active' : ''}`} {...dragProps('chapters', ch, null)} onClick={() => choose({ chapter: selection.chapter === ch.id ? null : ch.id, kp: null, core: false })}><span className="drag-handle">⠿</span><span className="name">{ch.name}<button className="edit-btn" title="重命名" onClick={stop(() => directory('chapter', ch))}>✎</button></span><span className="count">{total}</span><button className="del-chapter" title="删除章节" disabled={busy} onClick={stop(() => remove('chapters', ch))}>×</button></div><div className={`kp-list ${selection.chapter === ch.id ? 'open' : ''}`}>{children.map(k => <div key={k.id} className={`kp-item ${selection.kp === k.id ? 'active' : ''} ${k.color ? 'custom-color' : ''}`} style={k.color ? { '--kp-color': k.color } : undefined} {...dragProps('knowledge_points', k, ch.id)} tabIndex={0} role="button" onClick={() => choose({ chapter: ch.id, kp: k.id, core: false })} onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); choose({ chapter: ch.id, kp: k.id, core: false }); } }} onMouseEnter={() => scheduleHover(k.id)} onMouseLeave={cancelHover} onFocus={e => { if (e.target === e.currentTarget) scheduleHover(k.id); }} onBlur={cancelHover}><span className="drag-handle">⠿</span><span className="kp-name">{k.name}<button className="edit-btn kp-edit-btn" title="编辑知识点" onClick={stop(() => directory('kp', k))}>✎</button></span><span className="kp-count">{data.questions.filter(q => q.knowledge_point_id === k.id).length}</span><button className="kp-move-btn" title="转移知识点" onClick={stop(() => transfer('kpMove', k))}>↗</button><button className="del-kp" title="删除知识点" disabled={busy} onClick={stop(() => remove('knowledge_points', k))}>×</button></div>)}{!children.length && <div className="question-hint">暂无知识点</div>}<button className={`kp-item question-core-link ${selection.core && selection.chapter === ch.id ? 'active' : ''}`} onClick={() => choose({ chapter: ch.id, kp: null, core: true })}><span>★ 重要例题</span><span className="kp-count">{data.core_questions.filter(q => q.chapter_id === ch.id).length}</span></button></div></div>; })}{!chapters.length && <p className="question-hint">暂无章节，点击上方添加</p>}</div></aside><main className="main"><div className="main-header"><button className="menu-btn" onClick={() => setSidebarOpen(!sidebarOpen)} title="目录">☰</button><div className="breadcrumb">{selection.core ? `★ 重要例题 > ${chapter?.name || ''}` : kp ? `${chapter?.name || ''} > ${kp.name}` : chapter?.name || '选择知识点查看错题'}</div>{kp && <div className="question-header-tools"><span className="accuracy">正确率 {stats.rate ?? 0}%（{stats.correct}/{stats.attempts}）</span><button className="header-edit-btn" onClick={() => directory('kp', kp)}>编辑知识点</button><span className="kp-color-swatches">{colors.map(color => <button key={color} disabled={busy} className="kp-color-swatch" style={{ background: color }} title={`设置颜色 ${color}`} onClick={() => patch('knowledge_points', kp.id, { color }, '目录颜色已更新')} />)}<button className="kp-color-default" disabled={busy} onClick={() => patch('knowledge_points', kp.id, { color: '' }, '目录颜色已重置')}>默认</button></span></div>}<span className="total-count">总错题数 {data.questions.length}</span><button className="add-btn" disabled={busy || (!kp && !selection.core)} onClick={() => questionModal()}>{selection.core ? '+ 重要例题' : '+ 错题'}</button></div><div className="main-content"><div className="panel active" id="panelCuoti">{loading && <p className="question-hint">正在加载…</p>}{offline && <p className="question-hint" role="status">离线模式（上次缓存）<button disabled={busy} onClick={() => run(reload)}>重新同步</button></p>}{error && <div role="alert">加载失败：{error}<button onClick={() => run(async () => { await reload(); setError(''); }, '数据已同步')}>重试</button></div>}<div hidden={!!hover}>{kp && <KnowledgeNote key={kp.id} kp={kp} busy={busy} save={note => patch('knowledge_points', kp.id, { note }, '笔记已保存')} />}{(kp || selection.core) ? <>{selection.core && <p className="question-hint">重要例题集 · 共 {visible.length} 题</p>}<div className="question-grid">{visible.map(q => <QuestionCard key={`${table}-${q.id}`} question={q} core={selection.core} busy={busy} update={payload => patch(table, q.id, payload, '备注已保存')} record={correct => record(table, q, correct)} removeLog={index => removeLog(table, q, index)} editAnswer={() => questionModal(q)} preview={() => setPreview({ core: selection.core, ids: visible.map(item => item.id), index: visible.findIndex(item => item.id === q.id) })} previewImage={src => setPreview({ src })} move={() => transfer('move', q)} convert={() => transfer('convert', q)} remove={() => remove(table, q)} editTag={() => setModal({ kind: 'tag', item: q, name: q.tag || '' })} dragProps={dragProps(table, q, selection.core ? selection.chapter : selection.kp)} />)}</div>{!visible.length && <div className="empty-state"><p>当前目录暂无{selection.core ? '重要例题' : '错题'}，点击上方按钮添加</p></div>}</> : chapter ? <ChapterOverview chapter={chapter} kps={kps} questions={data.questions} cores={data.core_questions} /> : !loading && <div className="empty-state"><p>{chapters.length ? '选择左侧章节查看概况，或选择知识点查看错题' : '在目录中添加章节和知识点，即可开始记录错题'}</p></div>}</div>{hover && <section className="chapter-overview"><h2>{hover.name}</h2><p className="question-hint">知识点预览 · 移开鼠标或移出焦点后返回</p><ReviewSummary questions={data.questions.filter(q => q.knowledge_point_id === hover.id)} /></section>}</div></div></main></div>
+  return <div className="question-workspace">
+    {chapter && <div className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`} onClick={() => setSidebarOpen(false)} />}
+    <div className="body-row">
+      {chapter && <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <div className="sidebar-actions">
+          <button onClick={() => choose({ chapter: null, kp: null, core: false })}>返回所有章节</button>
+          <h2>目录</h2>
+          <button disabled={busy} onClick={() => directory('kp')}>+ 添加知识点</button>
+        </div>
+        <div className="sidebar-tree">
+          <div className="tree-chapter">
+            <button className={`chapter-header ${!kp && !selection.core ? 'active' : ''}`} onClick={() => choose({ chapter: chapter.id, kp: null, core: false })}>{chapter.name}</button>
+            <div className="kp-list open">
+              {chapterKps.map(k => <div key={k.id} className={`kp-item ${selection.kp === k.id ? 'active' : ''} ${k.color ? 'custom-color' : ''}`} style={k.color ? { '--kp-color': k.color } : undefined} {...dragProps('knowledge_points', k, chapter.id)} tabIndex={0} role="button" onClick={() => choose({ chapter: chapter.id, kp: k.id, core: false })} onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); choose({ chapter: chapter.id, kp: k.id, core: false }); } }}>
+                <span className="drag-handle">⠿</span>
+                <span className="kp-name">{k.name}<button className="edit-btn kp-edit-btn" title="编辑知识点" onClick={stop(() => directory('kp', k))}>✎</button></span>
+                <span className="kp-count">{data.questions.filter(q => q.knowledge_point_id === k.id).length}</span>
+                <button className="kp-move-btn" title="转移知识点" onClick={stop(() => transfer('kpMove', k))}>↗</button>
+                <button className="del-kp" title="删除知识点" disabled={busy} onClick={stop(() => remove('knowledge_points', k))}>×</button>
+              </div>)}
+              {!chapterKps.length && <div className="question-hint">暂无知识点</div>}
+              <button className={`kp-item question-core-link ${selection.core ? 'active' : ''}`} onClick={() => choose({ chapter: chapter.id, kp: null, core: true })}><span>★ 重要例题</span><span className="kp-count">{data.core_questions.filter(q => q.chapter_id === chapter.id).length}</span></button>
+            </div>
+          </div>
+        </div>
+      </aside>}
+      <main className="main">
+        {chapter && <div className="main-header">
+          <button className="menu-btn" onClick={() => setSidebarOpen(!sidebarOpen)} title="目录">☰</button>
+          <div className="breadcrumb"><button onClick={() => choose({ chapter: chapter.id, kp: null, core: false })}>{chapter.name}</button>{(kp || selection.core) && <span> &gt; {selection.core ? '★ 重要例题' : kp.name}</span>}</div>
+          {kp && <div className="question-header-tools"><span className="accuracy">正确率 {stats.rate ?? 0}%（{stats.correct}/{stats.attempts}）</span><button className="header-edit-btn" onClick={() => directory('kp', kp)}>编辑知识点</button><span className="kp-color-swatches">{colors.map(color => <button key={color} disabled={busy} className="kp-color-swatch" style={{ background: color }} title={`设置颜色 ${color}`} onClick={() => patch('knowledge_points', kp.id, { color }, '目录颜色已更新')} />)}<button className="kp-color-default" disabled={busy} onClick={() => patch('knowledge_points', kp.id, { color: '' }, '目录颜色已重置')}>默认</button></span></div>}
+          <span className="total-count">总错题数 {data.questions.length}</span>
+          {(kp || selection.core) && <button className="add-btn" disabled={busy} onClick={() => questionModal()}>{selection.core ? '+ 重要例题' : '+ 错题'}</button>}
+        </div>}
+        <div className="main-content" ref={contentRef}><div className="panel active" id="panelCuoti">
+          {loading && <p className="question-hint">正在加载…</p>}
+          {offline && <p className="question-hint" role="status">离线模式（上次缓存）<button disabled={busy} onClick={() => run(reload)}>重新同步</button></p>}
+          {error && <div role="alert">加载失败：{error}<button onClick={() => run(async () => { await reload(); setError(''); }, '数据已同步')}>重试</button></div>}
+          {!chapter ? <section className="chapter-home">
+            <header className="home-heading">
+              <div><p>错题集</p><h1>章节总览</h1><p>共 {chapters.length} 个章节 · {data.questions.length + data.core_questions.length} 题</p></div>
+              <button className="add-btn" disabled={busy} onClick={() => directory('chapter')}>+ 添加章节</button>
+            </header>
+            <div className="chapter-grid">
+              {chapters.map((ch, index) => {
+                const children = kps.filter(k => k.chapter_id === ch.id);
+                const questions = [...data.questions.filter(q => children.some(k => k.id === q.knowledge_point_id)), ...data.core_questions.filter(q => q.chapter_id === ch.id)];
+                return <article className="chapter-card" key={ch.id} {...dragProps('chapters', ch, null)}>
+                  <button className="chapter-card-open" onClick={() => choose({ chapter: ch.id, kp: null, core: false })}>
+                    <span className="chapter-card-index">{String(index + 1).padStart(2, '0')}</span>
+                    <h2>{ch.name}</h2>
+                    <span className="chapter-card-meta">{children.length} 个知识点 · {questions.length} 题</span>
+                  </button>
+                  <div className="chapter-card-tools"><span className="drag-handle">⠿</span><button className="edit-btn" title="编辑章节" disabled={busy} onClick={() => directory('chapter', ch)}>编辑</button><button className="del-chapter" title="删除章节" disabled={busy} onClick={() => remove('chapters', ch)}>删除</button></div>
+                  <ReviewProgress questions={questions} />
+                </article>;
+              })}
+            </div>
+            {!loading && !chapters.length && <div className="empty-state"><p>添加章节，即可开始记录错题</p></div>}
+          </section> : <>
+            {kp && <KnowledgeNote key={kp.id} kp={kp} busy={busy} save={note => patch('knowledge_points', kp.id, { note }, '笔记已保存')} />}
+            {(kp || selection.core) ? <>
+              {selection.core && <p className="question-hint">重要例题集 · 共 {visible.length} 题</p>}
+              <div className="question-grid">{visible.map(q => <QuestionCard key={`${table}-${q.id}`} question={q} core={selection.core} busy={busy} update={payload => patch(table, q.id, payload, '备注已保存')} record={correct => record(table, q, correct)} removeLog={index => removeLog(table, q, index)} editAnswer={() => questionModal(q)} preview={() => setPreview({ core: selection.core, ids: visible.map(item => item.id), index: visible.findIndex(item => item.id === q.id) })} previewImage={src => setPreview({ src })} move={() => transfer('move', q)} convert={() => transfer('convert', q)} remove={() => remove(table, q)} editTag={() => setModal({ kind: 'tag', item: q, name: q.tag || '' })} dragProps={dragProps(table, q, selection.core ? selection.chapter : selection.kp)} />)}</div>
+              {!visible.length && <div className="empty-state"><p>当前目录暂无{selection.core ? '重要例题' : '错题'}，点击上方按钮添加</p></div>}
+            </> : <ChapterOverview chapter={chapter} kps={kps} questions={data.questions} cores={data.core_questions} />}
+          </>}
+        </div></div>
+      </main>
+    </div>
     {modal && <Modal title={modal.kind === 'chapter' ? `${modal.id ? '编辑' : '添加'}章节` : modal.kind === 'kp' ? `${modal.id ? '编辑' : '添加'}知识点` : modal.kind === 'question' ? modal.id ? '编辑题目答案' : modal.table === 'core_questions' ? '添加重要例题' : '添加错题' : modal.kind === 'tag' ? '修改题型标签' : modal.kind === 'convert' ? modal.core ? '转为重要例题' : '转为知识点错题' : modal.kind === 'kpMove' ? '转移知识点及其中错题' : '转移题目'} onClose={closeModal}><form onSubmit={saveModal}><fieldset disabled={busy} className="question-form-fields">{['chapter', 'kp', 'tag'].includes(modal.kind) && <Field label={modal.kind === 'tag' ? '题型标签' : '名称'}><input autoFocus required={modal.kind !== 'tag'} value={modal.name} onChange={e => modalUpdate({ name: e.target.value })} /></Field>}{modal.kind === 'kp' && <><Field label="所属章节"><select value={modal.chapter} onChange={e => modalUpdate({ chapter: Number(e.target.value) })}>{chapters.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}</select></Field><Field label="目录颜色"><select value={modal.color} onChange={e => modalUpdate({ color: e.target.value })}><option value="">默认</option>{colors.map(color => <option key={color} value={color}>{color}</option>)}</select></Field><Field label="笔记（支持 LaTeX）"><textarea rows={4} value={modal.note} onChange={e => modalUpdate({ note: e.target.value })} /></Field></>}{modal.kind === 'question' && <>{!modal.id && <>{modal.table === 'core_questions' ? <><Field label="所属章节"><select value={modal.chapter} onChange={e => modalUpdate({ chapter: Number(e.target.value) })}>{chapters.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}</select></Field><Field label="题型标签"><input value={modal.tag} onChange={e => modalUpdate({ tag: e.target.value })} /></Field></> : <Field label="所属知识点"><select required value={modal.kp} onChange={e => modalUpdate({ kp: Number(e.target.value) })}>{chapters.map(ch => <optgroup key={ch.id} label={ch.name}>{kps.filter(k => k.chapter_id === ch.id).map(k => <option key={k.id} value={k.id}>{ch.name} &gt; {k.name}</option>)}</optgroup>)}</select></Field>}<ImageInput label="上传题目图片" value={modal.image} onChange={image => modalUpdate({ image })} /></>}<Field label="答案（支持 LaTeX）"><textarea rows={4} value={modal.answer} onChange={e => modalUpdate({ answer: e.target.value })} /></Field><ImageInput label="上传答案图片" value={modal.answerImage} onChange={answerImage => modalUpdate({ answerImage })} /></>}{transferModal && <><Field label="目标章节"><select value={modal.chapter} onChange={e => { const ch = Number(e.target.value); const target = kps.find(k => k.chapter_id === ch && !(modal.kind === 'move' && !modal.core && k.id === modal.item.knowledge_point_id)); modalUpdate({ chapter: ch, kp: target?.id || '' }); }}>{modal.allowedChapters.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}</select></Field>{!modal.chapterOnly && <Field label="目标知识点"><select required value={modal.kp} disabled={!modalKps.length} onChange={e => modalUpdate({ kp: Number(e.target.value) })}>{!modalKps.length && <option value="">该章节无可用知识点</option>}{modalKps.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}</select></Field>}</>}<div className="modal-btns"><button type="button" className="btn-cancel" onClick={() => setModal(null)}>取消</button><button type="submit" className="btn-confirm">{busy ? '保存中…' : '保存'}</button></div></fieldset></form></Modal>}
     {preview && <ImagePreview state={preview} questions={data[preview.core ? 'core_questions' : 'questions']} busy={busy} onClose={() => setPreview(null)} record={(q, correct) => record(preview.core ? 'core_questions' : 'questions', q, correct)} update={(q, payload) => patch(preview.core ? 'core_questions' : 'questions', q.id, payload, '答案已保存')} />}
   </div>;

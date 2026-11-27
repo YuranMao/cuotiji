@@ -19,7 +19,7 @@ export default function App() {
   useEffect(() => () => clearTimeout(timer.current), []);
   return <div className={`app-layout ${tab === 'cuoti' ? '' : 'not-cuoti'}`}>
     <nav className="tab-nav" aria-label="业务导航">
-      {tabs.map(([id, label]) => <button key={id} className={tab === id ? 'active' : ''} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>{label}</button>)}
+      {tabs.map(([id, label]) => <button key={id} className={tab === id ? 'active' : ''} aria-current={tab === id ? 'page' : undefined} onClick={() => { setTab(id); if (id === 'cuoti') window.dispatchEvent(new Event('cuoti:home')); }}>{label}</button>)}
     </nav>
     <Suspense fallback={<p className="question-hint" role="status">正在加载模块…</p>}>
     <div className="workspace-host" hidden={tab !== 'cuoti'}><QuestionWorkspace notify={notify} /></div>
