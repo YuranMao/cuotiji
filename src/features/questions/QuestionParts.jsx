@@ -2,8 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NoteInput } from '../../components/ui';
 import { aggregate, mastery, sourceRows } from './questionModel';
 
-export function SourceSelect({ sources, value, onChange, disabled, label = '题目来源', exclude = [] }) {
-  return <select aria-label={label} value={value || ''} disabled={disabled} onChange={e => onChange(e.target.value || null)}><option value="">未设置来源</option>{sourceRows(sources).filter(s => !exclude.includes(s.id)).map(s => <option key={s.id} value={s.id}>{s.path}</option>)}</select>;
+export function SourceSelect({ sources, value, onChange, disabled, label = '题目来源', exclude = [], leavesOnly = true }) {
+  const parentIds = new Set(sources.map(source => source.parent_id).filter(Boolean));
+  return <select aria-label={label} value={value || ''} disabled={disabled} onChange={e => onChange(e.target.value || null)}><option value="">未设置来源</option>{sourceRows(sources).filter(s => !exclude.includes(s.id) && (!leavesOnly || !parentIds.has(s.id))).map(s => <option key={s.id} value={s.id}>{s.path}</option>)}</select>;
 }
 
 export function ReviewSummary({ questions }) {
@@ -54,7 +55,7 @@ function ChapterSources({ sources, items, questions, busy, add, toggle, remove, 
   return <aside className="analytics-panel chapter-sources">
     <div className="sources-heading"><h3>来源记录</h3><span>{progressItems.filter(item => item.done).length} / {progressItems.length} 已整理</span></div>
     {availableSources.length > 0 && <form className="source-form" onSubmit={async e => { e.preventDefault(); if (selected && await add(selected)) setSelected(''); }}>
-      <SourceSelect sources={sources} exclude={items.map(item => item.source_id)} value={selected} onChange={setSelected} disabled={busy} label="章节来源" />
+      <SourceSelect sources={sources} leavesOnly={false} exclude={items.map(item => item.source_id)} value={selected} onChange={setSelected} disabled={busy} label="章节来源" />
       <button disabled={busy || !selected}>关联来源</button>
     </form>}
     <form className="source-form" onSubmit={async e => { e.preventDefault(); if (name.trim() && await create(name.trim(), parent || null)) setName(''); }}>
