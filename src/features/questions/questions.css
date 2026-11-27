@@ -124,11 +124,12 @@
 .source-tree ul > li > .source-tree-row { position: relative; }
 .source-tree ul > li > .source-tree-row::before { content: ''; position: absolute; left: -18px; top: 50%; width: 12px; border-top: 1px solid #d6e0ee; }
 .source-tree-parent { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; color: #4b5e7a; }
-.source-list label { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; font-size: 13px; color: #4b5e7a; line-height: 1.6; }
-.source-list label span { overflow-wrap: anywhere; }
+.source-tree-name { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .source-list input { width: 17px; height: 17px; flex-shrink: 0; accent-color: #59b9a4; }
-.source-list .is-done > .source-tree-row label span { color: #98a5b7; text-decoration: line-through; }
+.source-list .is-done > .source-tree-row .source-review-link { color: #98a5b7; text-decoration: line-through; }
 .source-list button { border: 0; background: transparent; color: #98a5b7; cursor: pointer; font-size: 20px; padding: 2px 5px; }
+.source-list .source-review-link { font-size: 13px; color: #3556a8; text-align: left; overflow-wrap: anywhere; line-height: 1.6; padding: 2px 0; }
+.source-list .source-review-link:hover { text-decoration: underline; }
 .sources-empty { text-align: center; padding: 62px 8px; color: #a1adbd; font-size: 12px; line-height: 1.9; }
 .sources-empty strong { font-weight: 500; color: #788ba7; }
 .sources-storage { margin-top: auto; padding-top: 24px; font-size: 11px; color: #9aa7b9; }
