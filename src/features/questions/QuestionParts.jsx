@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NoteInput } from '../../components/ui';
-import { aggregate, mastery, sourcePath, sourceRows } from './questionModel';
+import { aggregate, mastery, sourceRows } from './questionModel';
 
 export function SourceSelect({ sources, value, onChange, disabled, label = '题目来源', exclude = [] }) {
   return <select aria-label={label} value={value || ''} disabled={disabled} onChange={e => onChange(e.target.value || null)}><option value="">未设置来源</option>{sourceRows(sources).filter(s => !exclude.includes(s.id)).map(s => <option key={s.id} value={s.id}>{s.path}</option>)}</select>;
@@ -30,6 +30,21 @@ export function ReviewProgress({ questions }) {
 
 function ChapterSources({ sources, items, questions, busy, add, toggle, remove, create }) {
   const counts = new Map(sourceRows(sources, questions).map(s => [s.id, s.count]));
+  const included = new Set();
+  for (const item of items) {
+    let id = item.source_id;
+    while (id && !included.has(id)) {
+      included.add(id);
+      id = sources.find(s => s.id === id)?.parent_id;
+    }
+  }
+  function renderSources(parentId = null) {
+    return sources.filter(s => included.has(s.id) && (s.parent_id || null) === parentId).sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')).map(source => {
+      const item = items.find(row => row.source_id === source.id);
+      const children = renderSources(source.id);
+      return <li key={source.id} className={item?.done ? 'is-done' : ''}><div className="source-tree-row">{item ? <label><input type="checkbox" checked={item.done} disabled={busy} onChange={() => toggle(item)} /><span>{source.name}</span></label> : <span className="source-tree-parent">{source.name}</span>}<strong className="source-question-count">{counts.get(source.id) || 0} 题</strong>{item && <button type="button" disabled={busy} aria-label={`移除章节来源：${source.name}`} onClick={() => remove(item)}>×</button>}</div>{children.length > 0 && <ul>{children}</ul>}</li>;
+    });
+  }
   const [selected, setSelected] = useState('');
   const [name, setName] = useState('');
   const [parent, setParent] = useState('');
@@ -44,7 +59,7 @@ function ChapterSources({ sources, items, questions, busy, add, toggle, remove, 
       <select aria-label="新来源的父来源" value={parent} disabled={busy} onChange={e => setParent(e.target.value)}><option value="">顶级来源</option>{sourceRows(sources).map(s => <option key={s.id} value={s.id}>{s.path}</option>)}</select>
       <button disabled={busy || !name.trim()}>新建并关联</button>
     </form>
-    <ul className="source-list">{items.map(item => <li key={item.id} className={item.done ? 'is-done' : ''}><label><input type="checkbox" checked={item.done} disabled={busy} onChange={() => toggle(item)} /><span>{sourcePath(sources, item.source_id) || item.name}</span></label><strong className="source-question-count">{counts.get(item.source_id) || 0} 题</strong><button type="button" disabled={busy} aria-label={`移除章节来源：${item.name}`} onClick={() => remove(item)}>×</button></li>)}</ul>
+    <ul className="source-list source-tree">{renderSources()}</ul>
     {!items.length && <p className="question-hint">选择共用来源，记录本章节的整理进度。</p>}
     <div className="sources-storage">本章节题数，含重要例题 · 父来源包含子来源</div>
   </aside>;
