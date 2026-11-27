@@ -2,11 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { sb, uploadImage } from '../../lib/supabase';
 import { Modal, Field, NoteInput } from '../../components/ui';
 import { aggregate, coreToQuestionPayload, mastery, ordered, questionToCorePayload, utcDate } from './questionModel';
-import { ChapterOverview, ImagePreview, KnowledgeNote, QuestionCard, ReviewProgress } from './QuestionParts';
+import { ChapterOverview, ImagePreview, KnowledgeNote, QuestionCard, ReviewProgress, SourceManager, SourceSelect } from './QuestionParts';
 import { readQuestionCache, saveQuestionCache } from './questionCache';
 import './questions.css';
 
-const tables = ['chapters', 'knowledge_points', 'questions', 'core_questions'];
+const tables = ['chapters', 'knowledge_points', 'questions', 'core_questions', 'sources', 'chapter_sources'];
 const initialData = Object.fromEntries(tables.map(t => [t, []]));
 const colors = ['#3b82f6', '#16a34a', '#f59e0b', '#ef4444', '#9333ea'];
 
@@ -28,6 +28,7 @@ export default function QuestionWorkspace({ notify }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [offline, setOffline] = useState(false);
+  const [sourceError, setSourceError] = useState('');
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const [modal, setModal] = useState(null);
@@ -44,9 +45,19 @@ export default function QuestionWorkspace({ notify }) {
   const toast = message => notify?.(message);
   const reload = useCallback(async () => {
     try {
-      const results = await Promise.all(tables.map(t => sb.from(t).select('*')));
-      const failure = results.find(r => r.error);
+      const results = await Promise.all(tables.map(async t => {
+        const rows = [];
+        for (let start = 0; ; start += 1000) {
+          const result = await sb.from(t).select('*').order('id').range(start, start + 999);
+          if (result.error) return result;
+          rows.push(...result.data);
+          if (result.data.length < 1000) return { data: rows, error: null };
+        }
+      }));
+      const failure = results.slice(0, 4).find(r => r.error);
       if (failure) throw failure.error;
+      const sourceFailure = results.slice(4).find(r => r.error);
+      setSourceError(sourceFailure ? `来源功能加载失败，请先执行来源迁移 SQL：${sourceFailure.error.message}` : '');
       const next = Object.fromEntries(tables.map((t, i) => [t, results[i].data || []]));
       setData(next);
       setOffline(false);
@@ -54,7 +65,7 @@ export default function QuestionWorkspace({ notify }) {
     } catch (err) {
       const cache = await readQuestionCache();
       if (!cache) throw err;
-      setData({ chapters: cache.chapters || [], knowledge_points: cache.kps || [], questions: cache.questions || [], core_questions: cache.coreQuestions || cache.core_questions || [] });
+      setData({ chapters: cache.chapters || [], knowledge_points: cache.kps || [], questions: cache.questions || [], core_questions: cache.coreQuestions || cache.core_questions || [], sources: cache.sources || [], chapter_sources: cache.chapter_sources || [] });
       setOffline(true);
     }
   }, []);
@@ -80,6 +91,21 @@ export default function QuestionWorkspace({ notify }) {
     setData(current => ({ ...current, [t]: current[t].map(item => item.id === id ? { ...item, ...payload } : item) }));
   }
   const patch = (t, id, payload, message) => run(() => patchRaw(t, id, payload), message);
+  async function addChapterSourceRaw(chapterId, source) {
+    const row = await checked(sb.from('chapter_sources').upsert({ chapter_id: chapterId, source_id: source.id, name: source.name }, { onConflict: 'chapter_id,source_id', ignoreDuplicates: true }).select());
+    if (row.length) setData(current => ({ ...current, chapter_sources: [...current.chapter_sources, ...row] }));
+  }
+  const createSource = (name, parent_id, chapterId) => run(async () => {
+    const source = await checked(sb.from('sources').insert({ name, parent_id }).select().single());
+    setData(current => ({ ...current, sources: [...current.sources, source] }));
+    if (chapterId) await addChapterSourceRaw(chapterId, source);
+  }, '来源已添加');
+  const deleteSource = id => run(async () => {
+    if (data.sources.some(s => s.parent_id === id)) throw new Error('请先删除子来源');
+    if (data.chapter_sources.some(s => s.source_id === id)) throw new Error('请先在章节概况移除该来源关联');
+    await checked(sb.from('sources').delete().eq('id', id));
+    setData(current => ({ ...current, sources: current.sources.filter(s => s.id !== id), questions: current.questions.map(q => q.source_id === id ? { ...q, source_id: null } : q), core_questions: current.core_questions.map(q => q.source_id === id ? { ...q, source_id: null } : q) }));
+  }, '来源已删除');
   function record(t, q, correct) {
     const field = correct ? 'correct_count' : 'wrong_count';
     const review_log = [...(q.review_log || []), { date: utcDate(), result: correct ? 'correct' : 'wrong' }];
@@ -106,7 +132,7 @@ export default function QuestionWorkspace({ notify }) {
     setModal({ kind, id: item?.id, name: item?.name || '', chapter: item?.chapter_id || selection.chapter || chapters[0]?.id || '', color: item?.color || '', note: item?.note || '' });
   }
   function questionModal(q) {
-    setModal({ kind: 'question', id: q?.id, table, chapter: selection.chapter, kp: selection.kp || kps[0]?.id || '', image: q?.image_data || '', answer: q?.answer || '', answerImage: q?.answer_image || '', tag: q?.tag || '' });
+    setModal({ kind: 'question', id: q?.id, table, chapter: selection.chapter, kp: selection.kp || kps[0]?.id || '', image: q?.image_data || '', answer: q?.answer || '', answerImage: q?.answer_image || '', tag: q?.tag || '', source_id: q?.source_id || null });
   }
   function transfer(kind, item) {
     const targetCore = kind === 'convert' ? !selection.core : selection.core;
@@ -141,10 +167,10 @@ export default function QuestionWorkspace({ notify }) {
       } else if (m.kind === 'question') {
         const answer_image = await imageUrl(m.answerImage, 'answers');
         const answer = m.answer;
-        if (m.id) await patchRaw(m.table, m.id, { answer, answer_image });
+        if (m.id) await patchRaw(m.table, m.id, { answer, answer_image, source_id: m.source_id });
         else {
           const core = m.table === 'core_questions';
-          const payload = { image_data: await imageUrl(m.image, core ? 'core' : 'questions'), answer, answer_image, correct_count: 0, wrong_count: 0, review_log: [], ...(core ? { chapter_id: Number(m.chapter), tag: m.tag.trim() } : { knowledge_point_id: Number(m.kp), first_upload_date: utcDate(), file_name: typeof m.image === 'object' ? m.image.name || '' : '' }) };
+          const payload = { image_data: await imageUrl(m.image, core ? 'core' : 'questions'), source_id: m.source_id, answer, answer_image, correct_count: 0, wrong_count: 0, review_log: [], ...(core ? { chapter_id: Number(m.chapter), tag: m.tag.trim() } : { knowledge_point_id: Number(m.kp), first_upload_date: utcDate(), file_name: typeof m.image === 'object' ? m.image.name || '' : '' }) };
           await checked(sb.from(m.table).insert(payload));
           await reload();
         }
@@ -227,6 +253,7 @@ export default function QuestionWorkspace({ notify }) {
         </div>}
         <div className="main-content" ref={contentRef}><div className="panel active" id="panelCuoti">
           {loading && <p className="question-hint">正在加载…</p>}
+          {sourceError && <p className="source-error" role="alert">{sourceError}<button disabled={busy} onClick={() => run(reload)}>重新加载</button></p>}
           {offline && <p className="question-hint" role="status">离线模式（上次缓存）<button disabled={busy} onClick={() => run(reload)}>重新同步</button></p>}
           {error && <div role="alert">加载失败：{error}<button onClick={() => run(async () => { await reload(); setError(''); }, '数据已同步')}>重试</button></div>}
           {!chapter ? <section className="chapter-home">
@@ -234,6 +261,7 @@ export default function QuestionWorkspace({ notify }) {
               <div><p>错题集</p><h1>章节总览</h1><p>共 {chapters.length} 个章节 · {data.questions.length + data.core_questions.length} 题</p></div>
               <button className="add-btn" disabled={busy} onClick={() => directory('chapter')}>+ 添加章节</button>
             </header>
+            <SourceManager sources={data.sources} questions={[...data.questions, ...data.core_questions]} busy={busy || loading || offline} create={createSource} rename={(id, name) => patch('sources', id, { name }, '来源已更新')} remove={deleteSource} />
             <div className="chapter-grid">
               {chapters.map((ch, index) => {
                 const children = kps.filter(k => k.chapter_id === ch.id);
@@ -254,14 +282,14 @@ export default function QuestionWorkspace({ notify }) {
             {kp && <KnowledgeNote key={kp.id} kp={kp} busy={busy} save={note => patch('knowledge_points', kp.id, { note }, '笔记已保存')} />}
             {(kp || selection.core) ? <>
               {selection.core && <p className="question-hint">重要例题集 · 共 {visible.length} 题</p>}
-              <div className="question-grid">{visible.map(q => <QuestionCard key={`${table}-${q.id}`} question={q} core={selection.core} busy={busy} update={payload => patch(table, q.id, payload, '已保存')} record={correct => record(table, q, correct)} removeLog={index => removeLog(table, q, index)} editAnswer={() => questionModal(q)} preview={() => setPreview({ core: selection.core, ids: visible.map(item => item.id), index: visible.findIndex(item => item.id === q.id) })} previewImage={src => setPreview({ src })} move={() => transfer('move', q)} convert={() => transfer('convert', q)} remove={() => remove(table, q)} editTag={() => setModal({ kind: 'tag', item: q, name: q.tag || '' })} dragProps={dragProps(table, q, selection.core ? selection.chapter : selection.kp)} />)}</div>
+              <div className="question-grid">{visible.map(q => <QuestionCard key={`${table}-${q.id}`} question={q} sources={data.sources} core={selection.core} busy={busy} update={payload => patch(table, q.id, payload, '已保存')} record={correct => record(table, q, correct)} removeLog={index => removeLog(table, q, index)} editAnswer={() => questionModal(q)} preview={() => setPreview({ core: selection.core, ids: visible.map(item => item.id), index: visible.findIndex(item => item.id === q.id) })} previewImage={src => setPreview({ src })} move={() => transfer('move', q)} convert={() => transfer('convert', q)} remove={() => remove(table, q)} editTag={() => setModal({ kind: 'tag', item: q, name: q.tag || '' })} dragProps={dragProps(table, q, selection.core ? selection.chapter : selection.kp)} />)}</div>
               {!visible.length && <div className="empty-state"><p>当前目录暂无{selection.core ? '重要例题' : '错题'}，点击上方按钮添加</p></div>}
-            </> : <ChapterOverview chapter={chapter} kps={kps} questions={data.questions} cores={data.core_questions} />}
+            </> : <ChapterOverview chapter={chapter} kps={kps} questions={data.questions} cores={data.core_questions} sourceProps={{ sources: data.sources, items: data.chapter_sources.filter(s => s.chapter_id === chapter.id), busy: busy || offline, create: (name, parent) => createSource(name, parent, chapter.id), add: id => run(() => addChapterSourceRaw(chapter.id, data.sources.find(s => s.id === id)), '来源已关联'), toggle: item => patch('chapter_sources', item.id, { done: !item.done }, '整理进度已保存'), remove: item => run(async () => { await checked(sb.from('chapter_sources').delete().eq('id', item.id)); setData(current => ({ ...current, chapter_sources: current.chapter_sources.filter(s => s.id !== item.id) })); }, '已移除章节关联') }} />}
           </>}
         </div></div>
       </main>
     </div>
-    {modal && <Modal title={modal.kind === 'chapter' ? `${modal.id ? '编辑' : '添加'}章节` : modal.kind === 'kp' ? `${modal.id ? '编辑' : '添加'}知识点` : modal.kind === 'question' ? modal.id ? '编辑题目答案' : modal.table === 'core_questions' ? '添加重要例题' : '添加错题' : modal.kind === 'tag' ? '修改题型标签' : modal.kind === 'convert' ? modal.core ? '转为重要例题' : '转为知识点错题' : modal.kind === 'kpMove' ? '转移知识点及其中错题' : '转移题目'} onClose={closeModal}><form onSubmit={saveModal}><fieldset disabled={busy} className="question-form-fields">{['chapter', 'kp', 'tag'].includes(modal.kind) && <Field label={modal.kind === 'tag' ? '题型标签' : '名称'}><input autoFocus required={modal.kind !== 'tag'} value={modal.name} onChange={e => modalUpdate({ name: e.target.value })} /></Field>}{modal.kind === 'kp' && <><Field label="所属章节"><select value={modal.chapter} onChange={e => modalUpdate({ chapter: Number(e.target.value) })}>{chapters.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}</select></Field><Field label="目录颜色"><select value={modal.color} onChange={e => modalUpdate({ color: e.target.value })}><option value="">默认</option>{colors.map(color => <option key={color} value={color}>{color}</option>)}</select></Field><Field label="笔记"><NoteInput aria-label="知识点笔记" value={modal.note} onChange={e => modalUpdate({ note: e.target.value })} /></Field></>}{modal.kind === 'question' && <>{!modal.id && <>{modal.table === 'core_questions' ? <><Field label="所属章节"><select value={modal.chapter} onChange={e => modalUpdate({ chapter: Number(e.target.value) })}>{chapters.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}</select></Field><Field label="题型标签"><input value={modal.tag} onChange={e => modalUpdate({ tag: e.target.value })} /></Field></> : <Field label="所属知识点"><select required value={modal.kp} onChange={e => modalUpdate({ kp: Number(e.target.value) })}>{chapters.map(ch => <optgroup key={ch.id} label={ch.name}>{kps.filter(k => k.chapter_id === ch.id).map(k => <option key={k.id} value={k.id}>{ch.name} &gt; {k.name}</option>)}</optgroup>)}</select></Field>}<ImageInput label="上传题目图片" value={modal.image} onChange={image => modalUpdate({ image })} /></>}<Field label="答案"><NoteInput aria-label="文字答案" value={modal.answer} onChange={e => modalUpdate({ answer: e.target.value })} /></Field><ImageInput label="上传答案图片" value={modal.answerImage} onChange={answerImage => modalUpdate({ answerImage })} /></>}{transferModal && <><Field label="目标章节"><select value={modal.chapter} onChange={e => { const ch = Number(e.target.value); const target = kps.find(k => k.chapter_id === ch && !(modal.kind === 'move' && !modal.core && k.id === modal.item.knowledge_point_id)); modalUpdate({ chapter: ch, kp: target?.id || '' }); }}>{modal.allowedChapters.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}</select></Field>{!modal.chapterOnly && <Field label="目标知识点"><select required value={modal.kp} disabled={!modalKps.length} onChange={e => modalUpdate({ kp: Number(e.target.value) })}>{!modalKps.length && <option value="">该章节无可用知识点</option>}{modalKps.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}</select></Field>}</>}<div className="modal-btns"><button type="button" className="btn-cancel" onClick={() => setModal(null)}>取消</button><button type="submit" className="btn-confirm">{busy ? '保存中…' : '保存'}</button></div></fieldset></form></Modal>}
+    {modal && <Modal title={modal.kind === 'chapter' ? `${modal.id ? '编辑' : '添加'}章节` : modal.kind === 'kp' ? `${modal.id ? '编辑' : '添加'}知识点` : modal.kind === 'question' ? modal.id ? '编辑题目答案' : modal.table === 'core_questions' ? '添加重要例题' : '添加错题' : modal.kind === 'tag' ? '修改题型标签' : modal.kind === 'convert' ? modal.core ? '转为重要例题' : '转为知识点错题' : modal.kind === 'kpMove' ? '转移知识点及其中错题' : '转移题目'} onClose={closeModal}><form onSubmit={saveModal}><fieldset disabled={busy} className="question-form-fields">{['chapter', 'kp', 'tag'].includes(modal.kind) && <Field label={modal.kind === 'tag' ? '题型标签' : '名称'}><input autoFocus required={modal.kind !== 'tag'} value={modal.name} onChange={e => modalUpdate({ name: e.target.value })} /></Field>}{modal.kind === 'kp' && <><Field label="所属章节"><select value={modal.chapter} onChange={e => modalUpdate({ chapter: Number(e.target.value) })}>{chapters.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}</select></Field><Field label="目录颜色"><select value={modal.color} onChange={e => modalUpdate({ color: e.target.value })}><option value="">默认</option>{colors.map(color => <option key={color} value={color}>{color}</option>)}</select></Field><Field label="笔记"><NoteInput aria-label="知识点笔记" value={modal.note} onChange={e => modalUpdate({ note: e.target.value })} /></Field></>}{modal.kind === 'question' && <>{!modal.id && <>{modal.table === 'core_questions' ? <><Field label="所属章节"><select value={modal.chapter} onChange={e => modalUpdate({ chapter: Number(e.target.value) })}>{chapters.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}</select></Field><Field label="题型标签"><input value={modal.tag} onChange={e => modalUpdate({ tag: e.target.value })} /></Field></> : <Field label="所属知识点"><select required value={modal.kp} onChange={e => modalUpdate({ kp: Number(e.target.value) })}>{chapters.map(ch => <optgroup key={ch.id} label={ch.name}>{kps.filter(k => k.chapter_id === ch.id).map(k => <option key={k.id} value={k.id}>{ch.name} &gt; {k.name}</option>)}</optgroup>)}</select></Field>}<ImageInput label="上传题目图片" value={modal.image} onChange={image => modalUpdate({ image })} /></>}<Field label="来源"><SourceSelect sources={data.sources} value={modal.source_id} onChange={source_id => modalUpdate({ source_id })} /></Field><Field label="答案"><NoteInput aria-label="文字答案" value={modal.answer} onChange={e => modalUpdate({ answer: e.target.value })} /></Field><ImageInput label="上传答案图片" value={modal.answerImage} onChange={answerImage => modalUpdate({ answerImage })} /></>}{transferModal && <><Field label="目标章节"><select value={modal.chapter} onChange={e => { const ch = Number(e.target.value); const target = kps.find(k => k.chapter_id === ch && !(modal.kind === 'move' && !modal.core && k.id === modal.item.knowledge_point_id)); modalUpdate({ chapter: ch, kp: target?.id || '' }); }}>{modal.allowedChapters.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}</select></Field>{!modal.chapterOnly && <Field label="目标知识点"><select required value={modal.kp} disabled={!modalKps.length} onChange={e => modalUpdate({ kp: Number(e.target.value) })}>{!modalKps.length && <option value="">该章节无可用知识点</option>}{modalKps.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}</select></Field>}</>}<div className="modal-btns"><button type="button" className="btn-cancel" onClick={() => setModal(null)}>取消</button><button type="submit" className="btn-confirm">{busy ? '保存中…' : '保存'}</button></div></fieldset></form></Modal>}
     {preview && <ImagePreview state={preview} questions={data[preview.core ? 'core_questions' : 'questions']} busy={busy} onClose={() => setPreview(null)} record={(q, correct) => record(preview.core ? 'core_questions' : 'questions', q, correct)} update={(q, payload) => patch(preview.core ? 'core_questions' : 'questions', q.id, payload, '答案已保存')} />}
   </div>;
 }

@@ -26,9 +26,32 @@ export function aggregate(questions) {
   return stats;
 }
 export function questionToCorePayload(q, chapterId) {
-  return { chapter_id: chapterId, image_data: q.image_data, answer: q.answer || '', answer_image: q.answer_image || '', tag: q.note || '', note: '', sort_order: 0, correct_count: q.correct_count || 0, wrong_count: q.wrong_count || 0, review_log: q.review_log || [] };
+  return { chapter_id: chapterId, image_data: q.image_data, source_id: q.source_id || null, answer: q.answer || '', answer_image: q.answer_image || '', tag: q.note || '', note: '', sort_order: 0, correct_count: q.correct_count || 0, wrong_count: q.wrong_count || 0, review_log: q.review_log || [] };
 }
 export function coreToQuestionPayload(q, kpId) {
-  return { knowledge_point_id: kpId, image_data: q.image_data, answer: q.answer || '', answer_image: q.answer_image || '', note: q.tag || '', first_upload_date: localDate(), file_name: q.name || '', sort_order: 0, correct_count: q.correct_count || 0, wrong_count: q.wrong_count || 0, review_log: q.review_log || [] };
+  return { knowledge_point_id: kpId, image_data: q.image_data, source_id: q.source_id || null, answer: q.answer || '', answer_image: q.answer_image || '', note: q.tag || '', first_upload_date: localDate(), file_name: q.name || '', sort_order: 0, correct_count: q.correct_count || 0, wrong_count: q.wrong_count || 0, review_log: q.review_log || [] };
+}
+export function sourcePath(sources, id) {
+  const names = [], visited = new Set();
+  let source = sources.find(s => s.id === id);
+  while (source && !visited.has(source.id)) {
+    visited.add(source.id);
+    names.unshift(source.name);
+    source = sources.find(s => s.id === source.parent_id);
+  }
+  return names.join('/');
+}
+export function sourceRows(sources, questions = []) {
+  const counts = new Map(sources.map(s => [s.id, 0]));
+  for (const q of questions) {
+    const visited = new Set();
+    let source = sources.find(s => s.id === q.source_id);
+    while (source && !visited.has(source.id)) {
+      visited.add(source.id);
+      counts.set(source.id, counts.get(source.id) + 1);
+      source = sources.find(s => s.id === source.parent_id);
+    }
+  }
+  return sources.map(s => ({ ...s, path: sourcePath(sources, s.id), count: counts.get(s.id) })).sort((a, b) => a.path.localeCompare(b.path, 'zh-CN'));
 }
 export const normalizeNote = note => String(note || '').replace(/\\begin\{tabular\}(\{[^\n]*\})/g, '\\begin{array}$1').replace(/\\end\{tabular\}/g, '\\end{array}').replace(/\\(?:toprule|midrule|bottomrule)/g, '\\hline');

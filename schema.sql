@@ -229,3 +229,163 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
+
+-- 全局来源及任意深度层级：已有数据库可单独执行此事务，支持重复执行。
+begin;
+
+create table if not exists public.sources (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(btrim(name)) between 1 and 160),
+  parent_id uuid references public.sources(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  constraint sources_parent_not_self check (parent_id is distinct from id)
+);
+
+create unique index if not exists sources_parent_name_key
+  on public.sources (parent_id, name) where parent_id is not null;
+create unique index if not exists sources_root_name_key
+  on public.sources (name) where parent_id is null;
+
+create or replace function public.check_source_hierarchy()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public
+as $$
+declare
+  ancestor_id uuid := new.parent_id;
+  visited_ids uuid[] := array[new.id];
+begin
+  while ancestor_id is not null loop
+    if ancestor_id = any(visited_ids) then
+      raise exception 'Source hierarchy must not contain a cycle'
+        using errcode = '23514';
+    end if;
+    visited_ids := array_append(visited_ids, ancestor_id);
+    -- 锁住祖先的父关系，避免并发改挂节点时形成环；无递归深度上限。
+    select s.parent_id into ancestor_id
+    from public.sources as s
+    where s.id = ancestor_id
+    for update;
+  end loop;
+  return new;
+end;
+$$;
+
+drop trigger if exists sources_check_hierarchy on public.sources;
+create trigger sources_check_hierarchy
+  before insert or update of id, parent_id on public.sources
+  for each row execute function public.check_source_hierarchy();
+
+alter table public.chapter_sources
+  add column if not exists source_id uuid;
+alter table public.questions
+  add column if not exists source_id uuid;
+alter table public.core_questions
+  add column if not exists source_id uuid;
+
+-- 在映射及去重期间阻止并发写入；旧 name 保留，已关联的来源不重新映射。
+lock table public.chapter_sources in access exclusive mode;
+lock table public.sources in share row exclusive mode;
+
+insert into public.sources (name)
+select distinct btrim(cs.name)
+from public.chapter_sources as cs
+where cs.source_id is null
+on conflict (name) where parent_id is null do nothing;
+
+update public.chapter_sources as cs
+set source_id = s.id
+from public.sources as s
+where cs.source_id is null
+  and s.parent_id is null
+  and s.name = btrim(cs.name);
+
+with merged as (
+  select chapter_id, source_id, bool_or(done) as done,
+    (array_agg(id order by created_at, id))[1] as keep_id
+  from public.chapter_sources
+  group by chapter_id, source_id
+)
+update public.chapter_sources as cs
+set done = merged.done
+from merged
+where cs.id = merged.keep_id
+  and cs.done is distinct from merged.done;
+
+with ranked as (
+  select id, row_number() over (
+    partition by chapter_id, source_id order by created_at, id
+  ) as position
+  from public.chapter_sources
+)
+delete from public.chapter_sources as cs
+using ranked
+where cs.id = ranked.id and ranked.position > 1;
+
+alter table public.chapter_sources alter column source_id set not null;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.chapter_sources'::regclass
+      and conname = 'chapter_sources_source_id_fkey'
+  ) then
+    alter table public.chapter_sources
+      add constraint chapter_sources_source_id_fkey
+      foreign key (source_id) references public.sources(id) on delete restrict;
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.chapter_sources'::regclass
+      and conname = 'chapter_sources_chapter_id_source_id_key'
+  ) then
+    alter table public.chapter_sources
+      add constraint chapter_sources_chapter_id_source_id_key
+      unique (chapter_id, source_id);
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.questions'::regclass
+      and conname = 'questions_source_id_fkey'
+  ) then
+    alter table public.questions
+      add constraint questions_source_id_fkey
+      foreign key (source_id) references public.sources(id) on delete set null;
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.core_questions'::regclass
+      and conname = 'core_questions_source_id_fkey'
+  ) then
+    alter table public.core_questions
+      add constraint core_questions_source_id_fkey
+      foreign key (source_id) references public.sources(id) on delete set null;
+  end if;
+end $$;
+
+create index if not exists chapter_sources_source_id_idx
+  on public.chapter_sources (source_id);
+create index if not exists questions_source_id_idx
+  on public.questions (source_id);
+create index if not exists core_questions_source_id_idx
+  on public.core_questions (source_id);
+
+alter table public.sources enable row level security;
+grant select, insert, update, delete on public.sources to anon, authenticated;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'sources'
+      and policyname = 'Allow all on sources'
+  ) then
+    create policy "Allow all on sources"
+      on public.sources for all to anon, authenticated
+      using (true) with check (true);
+  end if;
+end $$;
+
+notify pgrst, 'reload schema';
+commit;

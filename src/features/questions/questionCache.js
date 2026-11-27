@@ -31,7 +31,7 @@ export async function saveQuestionCache(data) {
     const store = transaction.objectStore('cache');
     const request = store.get('data');
     request.onsuccess = () => {
-      store.put({ ...(request.result || {}), chapters: data.chapters, kps: data.knowledge_points, questions: data.questions, coreQuestions: data.core_questions }, 'data');
+      store.put({ ...(request.result || {}), chapters: data.chapters, kps: data.knowledge_points, questions: data.questions, coreQuestions: data.core_questions, sources: data.sources, chapter_sources: data.chapter_sources }, 'data');
     };
     await new Promise((resolve, reject) => {
       transaction.oncomplete = resolve;

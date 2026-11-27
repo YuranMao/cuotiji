@@ -1,7 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NoteInput } from '../../components/ui';
-import { sb } from '../../lib/supabase';
-import { aggregate, mastery } from './questionModel';
+import { aggregate, mastery, sourcePath, sourceRows } from './questionModel';
+
+export function SourceSelect({ sources, value, onChange, disabled, label = '题目来源', exclude = [] }) {
+  return <select aria-label={label} value={value || ''} disabled={disabled} onChange={e => onChange(e.target.value || null)}><option value="">未设置来源</option>{sourceRows(sources).filter(s => !exclude.includes(s.id)).map(s => <option key={s.id} value={s.id}>{s.path}</option>)}</select>;
+}
+
+export function SourceManager({ sources, questions, busy, create, rename, remove }) {
+  const [name, setName] = useState('');
+  const [parent, setParent] = useState('');
+  return <section className="analytics-panel source-manager"><h3>来源与错题总数</h3><p className="question-hint">普通错题与重要例题合计，父来源包含子来源。来源与章节概况共用。</p><form className="source-form" onSubmit={async e => { e.preventDefault(); if (name.trim() && await create(name.trim(), parent || null)) setName(''); }}><input aria-label="新来源名称" placeholder="来源名称，如模拟卷、李六" maxLength={160} value={name} onChange={e => setName(e.target.value)} disabled={busy} /><select aria-label="父来源" value={parent} onChange={e => setParent(e.target.value)} disabled={busy}><option value="">无父来源（顶级）</option>{sourceRows(sources).map(s => <option key={s.id} value={s.id}>{s.path}</option>)}</select><button disabled={busy || !name.trim()}>添加来源</button></form><ul className="source-count-list">{sourceRows(sources, questions).map(s => <li key={s.id}><span>{s.path}</span><strong>{s.count} 题</strong><button disabled={busy} onClick={() => { const value = window.prompt('来源名称', s.name); if (value?.trim() && value.trim() !== s.name) rename(s.id, value.trim()); }}>改名</button><button disabled={busy} onClick={async () => { if (window.confirm(`删除来源“${s.path}”？已有题目的来源将清空，请先删除其子来源。`) && await remove(s.id)) setParent(current => current === s.id ? '' : current); }}>删除</button></li>)}</ul>{!sources.length && <p className="question-hint">添加第一个来源，或选择父来源创建子来源。</p>}<p className="question-hint">未设置来源：{questions.filter(q => !q.source_id).length} 题</p></section>;
+}
 
 export function ReviewSummary({ questions }) {
   const s = aggregate(questions);
@@ -25,71 +34,30 @@ export function ReviewProgress({ questions }) {
   </div>;
 }
 
-function ChapterSources({ chapterId }) {
-  const [items, setItems] = useState([]);
+function ChapterSources({ sources, items, busy, add, toggle, remove, create }) {
+  const [selected, setSelected] = useState('');
   const [name, setName] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const lock = useRef(false);
-  async function loadSources() {
-    setLoading(true);
-    setError('');
-    try {
-      const { data, error: failure } = await sb.from('chapter_sources').select('*').eq('chapter_id', chapterId).order('created_at').order('id');
-      if (failure) throw failure;
-      setItems(data || []);
-    } catch (err) { setError(`来源加载失败，请确认已执行建表 SQL：${err.message}`); }
-    finally { setLoading(false); }
-  }
-  useEffect(() => { void loadSources(); }, [chapterId]);
-  async function change(action) {
-    if (lock.current) return false;
-    lock.current = true;
-    setBusy(true);
-    setError('');
-    try { await action(); return true; }
-    catch (err) { setError(`来源保存失败：${err.message}`); return false; }
-    finally { lock.current = false; setBusy(false); }
-  }
+  const [parent, setParent] = useState('');
   return <aside className="analytics-panel chapter-sources">
     <div className="sources-heading"><h3>来源记录</h3><span>{items.filter(item => item.done).length} / {items.length} 已整理</span></div>
-    <form className="source-form" onSubmit={async e => {
-      e.preventDefault();
-      const value = name.trim();
-      if (!value) return;
-      const ok = await change(async () => {
-        const { data, error: failure } = await sb.from('chapter_sources').insert({ chapter_id: chapterId, name: value }).select().single();
-        if (failure) throw failure;
-        setItems(current => [...current, data]);
-      });
-      if (ok) setName('');
-    }}>
-      <input aria-label="来源名称" placeholder="输入书名或习题册名称" maxLength={160} value={name} onChange={e => setName(e.target.value)} disabled={loading || busy} />
-      <button type="submit" disabled={!name.trim() || loading || busy}>添加来源</button>
+    <form className="source-form" onSubmit={async e => { e.preventDefault(); if (selected && await add(selected)) setSelected(''); }}>
+      <SourceSelect sources={sources} exclude={items.map(item => item.source_id)} value={selected} onChange={setSelected} disabled={busy} label="章节来源" />
+      <button disabled={busy || !selected}>关联来源</button>
     </form>
-    {error && <p className="source-error" role="alert">{error} <button type="button" disabled={busy || loading} onClick={loadSources}>重新加载</button></p>}
-    {loading && <p className="question-hint" role="status">正在加载来源…</p>}
-    <ul className="source-list">{items.map(item => <li key={item.id} className={item.done ? 'is-done' : ''}>
-      <label><input type="checkbox" checked={item.done} disabled={busy || loading} onChange={() => change(async () => {
-        const { data, error: failure } = await sb.from('chapter_sources').update({ done: !item.done }).eq('id', item.id).eq('chapter_id', chapterId).select().single();
-        if (failure) throw failure;
-        setItems(current => current.map(row => row.id === item.id ? data : row));
-      })} /><span>{item.name}</span></label>
-      <button type="button" disabled={busy || loading} aria-label={`删除来源：${item.name}`} onClick={() => change(async () => {
-        const { error: failure } = await sb.from('chapter_sources').delete().eq('id', item.id).eq('chapter_id', chapterId).select().single();
-        if (failure) throw failure;
-        setItems(current => current.filter(row => row.id !== item.id));
-      })}>×</button>
-    </li>)}</ul>
-    {!items.length && !error && !loading && <div className="sources-empty"><strong>从第一本书开始</strong><p>添加错题来源，记录你的整理进度。</p></div>}
-    <div className="sources-storage">按章节保存至 Supabase</div>
+    <form className="source-form" onSubmit={async e => { e.preventDefault(); if (name.trim() && await create(name.trim(), parent || null)) setName(''); }}>
+      <input aria-label="来源名称" placeholder="新来源名称" maxLength={160} value={name} onChange={e => setName(e.target.value)} disabled={busy} />
+      <select aria-label="新来源的父来源" value={parent} disabled={busy} onChange={e => setParent(e.target.value)}><option value="">顶级来源</option>{sourceRows(sources).map(s => <option key={s.id} value={s.id}>{s.path}</option>)}</select>
+      <button disabled={busy || !name.trim()}>新建并关联</button>
+    </form>
+    <ul className="source-list">{items.map(item => <li key={item.id} className={item.done ? 'is-done' : ''}><label><input type="checkbox" checked={item.done} disabled={busy} onChange={() => toggle(item)} /><span>{sourcePath(sources, item.source_id) || item.name}</span></label><button type="button" disabled={busy} aria-label={`移除章节来源：${item.name}`} onClick={() => remove(item)}>×</button></li>)}</ul>
+    {!items.length && <p className="question-hint">选择共用来源，记录本章节的整理进度。</p>}
+    <div className="sources-storage">来源全局共用 · 整理进度按章节保存</div>
   </aside>;
 }
 
 const distributionColors = ['#3556a8', '#4b6bc0', '#6281d2', '#7c97df', '#98afe9', '#b4c5f1', '#cedaf7', '#e2e9fc'];
 
-export function ChapterOverview({ chapter, kps, questions, cores }) {
+export function ChapterOverview({ chapter, kps, questions, cores, sourceProps }) {
   const groups = kps.filter(k => k.chapter_id === chapter.id).map(k => {
     const items = questions.filter(q => q.knowledge_point_id === k.id);
     return { id: `kp-${k.id}`, name: k.name, questions: items, stats: aggregate(items) };
@@ -142,7 +110,7 @@ export function ChapterOverview({ chapter, kps, questions, cores }) {
           </> : <div className="pie-empty"><div className="question-pie" /><p className="analytics-empty">暂无错题</p></div>}
         </section>
       </div>
-      <ChapterSources key={chapter.id} chapterId={chapter.id} />
+      <ChapterSources key={chapter.id} {...sourceProps} />
     </div>
   </section>;
 }
@@ -155,11 +123,11 @@ function CardNote({ question, save, busy }) {
   return <div className="question-note"><div>备注</div><NoteInput aria-label="错题备注" value={question.note} disabled={busy} onSave={save} /></div>;
 }
 
-export function QuestionCard({ question: q, core, busy, update, record, removeLog, editAnswer, preview, previewImage, move, convert, remove, editTag, dragProps }) {
+export function QuestionCard({ question: q, core, busy, update, record, removeLog, editAnswer, preview, previewImage, move, convert, remove, editTag, dragProps, sources }) {
   const [revealed, setRevealed] = useState(false);
   const m = mastery(q);
   const log = q.review_log || [];
-  return <article className="question-card" data-id={q.id} style={core ? { borderLeft: '3px solid #e67e22' } : undefined} {...dragProps}><div className="card-img-wrap" role="button" tabIndex={0} onClick={preview} onKeyDown={e => { if (e.key === 'Enter') preview(); }}><img src={q.image_data} alt={core ? '重要例题' : '错题'} loading="lazy" draggable={false} /><span className="drag-handle question-card-handle">⠿</span></div><div className="card-info">{!core && <><div className="card-date">首次上传：{q.first_upload_date}</div>{q.file_name && <div className="card-date">{q.file_name}</div>}</>}<div className={`answer-section ${revealed ? 'revealed' : ''}`} onClick={() => setRevealed(true)}><div className="answer-title">答案 <button className="answer-edit-btn" onClick={e => { e.stopPropagation(); editAnswer(); }}>编辑</button></div><NoteInput aria-label="文字答案" placeholder="填写文字答案…" value={q.answer} disabled={busy} onSave={answer => update({ answer })} />{q.answer_image && <img className="answer-image" src={q.answer_image} alt="答案图片" onClick={e => { e.stopPropagation(); if (revealed) previewImage(q.answer_image); else setRevealed(true); }} />}{!revealed && <button className="answer-mask" onClick={() => setRevealed(true)}>点击显示答案</button>}</div><CardNote question={q} busy={busy} save={note => update({ note })} />{core && <div className="question-core-tag">{q.tag || '未分类'} <button onClick={editTag} title="修改题型标签">编辑</button></div>}<div className="progress-section">{m.mastered && <span className="card-badge">✓ 已掌握</span>}<div className="progress-header"><span className="review-label">连续答对 {m.streak} / 5（共答 {m.correct + m.wrong} 次）</span></div><div className="progress-bar-wrap"><div className={`progress-bar-fill ${m.mastered ? 'full' : ''}`} style={{ width: `${Math.min(m.streak / 5 * 100, 100)}%` }} /></div><div className="review-dates">{log.slice(-8).reverse().map((entry, index) => <span key={log.length - 1 - index} className={`review-date-tag ${entry.result === 'correct' ? 'tag-correct' : 'tag-wrong'}`}>{entry.date} {entry.result === 'correct' ? '✓' : '✗'}<button disabled={busy} title="删除这条记录" onClick={() => removeLog(log.length - 1 - index)}>×</button></span>)}</div></div><div className="card-actions"><button className="btn-correct" disabled={busy} onClick={() => record(true)}>答对了</button><button className="btn-wrong" disabled={busy} onClick={() => record(false)}>还不会</button><button className="btn-delete" disabled={busy} onClick={remove}>删除</button><button className="btn-delete" disabled={busy} title="转移题目" onClick={move}>↗</button><button className="btn-delete" disabled={busy} onClick={convert}>{core ? '转为普通题' : '转为例题'}</button></div></div></article>;
+  return <article className="question-card" data-id={q.id} style={core ? { borderLeft: '3px solid #e67e22' } : undefined} {...dragProps}><div className="card-img-wrap" role="button" tabIndex={0} onClick={preview} onKeyDown={e => { if (e.key === 'Enter') preview(); }}><img src={q.image_data} alt={core ? '重要例题' : '错题'} loading="lazy" draggable={false} /><span className="drag-handle question-card-handle">⠿</span></div><div className="card-info"><div className="question-source"><span>来源</span><SourceSelect sources={sources} value={q.source_id} disabled={busy} onChange={source_id => update({ source_id })} /></div>{!core && <><div className="card-date">首次上传：{q.first_upload_date}</div>{q.file_name && <div className="card-date">{q.file_name}</div>}</>}<div className={`answer-section ${revealed ? 'revealed' : ''}`} onClick={() => setRevealed(true)}><div className="answer-title">答案 <button className="answer-edit-btn" onClick={e => { e.stopPropagation(); editAnswer(); }}>编辑</button></div><NoteInput aria-label="文字答案" placeholder="填写文字答案…" value={q.answer} disabled={busy} onSave={answer => update({ answer })} />{q.answer_image && <img className="answer-image" src={q.answer_image} alt="答案图片" onClick={e => { e.stopPropagation(); if (revealed) previewImage(q.answer_image); else setRevealed(true); }} />}{!revealed && <button className="answer-mask" onClick={() => setRevealed(true)}>点击显示答案</button>}</div><CardNote question={q} busy={busy} save={note => update({ note })} />{core && <div className="question-core-tag">{q.tag || '未分类'} <button onClick={editTag} title="修改题型标签">编辑</button></div>}<div className="progress-section">{m.mastered && <span className="card-badge">✓ 已掌握</span>}<div className="progress-header"><span className="review-label">连续答对 {m.streak} / 5（共答 {m.correct + m.wrong} 次）</span></div><div className="progress-bar-wrap"><div className={`progress-bar-fill ${m.mastered ? 'full' : ''}`} style={{ width: `${Math.min(m.streak / 5 * 100, 100)}%` }} /></div><div className="review-dates">{log.slice(-8).reverse().map((entry, index) => <span key={log.length - 1 - index} className={`review-date-tag ${entry.result === 'correct' ? 'tag-correct' : 'tag-wrong'}`}>{entry.date} {entry.result === 'correct' ? '✓' : '✗'}<button disabled={busy} title="删除这条记录" onClick={() => removeLog(log.length - 1 - index)}>×</button></span>)}</div></div><div className="card-actions"><button className="btn-correct" disabled={busy} onClick={() => record(true)}>答对了</button><button className="btn-wrong" disabled={busy} onClick={() => record(false)}>还不会</button><button className="btn-delete" disabled={busy} onClick={remove}>删除</button><button className="btn-delete" disabled={busy} title="转移题目" onClick={move}>↗</button><button className="btn-delete" disabled={busy} onClick={convert}>{core ? '转为普通题' : '转为例题'}</button></div></div></article>;
 }
 
 export function ImagePreview({ state, questions, busy, onClose, record, update }) {
