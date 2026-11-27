@@ -1,3 +1,9 @@
+node_modules/
+dist/
+.env
+.env.local
+.screenshots/
+.trae-html-share-packages/
 启动服务器.bat
 牛津英语同义词英汉双解/
 牛津高阶英汉双解词典(第9版)_v20191111/

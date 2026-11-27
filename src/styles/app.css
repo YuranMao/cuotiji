@@ -1,0 +1,14 @@
+#root { height: 100dvh; }
+.workspace-host { flex: 1; min-height: 0; overflow: auto; }
+.workspace-host[hidden] { display: none; }
+.workspace-host > .body-row { height: 100%; }
+.react-modal { width: min(900px, 94vw); max-height: 90dvh; overflow: auto; user-select: text; }
+.react-modal-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.react-modal-heading > button { background:none; border:0; cursor:pointer; font-size:24px; color:#666; }
+.react-field { display:block; }
+.react-field > span { display:block; font-size:13px; color:#555; margin-bottom:6px; }
+.react-field input:not([type=checkbox]):not([type=radio]), .react-field textarea, .react-field select { width:100%; padding:9px; border:1px solid #d9d9d9; border-radius:6px; font:inherit; }
+button { font-family:inherit; }
+button:disabled { cursor:not-allowed; opacity:.6; }
+input, textarea, select { user-select:text; }
+@media(max-width:768px) { .react-modal { max-height:92dvh; } }

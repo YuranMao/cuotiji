@@ -1,0 +1,44 @@
+.review-workspace { min-width: 0; color: #263548; }
+.review-workspace button, .review-form button { padding: 6px 11px; border: 1px solid #d6dce4; border-radius: 5px; background: #fff; color: inherit; cursor: pointer; font: inherit; font-size: 13px; }
+.review-workspace button:disabled, .review-form button:disabled { opacity: .55; cursor: default; }
+.review-workspace button.active, button.review-primary { background: #4a90d9; border-color: #4a90d9; color: #fff; }
+.review-toolbar, .review-toolbar nav, .review-actions, .review-chapters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.review-toolbar { margin-bottom: 14px; }
+.review-toolbar nav { flex: 1; }
+.review-actions { margin-top: 12px; }
+.review-workspace .review-danger { color: #c23535; border-color: #efbaba; }
+.review-muted { font-size: 12px; color: #6c7989; white-space: pre-wrap; }
+.review-card { border: 1px solid #e1e6ed; border-radius: 8px; background: #fff; padding: 16px; margin: 14px 0; overflow-wrap: anywhere; }
+.review-card h3 { margin: 0 0 10px; }
+.review-card p, .review-detail p, .review-pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.review-question { display: block; font-size: 18px !important; line-height: 1.75; font-weight: 600 !important; white-space: pre-wrap; overflow-wrap: anywhere; margin: 12px 0; }
+.review-workspace .review-link { border: 0; background: transparent; padding: 0; text-align: left; color: inherit; }
+.review-tag { display: inline-block; margin: 3px 5px 3px 0; padding: 3px 8px; font-size: 12px; border-radius: 4px; background: #edf3fa; color: #345b80; }
+.review-tag.reading { background: #e74c3c; color: #fff; }
+.review-structure { padding: 9px 12px; margin: 8px 0; border-left: 3px solid #9aa5b1; background: #f3f5f7; white-space: pre-wrap; }
+.review-structure.main { border-color: #4a90d9; background: #eaf4ff; }
+.review-structure.clause { border-color: #e99a52; background: #fff3e8; }
+.review-detail { line-height: 1.7; max-height: 70vh; overflow: auto; overflow-wrap: anywhere; }
+.review-detail li { margin: 8px 0; }
+.review-outline details { border: 1px solid #dfe6ee; border-radius: 5px; padding: 9px 12px; margin: 8px 0; }
+.review-outline summary { cursor: pointer; font-weight: 600; }
+.review-outline li { margin: 7px 0; }
+.review-table-wrap { overflow-x: auto; }
+.review-table { width: 100%; min-width: 960px; border-collapse: collapse; font-size: 12px; background: #fff; }
+.review-table th, .review-table td { padding: 7px; border: 1px solid #e1e6ed; text-align: center; vertical-align: middle; }
+.review-table thead th { position: sticky; top: 0; background: #f5f7fa; z-index: 1; }
+.review-table td.review-name { min-width: 120px; max-width: 240px; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
+.review-table td.review-due { color: #cf4646; background: #fff1f0; }
+.review-table .review-done { color: #28884c; }
+.review-table .review-completed { border: 0; background: transparent; color: #28884c; padding: 2px; font-size: 11px; }
+.review-note { display: block; width: 100%; box-sizing: border-box; min-width: 80px; min-height: 32px; border: 1px solid #c8c8c8; border-radius: 7px; background: #fdfcf0; padding: 4px 6px; font-size: 10px; font-family: inherit; resize: none; overflow: hidden; }
+.review-table .review-group { text-align: left; background: #f5f7fa; }
+.review-empty { text-align: center; color: #8793a1; padding: 24px !important; }
+.review-form fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.review-form input, .review-form select, .review-form textarea { box-sizing: border-box; width: 100%; padding: 8px 10px; border: 1px solid #cfd7e1; border-radius: 5px; font: inherit; margin-bottom: 10px; }
+.review-form textarea { resize: vertical; }
+.review-map { overflow: auto; min-height: 180px; text-align: center; }
+.review-map svg { max-width: 100%; height: auto; }
+.review-spectrum-entry { padding: 10px 0; border-top: 1px solid #edf0f4; }
+.review-spectrum-entry blockquote { margin: 8px 0 8px 12px; padding-left: 10px; border-left: 2px solid #d9e2ec; color: #66768a; white-space: pre-wrap; }
+@media (max-width: 640px) { .review-toolbar nav { flex-basis: 100%; } .review-card { padding: 12px; } .review-table-wrap { max-height: 70vh; } }
