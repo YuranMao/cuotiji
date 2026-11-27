@@ -19,4 +19,6 @@ button:focus-visible, [role=button]:focus-visible { outline: 3px solid #93b4ff; 
 button { font-family:inherit; }
 button:disabled { cursor:not-allowed; opacity:.6; }
 input, textarea, select { user-select:text; }
+textarea.review-note { display: block; width: 100%; box-sizing: border-box; min-width: 0; min-height: 32px; border: 1px solid #c8c8c8; border-radius: 7px; background: #fdfcf0; color: #263548; padding: 4px 6px; font-family: inherit; font-size: 10px; line-height: 1.6; resize: none; overflow: hidden; }
+.kp-note-block textarea.review-note, .img-preview-answer textarea.review-note, .react-field textarea.review-note, .review-form textarea.review-note, .planner-goal-table textarea.review-note { min-height: 32px; padding: 4px 6px; border: 1px solid #c8c8c8; border-radius: 7px; background: #fdfcf0; color: #263548; font-family: inherit; font-size: 10px; line-height: 1.6; resize: none; }
 @media(max-width:768px) { .react-modal { max-height:92dvh; } }

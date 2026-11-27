@@ -1,6 +1,6 @@
 import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sb } from '../../lib/supabase';
-import { Modal, Field } from '../../components/ui';
+import { Modal, Field, NoteInput } from '../../components/ui';
 import {
   SUBJECTS, GOAL_SUBJECTS, COLORS, GRADIENTS, MATH_TAGS, IMPORTANT_DATES, MONTHS,
   DEFAULT_GOALS, cloneGoals, formatDate, parseDate, addDays, initialRange,
@@ -145,7 +145,7 @@ function GoalTable({ goals, draft, setDraft, busy, onSave }) {
     const value = (week ? data?.weeks?.[week] : data?.goal) || '';
     if (week > month.weekCount) return <td key={month.month} className="planner-unused" />;
     return <td key={month.month} className={week ? '' : 'planner-total-goal'}>
-      {draft ? <textarea aria-label={`${month.month}${subject}${week ? `第${week}周` : '总目标'}`} value={value} onChange={event => change(month, subject, week, event.target.value)} /> : <>
+      {draft ? <NoteInput aria-label={`${month.month}${subject}${week ? `第${week}周` : '总目标'}`} value={value} onChange={event => change(month, subject, week, event.target.value)} /> : <>
         {week ? <small>W{month.weekStart + week - 1} </small> : null}{value || (!week ? '—' : '')}
       </>}
     </td>;

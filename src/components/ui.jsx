@@ -1,4 +1,39 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
+export function NoteInput({ value = '', onChange, onSave, disabled, className = '', placeholder = '备注…', ...props }) {
+  const [text, setText] = useState(value ?? '');
+  const [failed, setFailed] = useState(false);
+  const ref = useRef(null);
+  const saving = useRef(false);
+  const controlled = Boolean(onChange);
+  const content = controlled ? value ?? '' : text;
+  useEffect(() => { setText(value ?? ''); setFailed(false); }, [value]);
+  useEffect(() => {
+    const element = ref.current;
+    const resize = () => {
+      element.style.height = 'auto';
+      element.style.height = `${Math.max(32, element.scrollHeight + 2)}px`;
+    };
+    resize();
+    let width = element.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (element.clientWidth !== width) { width = element.clientWidth; resize(); }
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [content]);
+  return <><textarea {...props} ref={ref} rows={1} className={`review-note ${className}`} placeholder={placeholder} value={content} disabled={disabled} onChange={event => {
+    setFailed(false);
+    if (controlled) onChange(event);
+    else setText(event.target.value);
+  }} onBlur={async () => {
+    if (!onSave || content === (value ?? '') || saving.current) return;
+    saving.current = true;
+    try { setFailed(await onSave(content) === false); }
+    catch { setFailed(true); }
+    finally { saving.current = false; }
+  }} />{failed && <small role="alert">保存失败，内容已保留，离开输入框时重试。</small>}</>;
+}
 
 export function Modal({ title, onClose, children }) {
   const ref = useRef(null);

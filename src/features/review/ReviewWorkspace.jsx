@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { sb } from '../../lib/supabase';
-import { Modal, Field, MathText } from '../../components/ui';
+import { Modal, Field, MathText, NoteInput } from '../../components/ui';
 import { INTERVALS, WORD_LABELS, SUBJECTS, formatDate, normalizeReviews, getEbbDynamicSchedule, sentenceTags, getSentenceSettings, parseSentenceJson, SENTENCE_PROMPT } from './reviewModel';
 import './review.css';
 
@@ -51,15 +51,8 @@ function MindmapPreview({ code }) {
   return preview.svg ? <div className="review-map" dangerouslySetInnerHTML={{ __html: preview.svg }} /> : <p role="status">正在生成思维导图…</p>;
 }
 
-function ReviewNote({ value, onSave, disabled }) {
-  const [text, setText] = useState(value);
-  const ref = useRef(null);
-  useEffect(() => setText(value), [value]);
-  useEffect(() => {
-    const element = ref.current;
-    if (element) { element.style.height = 'auto'; element.style.height = `${Math.max(32, element.scrollHeight)}px`; }
-  }, [text]);
-  return <textarea ref={ref} className="review-note" aria-label="复习备注" placeholder="备注…" value={text} disabled={disabled} onChange={event => setText(event.target.value)} onBlur={() => { if (text !== value) onSave(text); }} />;
+function ReviewNote(props) {
+  return <NoteInput aria-label="复习备注" {...props} />;
 }
 
 export default function ReviewWorkspace({ notify }) {
@@ -153,7 +146,7 @@ export default function ReviewWorkspace({ notify }) {
         payload = { code: form.code.trim() };
       } else if (type === 'phrase') {
         if (!form.phrase.trim()) throw new Error('请输入词组或固定搭配');
-        payload = { phrase: form.phrase.trim(), meaning: form.meaning.trim(), note: form.note.trim(), updated_at: new Date().toISOString() };
+        payload = { phrase: form.phrase.trim(), meaning: form.meaning.trim(), note: form.note, updated_at: new Date().toISOString() };
       } else if (type === 'spectrum') {
         if (!form.word.trim() || !form.detail.trim()) throw new Error('请填写单词和词义/用法');
         payload = { word: form.word.trim(), entry_type: form.entry_type, detail: form.detail.trim(), example: form.example.trim(), updated_at: new Date().toISOString() };
@@ -213,7 +206,8 @@ export default function ReviewWorkspace({ notify }) {
       const result = await sb.from(TABLES.ebb).update({ reviews }).eq('id', item.id);
       if (result.error) throw result.error;
       await reload('ebb');
-    } catch (error) { message(`更新失败：${error.message}`); }
+      return true;
+    } catch (error) { message(`更新失败：${error.message}`); return false; }
     finally { setBusy(false); }
   }
 
@@ -266,7 +260,7 @@ export default function ReviewWorkspace({ notify }) {
     setRecitation({ type: kind, items: data[kind].slice(), index: 0, revealed: false });
   };
   const recitationItem = recitation?.items[recitation.index];
-  const input = (key, label, options = {}) => <Field label={label}>{options.rows ? <textarea rows={options.rows} value={form[key] || ''} onChange={event => change(key, event.target.value)} /> : <input type={options.type || 'text'} value={form[key] || ''} onChange={event => change(key, event.target.value)} autoComplete={options.type === 'password' ? 'off' : undefined} />}</Field>;
+  const input = (key, label, options = {}) => <Field label={label}>{options.rows ? <NoteInput aria-label={label} value={form[key] || ''} onChange={event => change(key, event.target.value)} /> : <input type={options.type || 'text'} value={form[key] || ''} onChange={event => change(key, event.target.value)} autoComplete={options.type === 'password' ? 'off' : undefined} />}</Field>;
 
   function renderRow(item) {
     const itemSubject = subjectOf(item);

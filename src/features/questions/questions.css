@@ -40,10 +40,9 @@
 .question-workspace .main-header { border: 1px solid #e6eaf2; border-radius: 16px; padding: 16px 20px; box-shadow: 0 3px 14px #233b6505; }
 .question-workspace .breadcrumb button { border: 0; background: transparent; color: #4469d8; font-size: inherit; font-weight: 600; cursor: pointer; }
 .question-workspace .sidebar { border: 1px solid #e6eaf2; border-radius: 18px 18px 0 0; box-shadow: none; padding-top: 4px; }
-.question-workspace .sidebar-actions { flex-wrap: wrap; padding: 16px; gap: 12px; }
-.question-workspace .sidebar-actions h2 { width: 100%; font-size: 13px; color: #8793a5; font-weight: 500; }
-.question-workspace .sidebar-actions button { flex-basis: 100%; border-radius: 9px; }
-.question-workspace .chapter-header { width: 100%; border: 0; text-align: left; font: inherit; font-weight: 600; }
+.question-workspace .sidebar-actions { flex-wrap: nowrap; align-items: center; padding: 12px 8px; gap: 6px; }
+.question-workspace .sidebar-actions h2 { flex: 1; margin: 0; font-size: 13px; color: #8793a5; font-weight: 500; white-space: nowrap; }
+.question-workspace .sidebar-actions button { flex: 0 0 auto; padding: 8px 6px; border-radius: 9px; font-size: 11px; }
 .question-workspace .kp-list { padding: 8px; }
 .question-workspace .kp-item { border-radius: 8px; margin-bottom: 4px; }
 .chapter-home { max-width: 1440px; margin: 0 auto; padding: 18px 12px; }
@@ -155,7 +154,7 @@
 .question-workspace .img-preview-answer { flex: 1 0 auto; max-height: none; overflow: visible; background: transparent; padding: 4px 22px 24px; font-size: 14px; line-height: 1.85; overflow-wrap: anywhere; }
 .question-workspace .img-preview-answer .answer-content { color: #e1e8f5; }
 .question-workspace .img-preview-answer img { height: auto; max-height: none; border-radius: 8px; background: white; }
-.question-workspace .img-preview-answer textarea { background: #111b2b; color: #e5eaf4; border-color: #41516d; min-height: 140px; }
+.question-workspace .img-preview-answer textarea.review-note { background: #fdfcf0; color: #263548; border-color: #c8c8c8; min-height: 32px; }
 .question-workspace .img-preview-controls { margin-top: auto; background: #151e2e; border-top: 1px solid #ffffff12; padding: 22px 22px max(20px, env(safe-area-inset-bottom)); text-align: left; }
 .preview-progress-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; }
 .preview-progress-heading strong { font-weight: 500; color: #c8d4e8; }
