@@ -197,3 +197,35 @@ begin
     create policy "Allow all on vocab_spectrum_entries" on vocab_spectrum_entries for all using (true);
   end if;
 end $$;
+
+-- 章节来源清单：已有数据库可单独执行此段。
+create table if not exists public.chapter_sources (
+  id uuid primary key default gen_random_uuid(),
+  chapter_id bigint not null references public.chapters(id) on delete cascade,
+  name text not null check (char_length(btrim(name)) between 1 and 160),
+  done boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists chapter_sources_chapter_id_idx
+  on public.chapter_sources (chapter_id);
+
+alter table public.chapter_sources enable row level security;
+
+-- 沿用现有个人应用的 anon 访问方式。
+grant select, insert, update, delete on public.chapter_sources to anon, authenticated;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'chapter_sources'
+      and policyname = 'Allow all on chapter_sources'
+  ) then
+    create policy "Allow all on chapter_sources"
+      on public.chapter_sources for all to anon, authenticated
+      using (true) with check (true);
+  end if;
+end $$;
+
+notify pgrst, 'reload schema';

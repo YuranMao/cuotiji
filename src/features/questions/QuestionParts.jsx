@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { MathText } from '../../components/ui';
+import { sb } from '../../lib/supabase';
 import { aggregate, mastery, normalizeNote } from './questionModel';
 
 export function ReviewSummary({ questions }) {
@@ -26,42 +27,79 @@ export function ReviewProgress({ questions }) {
 
 function ChapterSources({ chapterId }) {
   const storageKey = `cuoti:chapter-sources:${chapterId}`;
-  const [load] = useState(() => {
-    try {
-      const items = JSON.parse(localStorage.getItem(storageKey) || '[]');
-      if (!Array.isArray(items) || items.some(item => !item || typeof item.id !== 'string' || typeof item.name !== 'string' || typeof item.done !== 'boolean')) throw new Error();
-      return { items, error: '' };
-    } catch { return { items: [], error: '来源记录读取失败，请检查浏览器存储后重试。' }; }
-  });
-  const [items, setItems] = useState(load.items);
+  const [items, setItems] = useState([]);
   const [name, setName] = useState('');
-  const [error, setError] = useState(load.error);
-  function save(next) {
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const lock = useRef(false);
+  async function loadSources() {
+    setLoading(true);
+    setError('');
     try {
-      localStorage.setItem(storageKey, JSON.stringify(next));
-      setItems(next);
-      setError('');
-      return true;
-    } catch { setError('保存失败，浏览器存储不可用或空间不足，本次修改未保存。'); return false; }
+      const { data, error: failure } = await sb.from('chapter_sources').select('*').eq('chapter_id', chapterId).order('created_at').order('id');
+      if (failure) throw failure;
+      setItems(data || []);
+    } catch (err) { setError(`来源加载失败，请确认已执行建表 SQL：${err.message}`); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { void loadSources(); }, [chapterId]);
+  async function change(action) {
+    if (lock.current) return false;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    try { await action(); return true; }
+    catch (err) { setError(`来源保存失败：${err.message}`); return false; }
+    finally { lock.current = false; setBusy(false); }
+  }
+  async function importLocal() {
+    await change(async () => {
+      const local = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      if (!Array.isArray(local) || local.some(item => !item || typeof item.id !== 'string' || typeof item.name !== 'string' || typeof item.done !== 'boolean')) throw new Error('旧来源记录格式无效');
+      if (!local.length) throw new Error('当前浏览器没有待导入的来源');
+      const { error: failure } = await sb.from('chapter_sources').upsert(local.map(item => ({ id: item.id, chapter_id: chapterId, name: item.name, done: item.done })), { onConflict: 'id', ignoreDuplicates: true });
+      if (failure) throw failure;
+      localStorage.removeItem(storageKey);
+      await loadSources();
+    });
   }
   return <aside className="analytics-panel chapter-sources">
     <div className="sources-heading"><h3>来源记录</h3><span>{items.filter(item => item.done).length} / {items.length} 已整理</span></div>
-    <p className="question-hint">一本书、一本习题册，整理完就打个钩。</p>
-    <form className="source-form" onSubmit={e => { e.preventDefault(); if (name.trim() && save([...items, { id: crypto.randomUUID(), name: name.trim(), done: false }])) setName(''); }}>
-      <input aria-label="来源名称" placeholder="输入书名或习题册名称" maxLength={160} value={name} onChange={e => setName(e.target.value)} disabled={!!load.error} />
-      <button type="submit" disabled={!name.trim() || !!load.error}>添加来源</button>
+    <form className="source-form" onSubmit={async e => {
+      e.preventDefault();
+      const value = name.trim();
+      if (!value) return;
+      const ok = await change(async () => {
+        const { data, error: failure } = await sb.from('chapter_sources').insert({ chapter_id: chapterId, name: value }).select().single();
+        if (failure) throw failure;
+        setItems(current => [...current, data]);
+      });
+      if (ok) setName('');
+    }}>
+      <input aria-label="来源名称" placeholder="输入书名或习题册名称" maxLength={160} value={name} onChange={e => setName(e.target.value)} disabled={loading || busy} />
+      <button type="submit" disabled={!name.trim() || loading || busy}>添加来源</button>
     </form>
-    {error && <p className="source-error" role="alert">{error}</p>}
+    {error && <p className="source-error" role="alert">{error} <button type="button" disabled={busy || loading} onClick={loadSources}>重新加载</button></p>}
+    {loading && <p className="question-hint" role="status">正在加载来源…</p>}
     <ul className="source-list">{items.map(item => <li key={item.id} className={item.done ? 'is-done' : ''}>
-      <label><input type="checkbox" checked={item.done} onChange={() => save(items.map(row => row.id === item.id ? { ...row, done: !row.done } : row))} /><span>{item.name}</span></label>
-      <button type="button" aria-label={`删除来源：${item.name}`} onClick={() => save(items.filter(row => row.id !== item.id))}>×</button>
+      <label><input type="checkbox" checked={item.done} disabled={busy || loading} onChange={() => change(async () => {
+        const { data, error: failure } = await sb.from('chapter_sources').update({ done: !item.done }).eq('id', item.id).eq('chapter_id', chapterId).select().single();
+        if (failure) throw failure;
+        setItems(current => current.map(row => row.id === item.id ? data : row));
+      })} /><span>{item.name}</span></label>
+      <button type="button" disabled={busy || loading} aria-label={`删除来源：${item.name}`} onClick={() => change(async () => {
+        const { error: failure } = await sb.from('chapter_sources').delete().eq('id', item.id).eq('chapter_id', chapterId).select().single();
+        if (failure) throw failure;
+        setItems(current => current.filter(row => row.id !== item.id));
+      })}>×</button>
     </li>)}</ul>
-    {!items.length && !error && <div className="sources-empty"><strong>从第一本书开始</strong><p>添加错题来源，记录你的整理进度。</p></div>}
-    <p className="sources-storage">按章节保存于当前浏览器</p>
+    {!items.length && !error && !loading && <div className="sources-empty"><strong>从第一本书开始</strong><p>添加错题来源，记录你的整理进度。</p></div>}
+    <div className="sources-storage">按章节保存至 Supabase <button type="button" disabled={busy || loading} onClick={importLocal}>导入此浏览器旧来源</button></div>
   </aside>;
 }
 
-const distributionColors = ['#5579df', '#59b9a4', '#e9b35d', '#a18ade', '#e58b9d', '#64a9d1', '#97b766', '#c69c77'];
+const distributionColors = ['#3556a8', '#4b6bc0', '#6281d2', '#7c97df', '#98afe9', '#b4c5f1', '#cedaf7', '#e2e9fc'];
 
 export function ChapterOverview({ chapter, kps, questions, cores }) {
   const groups = kps.filter(k => k.chapter_id === chapter.id).map(k => {
@@ -84,8 +122,6 @@ export function ChapterOverview({ chapter, kps, questions, cores }) {
     return { ...g, color: distributionColors[index % distributionColors.length], start, end: offset };
   });
   return <section className="chapter-overview">
-    <h2>{chapter.name}</h2>
-    <p className="question-hint overview-subtitle">章节复习概况 · 从知识点到每一本书</p>
     <div className="chapter-dashboard">
       <section className="analytics-panel overview-summary">
         <h3>总体信息</h3>
