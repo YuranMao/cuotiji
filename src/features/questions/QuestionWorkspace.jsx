@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { sb, uploadImage } from '../../lib/supabase';
 import { Modal, Field, NoteInput } from '../../components/ui';
 import { aggregate, coreToQuestionPayload, mastery, ordered, questionToCorePayload, utcDate } from './questionModel';
-import { ChapterOverview, ImagePreview, KnowledgeNote, QuestionCard, ReviewProgress, SourceManager, SourceSelect } from './QuestionParts';
+import { ChapterOverview, ImagePreview, KnowledgeNote, QuestionCard, ReviewProgress, SourceSelect } from './QuestionParts';
 import { readQuestionCache, saveQuestionCache } from './questionCache';
 import './questions.css';
 
@@ -100,12 +100,6 @@ export default function QuestionWorkspace({ notify }) {
     setData(current => ({ ...current, sources: [...current.sources, source] }));
     if (chapterId) await addChapterSourceRaw(chapterId, source);
   }, '来源已添加');
-  const deleteSource = id => run(async () => {
-    if (data.sources.some(s => s.parent_id === id)) throw new Error('请先删除子来源');
-    if (data.chapter_sources.some(s => s.source_id === id)) throw new Error('请先在章节概况移除该来源关联');
-    await checked(sb.from('sources').delete().eq('id', id));
-    setData(current => ({ ...current, sources: current.sources.filter(s => s.id !== id), questions: current.questions.map(q => q.source_id === id ? { ...q, source_id: null } : q), core_questions: current.core_questions.map(q => q.source_id === id ? { ...q, source_id: null } : q) }));
-  }, '来源已删除');
   function record(t, q, correct) {
     const field = correct ? 'correct_count' : 'wrong_count';
     const review_log = [...(q.review_log || []), { date: utcDate(), result: correct ? 'correct' : 'wrong' }];
@@ -261,7 +255,6 @@ export default function QuestionWorkspace({ notify }) {
               <div><p>错题集</p><h1>章节总览</h1><p>共 {chapters.length} 个章节 · {data.questions.length + data.core_questions.length} 题</p></div>
               <button className="add-btn" disabled={busy} onClick={() => directory('chapter')}>+ 添加章节</button>
             </header>
-            <SourceManager sources={data.sources} questions={[...data.questions, ...data.core_questions]} busy={busy || loading || offline} create={createSource} rename={(id, name) => patch('sources', id, { name }, '来源已更新')} remove={deleteSource} />
             <div className="chapter-grid">
               {chapters.map((ch, index) => {
                 const children = kps.filter(k => k.chapter_id === ch.id);

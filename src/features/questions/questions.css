@@ -1,12 +1,7 @@
 .question-workspace { display: flex; flex: 1; min-height: 0; flex-direction: column; }
-.source-manager { margin-bottom: 24px; }
-.source-manager h3 { margin-top: 0; }
 .question-workspace .source-form { display: flex; flex-wrap: wrap; gap: 8px; }
 .source-form input, .source-form select { min-width: 0; flex: 1 1 160px; max-width: 100%; padding: 8px; border: 1px solid #dfe6f1; border-radius: 6px; }
-.source-count-list { list-style: none; padding: 0; margin: 16px 0; }
-.source-count-list li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid #edf0f5; }
-.source-count-list li > span { flex: 1 1 140px; overflow-wrap: anywhere; color: #3556a8; }
-.source-count-list strong { white-space: nowrap; }
+.source-question-count { margin-left: auto; white-space: nowrap; color: #3556a8; font-size: 13px; }
 .question-source { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: #3556a8; font-size: 12px; }
 .question-source select { flex: 1; min-width: 0; max-width: 100%; background: #f0f5ff; border: 1px solid #d5e0fa; border-radius: 6px; padding: 7px; color: inherit; }
 .question-workspace > .body-row { flex: 1; min-height: 0; }

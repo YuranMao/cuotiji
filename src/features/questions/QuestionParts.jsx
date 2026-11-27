@@ -6,12 +6,6 @@ export function SourceSelect({ sources, value, onChange, disabled, label = '题�
   return <select aria-label={label} value={value || ''} disabled={disabled} onChange={e => onChange(e.target.value || null)}><option value="">未设置来源</option>{sourceRows(sources).filter(s => !exclude.includes(s.id)).map(s => <option key={s.id} value={s.id}>{s.path}</option>)}</select>;
 }
 
-export function SourceManager({ sources, questions, busy, create, rename, remove }) {
-  const [name, setName] = useState('');
-  const [parent, setParent] = useState('');
-  return <section className="analytics-panel source-manager"><h3>来源与错题总数</h3><p className="question-hint">普通错题与重要例题合计，父来源包含子来源。来源与章节概况共用。</p><form className="source-form" onSubmit={async e => { e.preventDefault(); if (name.trim() && await create(name.trim(), parent || null)) setName(''); }}><input aria-label="新来源名称" placeholder="来源名称，如模拟卷、李六" maxLength={160} value={name} onChange={e => setName(e.target.value)} disabled={busy} /><select aria-label="父来源" value={parent} onChange={e => setParent(e.target.value)} disabled={busy}><option value="">无父来源（顶级）</option>{sourceRows(sources).map(s => <option key={s.id} value={s.id}>{s.path}</option>)}</select><button disabled={busy || !name.trim()}>添加来源</button></form><ul className="source-count-list">{sourceRows(sources, questions).map(s => <li key={s.id}><span>{s.path}</span><strong>{s.count} 题</strong><button disabled={busy} onClick={() => { const value = window.prompt('来源名称', s.name); if (value?.trim() && value.trim() !== s.name) rename(s.id, value.trim()); }}>改名</button><button disabled={busy} onClick={async () => { if (window.confirm(`删除来源“${s.path}”？已有题目的来源将清空，请先删除其子来源。`) && await remove(s.id)) setParent(current => current === s.id ? '' : current); }}>删除</button></li>)}</ul>{!sources.length && <p className="question-hint">添加第一个来源，或选择父来源创建子来源。</p>}<p className="question-hint">未设置来源：{questions.filter(q => !q.source_id).length} 题</p></section>;
-}
-
 export function ReviewSummary({ questions }) {
   const s = aggregate(questions);
   return <><div className="question-summary">{[['错题总数', s.total, '当前范围收录题量'], ['已掌握', s.mastered, '连续答对至少 5 次'], ['待复习', s.pending, '复习中 + 未复习'], ['复习正确率', s.rate === null ? '—' : `${s.rate}%`, '答对次数 / 总复习次数'], ['累计复习次数', s.attempts, '每次答对或答错计 1 次']].map(([label, value, hint]) => <div key={label}><small>{label}</small><strong>{value}</strong><small>{hint}</small></div>)}</div><p className="question-hint">末尾连续答对至少 5 次即已掌握，答错后重新累计。正确率与累计次数按历史答对、答错次数统计。</p><div className="question-stats-bar" role="img" aria-label={`已掌握 ${s.mastered}，复习中 ${s.reviewing}，未复习 ${s.unreviewed}`}>{[[s.mastered, '#22c55e'], [s.reviewing, '#facc15'], [s.unreviewed, '#cbd5e1']].map(([count, color], i) => <span key={i} style={{ width: `${s.total ? count / s.total * 100 : 0}%`, background: color }} />)}</div><p className="question-hint">已掌握 {s.mastered} · 复习中 {s.reviewing} · 未复习 {s.unreviewed}{s.total ? ` · 掌握率 ${Math.round(s.mastered / s.total * 100)}%` : ' · 暂无错题'}</p></>;
@@ -34,7 +28,8 @@ export function ReviewProgress({ questions }) {
   </div>;
 }
 
-function ChapterSources({ sources, items, busy, add, toggle, remove, create }) {
+function ChapterSources({ sources, items, questions, busy, add, toggle, remove, create }) {
+  const counts = new Map(sourceRows(sources, questions).map(s => [s.id, s.count]));
   const [selected, setSelected] = useState('');
   const [name, setName] = useState('');
   const [parent, setParent] = useState('');
@@ -49,9 +44,9 @@ function ChapterSources({ sources, items, busy, add, toggle, remove, create }) {
       <select aria-label="新来源的父来源" value={parent} disabled={busy} onChange={e => setParent(e.target.value)}><option value="">顶级来源</option>{sourceRows(sources).map(s => <option key={s.id} value={s.id}>{s.path}</option>)}</select>
       <button disabled={busy || !name.trim()}>新建并关联</button>
     </form>
-    <ul className="source-list">{items.map(item => <li key={item.id} className={item.done ? 'is-done' : ''}><label><input type="checkbox" checked={item.done} disabled={busy} onChange={() => toggle(item)} /><span>{sourcePath(sources, item.source_id) || item.name}</span></label><button type="button" disabled={busy} aria-label={`移除章节来源：${item.name}`} onClick={() => remove(item)}>×</button></li>)}</ul>
+    <ul className="source-list">{items.map(item => <li key={item.id} className={item.done ? 'is-done' : ''}><label><input type="checkbox" checked={item.done} disabled={busy} onChange={() => toggle(item)} /><span>{sourcePath(sources, item.source_id) || item.name}</span></label><strong className="source-question-count">{counts.get(item.source_id) || 0} 题</strong><button type="button" disabled={busy} aria-label={`移除章节来源：${item.name}`} onClick={() => remove(item)}>×</button></li>)}</ul>
     {!items.length && <p className="question-hint">选择共用来源，记录本章节的整理进度。</p>}
-    <div className="sources-storage">来源全局共用 · 整理进度按章节保存</div>
+    <div className="sources-storage">本章节题数，含重要例题 · 父来源包含子来源</div>
   </aside>;
 }
 
@@ -110,7 +105,7 @@ export function ChapterOverview({ chapter, kps, questions, cores, sourceProps })
           </> : <div className="pie-empty"><div className="question-pie" /><p className="analytics-empty">暂无错题</p></div>}
         </section>
       </div>
-      <ChapterSources key={chapter.id} {...sourceProps} />
+      <ChapterSources key={chapter.id} {...sourceProps} questions={all} />
     </div>
   </section>;
 }
