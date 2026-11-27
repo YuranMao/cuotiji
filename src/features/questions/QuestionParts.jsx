@@ -30,6 +30,9 @@ export function ReviewProgress({ questions }) {
 
 function ChapterSources({ sources, items, questions, busy, add, toggle, remove, create }) {
   const counts = new Map(sourceRows(sources, questions).map(s => [s.id, s.count]));
+  const parentIds = new Set(sources.map(source => source.parent_id).filter(Boolean));
+  const progressItems = items.filter(item => !parentIds.has(item.source_id));
+  const availableSources = sources.filter(source => !items.some(item => item.source_id === source.id));
   const included = new Set();
   for (const item of items) {
     let id = item.source_id;
@@ -42,18 +45,18 @@ function ChapterSources({ sources, items, questions, busy, add, toggle, remove, 
     return sources.filter(s => included.has(s.id) && (s.parent_id || null) === parentId).sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')).map(source => {
       const item = items.find(row => row.source_id === source.id);
       const children = renderSources(source.id);
-      return <li key={source.id} className={item?.done ? 'is-done' : ''}><div className="source-tree-row">{item ? <label><input type="checkbox" checked={item.done} disabled={busy} onChange={() => toggle(item)} /><span>{source.name}</span></label> : <span className="source-tree-parent">{source.name}</span>}<strong className="source-question-count">{counts.get(source.id) || 0} 题</strong>{item && <button type="button" disabled={busy} aria-label={`移除章节来源：${source.name}`} onClick={() => remove(item)}>×</button>}</div>{children.length > 0 && <ul>{children}</ul>}</li>;
+      return <li key={source.id} className={item?.done && !parentIds.has(source.id) ? 'is-done' : ''}><div className="source-tree-row">{item && !parentIds.has(source.id) ? <label><input type="checkbox" checked={item.done} disabled={busy} onChange={() => toggle(item)} /><span>{source.name}</span></label> : <span className="source-tree-parent">{source.name}</span>}<strong className="source-question-count">{counts.get(source.id) || 0} 题</strong>{item && <button type="button" disabled={busy} aria-label={`移除章节来源：${source.name}`} onClick={() => remove(item)}>×</button>}</div>{children.length > 0 && <ul>{children}</ul>}</li>;
     });
   }
   const [selected, setSelected] = useState('');
   const [name, setName] = useState('');
   const [parent, setParent] = useState('');
   return <aside className="analytics-panel chapter-sources">
-    <div className="sources-heading"><h3>来源记录</h3><span>{items.filter(item => item.done).length} / {items.length} 已整理</span></div>
-    <form className="source-form" onSubmit={async e => { e.preventDefault(); if (selected && await add(selected)) setSelected(''); }}>
+    <div className="sources-heading"><h3>来源记录</h3><span>{progressItems.filter(item => item.done).length} / {progressItems.length} 已整理</span></div>
+    {availableSources.length > 0 && <form className="source-form" onSubmit={async e => { e.preventDefault(); if (selected && await add(selected)) setSelected(''); }}>
       <SourceSelect sources={sources} exclude={items.map(item => item.source_id)} value={selected} onChange={setSelected} disabled={busy} label="章节来源" />
       <button disabled={busy || !selected}>关联来源</button>
-    </form>
+    </form>}
     <form className="source-form" onSubmit={async e => { e.preventDefault(); if (name.trim() && await create(name.trim(), parent || null)) setName(''); }}>
       <input aria-label="来源名称" placeholder="新来源名称" maxLength={160} value={name} onChange={e => setName(e.target.value)} disabled={busy} />
       <select aria-label="新来源的父来源" value={parent} disabled={busy} onChange={e => setParent(e.target.value)}><option value="">顶级来源</option>{sourceRows(sources).map(s => <option key={s.id} value={s.id}>{s.path}</option>)}</select>
