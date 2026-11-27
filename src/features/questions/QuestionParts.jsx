@@ -26,7 +26,6 @@ export function ReviewProgress({ questions }) {
 }
 
 function ChapterSources({ chapterId }) {
-  const storageKey = `cuoti:chapter-sources:${chapterId}`;
   const [items, setItems] = useState([]);
   const [name, setName] = useState('');
   const [error, setError] = useState('');
@@ -52,17 +51,6 @@ function ChapterSources({ chapterId }) {
     try { await action(); return true; }
     catch (err) { setError(`来源保存失败：${err.message}`); return false; }
     finally { lock.current = false; setBusy(false); }
-  }
-  async function importLocal() {
-    await change(async () => {
-      const local = JSON.parse(localStorage.getItem(storageKey) || '[]');
-      if (!Array.isArray(local) || local.some(item => !item || typeof item.id !== 'string' || typeof item.name !== 'string' || typeof item.done !== 'boolean')) throw new Error('旧来源记录格式无效');
-      if (!local.length) throw new Error('当前浏览器没有待导入的来源');
-      const { error: failure } = await sb.from('chapter_sources').upsert(local.map(item => ({ id: item.id, chapter_id: chapterId, name: item.name, done: item.done })), { onConflict: 'id', ignoreDuplicates: true });
-      if (failure) throw failure;
-      localStorage.removeItem(storageKey);
-      await loadSources();
-    });
   }
   return <aside className="analytics-panel chapter-sources">
     <div className="sources-heading"><h3>来源记录</h3><span>{items.filter(item => item.done).length} / {items.length} 已整理</span></div>
@@ -95,7 +83,7 @@ function ChapterSources({ chapterId }) {
       })}>×</button>
     </li>)}</ul>
     {!items.length && !error && !loading && <div className="sources-empty"><strong>从第一本书开始</strong><p>添加错题来源，记录你的整理进度。</p></div>}
-    <div className="sources-storage">按章节保存至 Supabase <button type="button" disabled={busy || loading} onClick={importLocal}>导入此浏览器旧来源</button></div>
+    <div className="sources-storage">按章节保存至 Supabase</div>
   </aside>;
 }
 
@@ -113,7 +101,7 @@ export function ChapterOverview({ chapter, kps, questions, cores }) {
   const ranked = [...groups].sort((a, b) => {
     if (!a.stats.attempts) return b.stats.attempts ? 1 : 0;
     if (!b.stats.attempts) return -1;
-    return b.stats.correct / b.stats.attempts - a.stats.correct / a.stats.attempts || b.stats.attempts - a.stats.attempts;
+    return b.stats.wrong / b.stats.attempts - a.stats.wrong / a.stats.attempts || b.stats.attempts - a.stats.attempts;
   });
   let offset = 0;
   const slices = distribution.map((g, index) => {
@@ -129,21 +117,21 @@ export function ChapterOverview({ chapter, kps, questions, cores }) {
       </section>
       <div className="chapter-charts">
         <section className="analytics-panel accuracy-panel">
-          <h3>知识点正确率</h3>
-          <p className="question-hint">随复习记录更新，按正确率从高到低排列</p>
+          <h3>知识点错误率</h3>
+          <p className="question-hint">随复习记录更新，按错误率从高到低排列</p>
           {ranked.length ? <div className="accuracy-chart">
             <div className="accuracy-axis" aria-hidden="true">{[100, 75, 50, 25, 0].map(value => <span key={value}>{value}%</span>)}</div>
             <div className="accuracy-scroll"><div className="accuracy-columns" style={{ minWidth: `${ranked.length * 66}px` }}>
               {ranked.map(g => {
-                const rate = g.stats.attempts ? g.stats.correct / g.stats.attempts * 100 : null;
-                return <div className="accuracy-column" key={g.id} title={`${g.name}：${rate === null ? '暂无复习记录' : `正确率 ${rate.toFixed(1)}%，答对 ${g.stats.correct} / 复习 ${g.stats.attempts} 次`}`}>
+                const rate = g.stats.attempts ? g.stats.wrong / g.stats.attempts * 100 : null;
+                return <div className="accuracy-column" key={g.id} title={`${g.name}：${rate === null ? '暂无复习记录' : `错误率 ${rate.toFixed(1)}%，答错 ${g.stats.wrong} / 复习 ${g.stats.attempts} 次`}`}>
                   <div className="accuracy-bar-area"><div className={`accuracy-bar ${rate === null ? 'no-record' : ''}`} style={{ height: `${rate || 0}%` }}><span>{rate === null ? '—' : `${Math.round(rate)}%`}</span></div></div>
                   <span className="accuracy-label">{g.name}</span>
                 </div>;
               })}
             </div></div>
-          </div> : <p className="analytics-empty">添加知识点后显示正确率图表。</p>}
-          <p className="chart-footnote">正确率 = 答对次数 / 复习次数；— 表示暂无记录</p>
+          </div> : <p className="analytics-empty">添加知识点后显示错误率图表。</p>}
+          <p className="chart-footnote">错误率 = 答错次数 / 复习次数；— 表示暂无记录</p>
         </section>
         <section className="analytics-panel distribution-panel">
           <h3>错题数量分布</h3>
