@@ -25,7 +25,12 @@
 .question-chart-track { height: 9px; border-radius: 4px; overflow: hidden; background: #e5e7eb; margin-top: 6px; }
 .question-chart-track > span { display: block; height: 100%; }
 .question-note { margin: 10px 0; padding: 10px; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 6px; }
-.question-note > div { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; font-size: 12px; font-weight: 600; color: #475569; }
+.question-note > div:first-child { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; font-size: 12px; font-weight: 600; color: #475569; }
+.math-note-view { cursor: text; border-radius: 4px; }
+.math-note-view:focus-visible { outline: 2px solid #4a90d9; outline-offset: 2px; }
+.math-note-placeholder { color: #94a3b8; }
+.question-note-content { min-height: 22px; color: #334155; font-size: 13px; line-height: 1.7; font-weight: 400; }
+.question-workspace .img-preview-answer .math-note-placeholder { color: #8e9db5; }
 .question-workspace .review-date-tag { display: inline-flex; align-items: center; gap: 4px; }
 .question-workspace .review-date-tag button { border: 0; background: transparent; color: inherit; padding: 0 1px; cursor: pointer; font-size: 12px; }
 .question-core-tag { padding: 6px 10px; background: #fef3e2; color: #b45309; border: 1px solid #f0c78e; border-radius: 4px; }
