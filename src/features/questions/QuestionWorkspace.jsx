@@ -34,6 +34,26 @@ export default function QuestionWorkspace({ notify }) {
   const [modal, setModal] = useState(null);
   const closeModal = useCallback(() => { if (!lock.current) setModal(null); }, []);
   const [preview, setPreview] = useState(null);
+  const [sorting, setSorting] = useState(null);
+  const sortDrag = useRef(null);
+  function openSorting(t, items) { setSorting({ table: t, items: [...items] }); }
+  function moveSortItem(id, position) {
+    setSorting(current => {
+      const items = [...current.items];
+      const from = items.findIndex(item => item.id === id);
+      const [item] = items.splice(from, 1);
+      items.splice(Math.max(0, Math.min(items.length, position)), 0, item);
+      return { ...current, items };
+    });
+  }
+  async function saveSorting() {
+    const ok = await run(async () => {
+      try {
+        await Promise.all(sorting.items.map((item, index) => checked(sb.from(sorting.table).update({ sort_order: index + 1 }).eq('id', item.id))));
+      } finally { await reload(); }
+    }, '目录顺序已保存');
+    if (ok) setSorting(null);
+  }
   const drag = useRef(null);
   const contentRef = useRef(null);
   useEffect(() => { contentRef.current?.scrollTo({ top: 0 }); }, [selection.chapter, selection.kp, selection.core]);
@@ -216,7 +236,8 @@ export default function QuestionWorkspace({ notify }) {
         const list = ordered(data[t].filter(q => t === 'chapters' || (t === 'knowledge_points' || t === 'core_questions' ? q.chapter_id === parent : q.knowledge_point_id === parent)));
         const a = list.findIndex(q => q.id === source.id), b = list.findIndex(q => q.id === item.id);
         if (a < 0 || b < 0) return;
-        [list[a], list[b]] = [list[b], list[a]];
+        const [moved] = list.splice(a, 1);
+        list.splice(b, 0, moved);
         try { const results = await Promise.all(list.map((q, i) => sb.from(t).update({ sort_order: i + 1 }).eq('id', q.id))); const fail = results.find(r => r.error); if (fail) throw fail.error; }
         finally { await reload(); }
       });
@@ -236,6 +257,7 @@ export default function QuestionWorkspace({ notify }) {
         <div className="sidebar-actions">
           <h2>目录</h2>
           <button disabled={busy} onClick={() => directory('kp')}>+ 添加知识点</button>
+          <button disabled={busy || chapterKps.length < 2} onClick={() => openSorting('knowledge_points', chapterKps)}>调整顺序</button>
           <button title="返回所有章节" onClick={() => choose({ chapter: null, kp: null, core: false })}>返回</button>
         </div>
         <div className="sidebar-tree">
@@ -270,7 +292,7 @@ export default function QuestionWorkspace({ notify }) {
           {!chapter ? <section className="chapter-home">
             <header className="home-heading">
               <div><p>错题集</p><h1>章节总览</h1><p>共 {chapters.length} 个章节 · {data.questions.length + data.core_questions.length} 题</p></div>
-              <button className="add-btn" disabled={busy} onClick={() => directory('chapter')}>+ 添加章节</button>
+              <div className="question-header-tools"><button disabled={busy || chapters.length < 2} onClick={() => openSorting('chapters', chapters)}>调整顺序</button><button className="add-btn" disabled={busy} onClick={() => directory('chapter')}>+ 添加章节</button></div>
             </header>
             <div className="chapter-grid">
               {chapters.map((ch, index) => {
@@ -300,6 +322,18 @@ export default function QuestionWorkspace({ notify }) {
       </main>
     </div>
     {modal && <Modal title={modal.kind === 'chapter' ? `${modal.id ? '编辑' : '添加'}章节` : modal.kind === 'kp' ? `${modal.id ? '编辑' : '添加'}知识点` : modal.kind === 'question' ? modal.id ? '编辑题目答案' : modal.table === 'core_questions' ? '添加重要例题' : '添加错题' : modal.kind === 'tag' ? '修改题型标签' : modal.kind === 'convert' ? modal.core ? '转为重要例题' : '转为知识点错题' : modal.kind === 'kpMove' ? '转移知识点及其中错题' : '转移题目'} onClose={closeModal}><form onSubmit={saveModal}><fieldset disabled={busy} className="question-form-fields">{['chapter', 'kp', 'tag'].includes(modal.kind) && <Field label={modal.kind === 'tag' ? '题型标签' : '名称'}><input autoFocus required={modal.kind !== 'tag'} value={modal.name} onChange={e => modalUpdate({ name: e.target.value })} /></Field>}{modal.kind === 'kp' && <><Field label="所属章节"><select value={modal.chapter} onChange={e => modalUpdate({ chapter: Number(e.target.value) })}>{chapters.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}</select></Field><Field label="目录颜色"><select value={modal.color} onChange={e => modalUpdate({ color: e.target.value })}><option value="">默认</option>{colors.map(color => <option key={color} value={color}>{color}</option>)}</select></Field><Field label="笔记"><NoteInput aria-label="知识点笔记" value={modal.note} onChange={e => modalUpdate({ note: e.target.value })} /></Field></>}{modal.kind === 'question' && <>{!modal.id && <>{modal.table === 'core_questions' ? <><Field label="所属章节"><select value={modal.chapter} onChange={e => modalUpdate({ chapter: Number(e.target.value) })}>{chapters.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}</select></Field><Field label="题型标签"><input value={modal.tag} onChange={e => modalUpdate({ tag: e.target.value })} /></Field></> : <Field label="所属知识点"><select required value={modal.kp} onChange={e => modalUpdate({ kp: Number(e.target.value) })}>{chapters.map(ch => <optgroup key={ch.id} label={ch.name}>{kps.filter(k => k.chapter_id === ch.id).map(k => <option key={k.id} value={k.id}>{ch.name} &gt; {k.name}</option>)}</optgroup>)}</select></Field>}<ImageInput label="上传题目图片" value={modal.image} onChange={image => modalUpdate({ image })} /></>}<Field label="来源"><SourceSelect sources={data.sources} value={modal.source_id} onChange={source_id => modalUpdate({ source_id })} /></Field><Field label="答案"><NoteInput aria-label="文字答案" value={modal.answer} onChange={e => modalUpdate({ answer: e.target.value })} /></Field><ImageInput label="上传答案图片" value={modal.answerImage} onChange={answerImage => modalUpdate({ answerImage })} /></>}{transferModal && <><Field label="目标章节"><select value={modal.chapter} onChange={e => { const ch = Number(e.target.value); const target = kps.find(k => k.chapter_id === ch && !(modal.kind === 'move' && !modal.core && k.id === modal.item.knowledge_point_id)); modalUpdate({ chapter: ch, kp: target?.id || '' }); }}>{modal.allowedChapters.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}</select></Field>{!modal.chapterOnly && <Field label="目标知识点"><select required value={modal.kp} disabled={!modalKps.length} onChange={e => modalUpdate({ kp: Number(e.target.value) })}>{!modalKps.length && <option value="">该章节无可用知识点</option>}{modalKps.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}</select></Field>}</>}<div className="modal-btns"><button type="button" className="btn-cancel" onClick={() => setModal(null)}>取消</button><button type="submit" className="btn-confirm">{busy ? '保存中…' : '保存'}</button></div></fieldset></form></Modal>}
+    {sorting && <Modal title={sorting.table === 'chapters' ? '调整章节顺序' : '调整知识点顺序'} onClose={() => { if (!busy) setSorting(null); }}>
+      <p className="question-hint">拖动条目到目标位置，也可上移、下移或选择序号。完成后统一保存。</p>
+      <ol className="directory-sort-list">
+        {sorting.items.map((item, index) => <li key={item.id} draggable={!busy} onDragStart={e => { if (e.target.closest('button,select')) { e.preventDefault(); return; } sortDrag.current = item.id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(item.id)); }} onDragEnd={() => { sortDrag.current = null; }} onDragOver={e => { if (sortDrag.current !== null) e.preventDefault(); }} onDrop={e => { e.preventDefault(); if (sortDrag.current !== null) moveSortItem(sortDrag.current, index); sortDrag.current = null; }}>
+          <span className="directory-sort-handle" aria-hidden="true">↕</span><span className="directory-sort-name">{item.name}</span>
+          <select aria-label={`${item.name}的位置`} disabled={busy} value={index} onChange={e => moveSortItem(item.id, Number(e.target.value))}>{sorting.items.map((_, position) => <option key={position} value={position}>第 {position + 1} 位</option>)}</select>
+          <button type="button" aria-label={`上移${item.name}`} disabled={busy || index === 0} onClick={() => moveSortItem(item.id, index - 1)}>↑</button>
+          <button type="button" aria-label={`下移${item.name}`} disabled={busy || index === sorting.items.length - 1} onClick={() => moveSortItem(item.id, index + 1)}>↓</button>
+        </li>)}
+      </ol>
+      <div className="modal-btns"><button className="btn-cancel" disabled={busy} onClick={() => setSorting(null)}>取消</button><button className="btn-confirm" disabled={busy} onClick={saveSorting}>{busy ? '保存中…' : '保存顺序'}</button></div>
+    </Modal>}
     {preview && <ImagePreview state={preview} questions={preview.sourceId ? sourceQuestions : data[preview.core ? 'core_questions' : 'questions']} busy={busy} onClose={() => setPreview(null)} record={(q, correct) => record(q._table || (preview.core ? 'core_questions' : 'questions'), q, correct)} update={(q, payload) => patch(q._table || (preview.core ? 'core_questions' : 'questions'), q.id, payload, '答案已保存')} />}
   </div>;
 }

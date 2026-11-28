@@ -144,9 +144,67 @@ export function QuestionCard({ question: q, core, busy, update, record, removeLo
   return <article className="question-card" data-id={q.id} style={core ? { borderLeft: '3px solid #e67e22' } : undefined} {...dragProps}><div className="card-img-wrap" role="button" tabIndex={0} onClick={preview} onKeyDown={e => { if (e.key === 'Enter') preview(); }}><img src={q.image_data} alt={core ? '重要例题' : '错题'} loading="lazy" draggable={false} /><span className="drag-handle question-card-handle">⠿</span></div><div className="card-info"><div className="question-source"><span>来源</span><SourceSelect sources={sources} value={q.source_id} disabled={busy} onChange={source_id => update({ source_id })} /></div>{!core && <><div className="card-date">首次上传：{q.first_upload_date}</div>{q.file_name && <div className="card-date">{q.file_name}</div>}</>}<div className={`answer-section ${revealed ? 'revealed' : ''}`} onClick={() => setRevealed(true)}><div className="answer-title">答案 <button className="answer-edit-btn" onClick={e => { e.stopPropagation(); editAnswer(); }}>编辑</button></div><NoteInput aria-label="文字答案" placeholder="填写文字答案…" value={q.answer} disabled={busy} onSave={answer => update({ answer })} />{q.answer_image && <img className="answer-image" src={q.answer_image} alt="答案图片" onClick={e => { e.stopPropagation(); if (revealed) previewImage(q.answer_image); else setRevealed(true); }} />}{!revealed && <button className="answer-mask" onClick={() => setRevealed(true)}>点击显示答案</button>}</div><CardNote question={q} busy={busy} save={note => update({ note })} />{core && <div className="question-core-tag">{q.tag || '未分类'} <button onClick={editTag} title="修改题型标签">编辑</button></div>}<div className="progress-section">{m.mastered && <span className="card-badge">✓ 已掌握</span>}<div className="progress-header"><span className="review-label">连续答对 {m.streak} / 5（共答 {m.correct + m.wrong} 次）</span></div><div className="progress-bar-wrap"><div className={`progress-bar-fill ${m.mastered ? 'full' : ''}`} style={{ width: `${Math.min(m.streak / 5 * 100, 100)}%` }} /></div><div className="review-dates">{log.slice(-8).reverse().map((entry, index) => <span key={log.length - 1 - index} className={`review-date-tag ${entry.result === 'correct' ? 'tag-correct' : 'tag-wrong'}`}>{entry.date} {entry.result === 'correct' ? '✓' : '✗'}<button disabled={busy} title="删除这条记录" onClick={() => removeLog(log.length - 1 - index)}>×</button></span>)}</div></div><div className="card-actions"><button className="btn-correct" disabled={busy} onClick={() => record(true)}>答对了</button><button className="btn-wrong" disabled={busy} onClick={() => record(false)}>还不会</button><button className="btn-delete" disabled={busy} onClick={remove}>删除</button><button className="btn-delete" disabled={busy} title="转移题目" onClick={move}>↗</button><button className="btn-delete" disabled={busy} onClick={convert}>{core ? '转为普通题' : '转为例题'}</button></div></div></article>;
 }
 
+function FullscreenImage({ image, onClose }) {
+  const dialog = useRef(null);
+  const viewport = useRef(null);
+  const picture = useRef(null);
+  const [fitWidth, setFitWidth] = useState(0);
+  const [zoom, setZoom] = useState(1);
+
+  useEffect(() => {
+    const previous = document.activeElement;
+    const modal = dialog.current;
+    modal.showModal();
+    const resize = () => {
+      const img = picture.current;
+      if (img?.naturalWidth) {
+        setFitWidth(Math.min(img.naturalWidth, viewport.current.clientWidth - 32, (viewport.current.clientHeight - 32) * img.naturalWidth / img.naturalHeight));
+      }
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(viewport.current);
+    resize();
+    picture.current.addEventListener('load', resize);
+    const img = picture.current;
+    return () => {
+      observer.disconnect();
+      img.removeEventListener('load', resize);
+      modal.close();
+      if (previous?.isConnected) previous.focus();
+    };
+  }, []);
+
+  return <dialog ref={dialog} className="preview-fullscreen-image" aria-label={`${image.label}放大查看`} onCancel={e => { e.preventDefault(); onClose(); }} onClick={e => e.stopPropagation()} onKeyDown={e => {
+    e.stopPropagation();
+    if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+  }}>
+    <div className="preview-fullscreen-toolbar">
+      <strong>{image.label}</strong>
+      <div className="preview-fullscreen-tools">
+        <button type="button" disabled={zoom <= 0.5} onClick={() => setZoom(value => Math.max(0.5, value - 0.25))} aria-label="缩小图片">− 缩小</button>
+        <span aria-live="polite">{Math.round(zoom * 100)}%</span>
+        <button type="button" disabled={zoom >= 5} onClick={() => setZoom(value => Math.min(5, value + 0.25))} aria-label="放大图片">＋ 放大</button>
+        <button type="button" onClick={() => { setZoom(1); viewport.current.scrollTo(0, 0); }}>适应屏幕</button>
+        <button type="button" autoFocus onClick={onClose} aria-label="关闭图片放大">关闭 ×</button>
+      </div>
+    </div>
+    <div ref={viewport} className="preview-fullscreen-viewport" tabIndex={0} aria-label="图片查看区域，可滚动查看放大图片">
+      <div className="preview-fullscreen-canvas">
+        <img ref={picture} src={image.src} alt={image.label} draggable={false} style={fitWidth ? { width: `${fitWidth * zoom}px` } : undefined} />
+      </div>
+    </div>
+  </dialog>;
+}
+
 export function ImagePreview({ state, questions, busy, onClose, record, update }) {
   const [index, setIndex] = useState(state.index || 0);
   const [answerVisible, setAnswerVisible] = useState(false);
+  const [fullscreenImage, setFullscreenImage] = useState(null);
+
+  function openImage(event, src, label) {
+    event.currentTarget.focus();
+    setFullscreenImage({ src, label });
+  }
 
   const touch = useRef(null);
   const closeButton = useRef(null);
@@ -154,7 +212,7 @@ export function ImagePreview({ state, questions, busy, onClose, record, update }
   const m = q ? mastery(q) : null;
   const addedAt = q?.first_upload_date || q?.created_at;
   function navigate(direction) {
-    if (busy || !state.ids) return;
+    if (busy || fullscreenImage || !state.ids) return;
     setIndex(i => Math.max(0, Math.min(state.ids.length - 1, i + direction)));
     setAnswerVisible(false);
   }
@@ -167,18 +225,19 @@ export function ImagePreview({ state, questions, busy, onClose, record, update }
   }, []);
   useEffect(() => {
     const handler = e => {
-      if (e.isComposing || e.target.matches('input,textarea,[contenteditable="true"]')) return;
-      if (e.key === 'Escape') { if (!busy) onClose(); }
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); navigate(e.key === 'ArrowLeft' ? -1 : 1); }
+      if (fullscreenImage) return;
       if (e.key === 'Tab') {
-        const focusable = [...closeButton.current.closest('[role="dialog"]').querySelectorAll('button:not(:disabled),textarea:not(:disabled)')].filter(el => !el.closest('[hidden]'));
+        const focusable = [...closeButton.current.closest('[role="dialog"]').querySelectorAll('button:not(:disabled),textarea:not(:disabled),[tabindex="0"]')].filter(el => !el.closest('[hidden]'));
         const first = focusable[0], last = focusable[focusable.length - 1];
         if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
         else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
       }
+      if (e.isComposing || e.target.matches('input,textarea,[contenteditable="true"]')) return;
+      if (e.key === 'Escape') { if (!busy) onClose(); }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); navigate(e.key === 'ArrowLeft' ? -1 : 1); }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   });
-  return <div className="img-preview-overlay show" role="dialog" aria-modal="true" aria-label="图片预览" onClick={e => { if (e.target === e.currentTarget && !busy) onClose(); }}><div className="img-preview-header"><div className="preview-heading"><span className="preview-mode">{state.ids ? '专注复习' : '图片预览'}</span><strong>{state.ids ? `${state.title || (state.core ? '重要例题' : '错题')} · ${index + 1} / ${state.ids.length}` : '查看图片'}</strong></div><div className="preview-header-end"><span className="preview-keyboard-hint">← → 切题 · Esc 退出</span><button ref={closeButton} disabled={busy} onClick={onClose} aria-label="关闭图片预览">关闭 ×</button></div></div><div className={`preview-body ${q ? '' : 'preview-image-only'}`}><div className="preview-canvas"><div className="img-preview-stage" onClick={e => { if (e.target === e.currentTarget && !busy) onClose(); }} onTouchStart={e => { touch.current = e.touches.length === 1 && (!window.visualViewport || window.visualViewport.scale <= 1) ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null; }} onTouchMove={e => { if (touch.current && (e.touches.length !== 1 || Math.abs(e.touches[0].clientY - touch.current.y) > 24)) touch.current = null; }} onTouchCancel={() => { touch.current = null; }} onTouchEnd={e => { const start = touch.current; touch.current = null; if (!start || e.touches.length || e.changedTouches.length !== 1) return; const dx = e.changedTouches[0].clientX - start.x, dy = e.changedTouches[0].clientY - start.y; if (Math.abs(dx) >= 50 && Math.abs(dx) > Math.abs(dy) * 1.5) navigate(dx < 0 ? 1 : -1); }}><img src={q?.image_data || state.src} alt="图片预览" draggable={false} /></div>{q && <div className="preview-navigation"><button disabled={busy || index === 0} onClick={() => navigate(-1)}>← 上一题</button><span>{index + 1} <span>/ {state.ids.length}</span></span><button disabled={busy || index === state.ids.length - 1} onClick={() => navigate(1)}>下一题 →</button></div>}</div>{q && <aside className="preview-sidebar"><p className="preview-eyebrow">添加时间：{addedAt ? <time dateTime={addedAt}>{q.first_upload_date || new Date(addedAt).toLocaleString('zh-CN', { hour12: false })}</time> : '未记录'}</p><div className="preview-answer-heading"><div><span className="preview-eyebrow">先思考，再核对</span><h2>答案与解析</h2></div><button disabled={busy} aria-expanded={answerVisible} aria-controls="preview-answer" onClick={() => setAnswerVisible(!answerVisible)}>{answerVisible ? '收起答案' : '查看答案'}</button></div>{!answerVisible && <div className="preview-answer-empty"><span aria-hidden="true">?</span><strong>给自己一点思考空间</strong><p>完成作答后，点击「查看答案」核对思路。</p></div>}<section id="preview-answer" className="img-preview-answer" hidden={!answerVisible} aria-label="题目答案"><NoteInput key={q._previewKey || q.id} aria-label="文字答案" placeholder="填写文字答案…" value={q.answer} disabled={busy} onSave={answer => update(q, { answer })} />{q.answer_image && <img src={q.answer_image} alt="答案图片" />}</section><div className="img-preview-controls"><div className="preview-progress-heading"><strong>掌握进度</strong><span className={m.mastered ? 'is-mastered' : ''}>{m.mastered ? '已掌握' : `连续答对 ${m.streak} / 5`}</span></div><progress max={5} value={Math.min(m.streak, 5)} aria-label="连续答对进度" /><div className="preview-review-status" aria-live="polite">答对 {m.correct} 次 · 答错 {m.wrong} 次{busy ? ' · 保存中…' : ''}</div><div className="img-preview-actions"><button className="preview-wrong" disabled={busy} onClick={() => record(q, false)}>× 还不会</button><button className="preview-correct" disabled={busy} onClick={() => record(q, true)}>✓ 答对了</button></div><p className="preview-review-hint">连续答对 5 次，标记为已掌握</p></div></aside>}</div></div>;
+  return <div className="img-preview-overlay show" role="dialog" aria-modal="true" aria-label="图片预览" onClick={e => { if (e.target === e.currentTarget && !busy) onClose(); }}><div className="img-preview-header"><div className="preview-heading"><span className="preview-mode">{state.ids ? '专注复习' : '图片预览'}</span><strong>{state.ids ? `${state.title || (state.core ? '重要例题' : '错题')} · ${index + 1} / ${state.ids.length}` : '查看图片'}</strong></div><div className="preview-header-end"><span className="preview-keyboard-hint">← → 切题 · Esc 退出</span><button ref={closeButton} disabled={busy} onClick={onClose} aria-label="关闭图片预览">关闭 ×</button></div></div><div className={`preview-body ${q ? '' : 'preview-image-only'}`}><div className="preview-canvas"><div className="img-preview-stage" onClick={e => { if (e.target === e.currentTarget && !busy) onClose(); }} onTouchStart={e => { touch.current = e.touches.length === 1 && (!window.visualViewport || window.visualViewport.scale <= 1) ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null; }} onTouchMove={e => { if (touch.current && (e.touches.length !== 1 || Math.abs(e.touches[0].clientY - touch.current.y) > 24)) touch.current = null; }} onTouchCancel={() => { touch.current = null; }} onTouchEnd={e => { const start = touch.current; touch.current = null; if (!start || e.touches.length || e.changedTouches.length !== 1) return; const dx = e.changedTouches[0].clientX - start.x, dy = e.changedTouches[0].clientY - start.y; if (Math.abs(dx) >= 50 && Math.abs(dx) > Math.abs(dy) * 1.5) navigate(dx < 0 ? 1 : -1); }}><img src={q?.image_data || state.src} alt="图片预览，点击放大" draggable={false} role="button" tabIndex={0} className="preview-zoom-trigger" onClick={e => openImage(e, q?.image_data || state.src, '题目图片')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openImage(e, q?.image_data || state.src, '题目图片'); } }} /></div>{q && <div className="preview-navigation"><button disabled={busy || index === 0} onClick={() => navigate(-1)}>← 上一题</button><span>{index + 1} <span>/ {state.ids.length}</span></span><button disabled={busy || index === state.ids.length - 1} onClick={() => navigate(1)}>下一题 →</button></div>}</div>{q && <aside className="preview-sidebar"><p className="preview-eyebrow">添加时间：{addedAt ? <time dateTime={addedAt}>{q.first_upload_date || new Date(addedAt).toLocaleString('zh-CN', { hour12: false })}</time> : '未记录'}</p><div className="preview-answer-heading"><div><span className="preview-eyebrow">先思考，再核对</span><h2>答案与解析</h2></div><button disabled={busy} aria-expanded={answerVisible} aria-controls="preview-answer" onClick={() => setAnswerVisible(!answerVisible)}>{answerVisible ? '收起答案' : '查看答案'}</button></div>{!answerVisible && <div className="preview-answer-empty"><span aria-hidden="true">?</span><strong>给自己一点思考空间</strong><p>完成作答后，点击「查看答案」核对思路。</p></div>}<section id="preview-answer" className="img-preview-answer" hidden={!answerVisible} aria-label="题目答案"><NoteInput key={q._previewKey || q.id} aria-label="文字答案" placeholder="填写文字答案…" value={q.answer} disabled={busy} onSave={answer => update(q, { answer })} />{q.answer_image && <img src={q.answer_image} alt="答案图片，点击放大" role="button" tabIndex={0} className="preview-zoom-trigger" onClick={e => openImage(e, q.answer_image, '答案图片')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openImage(e, q.answer_image, '答案图片'); } }} />}</section><div className="img-preview-controls"><div className="preview-progress-heading"><strong>掌握进度</strong><span className={m.mastered ? 'is-mastered' : ''}>{m.mastered ? '已掌握' : `连续答对 ${m.streak} / 5`}</span></div><progress max={5} value={Math.min(m.streak, 5)} aria-label="连续答对进度" /><div className="preview-review-status" aria-live="polite">答对 {m.correct} 次 · 答错 {m.wrong} 次{busy ? ' · 保存中…' : ''}</div><div className="img-preview-actions"><button className="preview-wrong" disabled={busy} onClick={() => record(q, false)}>× 还不会</button><button className="preview-correct" disabled={busy} onClick={() => record(q, true)}>✓ 答对了</button></div><p className="preview-review-hint">连续答对 5 次，标记为已掌握</p></div></aside>}</div>{fullscreenImage && <FullscreenImage image={fullscreenImage} onClose={() => setFullscreenImage(null)} />}</div>;
 }

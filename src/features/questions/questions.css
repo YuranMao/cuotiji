@@ -239,3 +239,24 @@
   .question-summary > div { padding: 14px 12px; }
   .analytics-panel { padding: 20px; }
 }
+
+.directory-sort-list { list-style: none; padding: 0; margin: 16px 0; max-height: 55dvh; overflow-y: auto; }
+.directory-sort-list li { display: flex; align-items: center; gap: 8px; padding: 10px 6px; border-bottom: 1px solid #e6eaf2; background: white; }
+.directory-sort-handle { cursor: grab; color: #8090aa; }
+.directory-sort-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.directory-sort-list select { width: 85px; padding: 6px 2px; }
+.directory-sort-list button { padding: 6px 10px; }
+.preview-zoom-trigger { cursor: zoom-in; }
+.preview-zoom-trigger:focus-visible { outline: 2px solid #a9bdff; outline-offset: 3px; }
+.preview-fullscreen-image[open] { position: fixed; inset: 0; display: flex; flex-direction: column; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: #101725; color: #e5eaf4; overflow: hidden; }
+.preview-fullscreen-image::backdrop { background: #101725; }
+.preview-fullscreen-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; flex-shrink: 0; padding: max(12px, env(safe-area-inset-top)) 16px 12px; border-bottom: 1px solid #ffffff20; background: #151e2e; }
+.preview-fullscreen-toolbar > strong { font-size: 14px; }
+.preview-fullscreen-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.preview-fullscreen-tools > span { min-width: 44px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+.preview-fullscreen-tools button { padding: 8px 12px; border: 1px solid #ffffff30; border-radius: 8px; background: #ffffff08; color: #e5eaf4; font: inherit; font-size: 13px; cursor: pointer; }
+.preview-fullscreen-tools button:disabled { opacity: .45; cursor: default; }
+.preview-fullscreen-image :focus-visible { outline: 2px solid #a9bdff; outline-offset: -2px; }
+.preview-fullscreen-viewport { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding-bottom: env(safe-area-inset-bottom); }
+.preview-fullscreen-canvas { display: flex; width: max-content; min-width: 100%; min-height: 100%; box-sizing: border-box; padding: 16px; }
+.question-workspace .preview-fullscreen-image .preview-fullscreen-canvas > img { display: block; flex-shrink: 0; align-self: center; height: auto; max-width: none; max-height: none; margin: auto; object-fit: contain; background: white; }
